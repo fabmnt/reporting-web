@@ -1,0 +1,10 @@
+---
+import { AuthPage } from "../components/auth/AuthPage";
+import Layout from "../layouts/Layout.astro";
+---
+
+<Layout title="Sign in | Reporting Web">
+  <main class="flex min-h-screen items-center justify-center p-6">
+    <AuthPage convexUrl={import.meta.env.CONVEX_URL} mode="signIn" client:load />
+  </main>
+</Layout>

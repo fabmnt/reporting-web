@@ -1,0 +1,12 @@
+---
+import { AdminPanel } from "../components/admin/AdminPanel";
+import Layout from "../layouts/Layout.astro";
+---
+
+<Layout title="Account administration | Reporting Web">
+  <main class="mx-auto flex min-h-screen w-full max-w-5xl items-center p-6">
+    <div class="w-full">
+      <AdminPanel convexUrl={import.meta.env.CONVEX_URL} client:load />
+    </div>
+  </main>
+</Layout>
