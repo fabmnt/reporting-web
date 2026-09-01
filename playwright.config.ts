@@ -1,5 +1,7 @@
 import { defineConfig, devices } from "@playwright/test";
 
+const devServerUrl = "http://localhost:4322";
+
 export default defineConfig({
   testDir: "./e2e",
   fullyParallel: true,
@@ -8,12 +10,12 @@ export default defineConfig({
   workers: process.env.CI ? 1 : undefined,
   reporter: "html",
   use: {
-    baseURL: "http://localhost:4321",
+    baseURL: devServerUrl,
     trace: "on-first-retry",
   },
   webServer: {
-    command: "npm run dev -- --port 4321",
-    url: "http://localhost:4321",
+    command: "pnpm dev",
+    url: devServerUrl,
     reuseExistingServer: !process.env.CI,
   },
   projects: [
