@@ -1,3 +1,9 @@
+## Reporting Web
+
+This is the web version and better version of the Reporting Tool project (~/dev/me/Reporting-Tool)
+
+Maintain the project without linter, formatter and type errors.
+
 ## Development
 
 When starting the dev server, use background mode:

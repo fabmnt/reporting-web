@@ -1,5 +1,5 @@
 allowBuilds:
   esbuild: true
 minimumReleaseAgeExclude:
-  - '@types/node@26.4.1'
+  - "@types/node@26.4.1"
   - lucide-react@1.39.0
