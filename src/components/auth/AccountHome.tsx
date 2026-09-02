@@ -106,7 +106,12 @@ function HomeContent() {
       </CardContent>
       <CardFooter className="flex justify-between gap-3">
         {account.role === "admin" ? (
-          <Button render={<a href="/admin" />}>Manage accounts</Button>
+          <div className="flex gap-3">
+            <Button render={<a href="/admin" />}>Manage accounts</Button>
+            <Button variant="outline" render={<a href="/admin/clinics" />}>
+              Manage clinics
+            </Button>
+          </div>
         ) : (
           <span />
         )}

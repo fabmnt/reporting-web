@@ -199,9 +199,14 @@ function PanelContent() {
         <p className="text-xs text-muted-foreground">
           Showing up to {managed?.limit ?? 100} accounts.
         </p>
-        <Button variant="outline" render={<a href="/" />}>
-          Back to app
-        </Button>
+        <div className="flex gap-3">
+          <Button variant="outline" render={<a href="/admin/clinics" />}>
+            Manage clinics
+          </Button>
+          <Button variant="outline" render={<a href="/" />}>
+            Back to app
+          </Button>
+        </div>
       </CardFooter>
     </Card>
   );
