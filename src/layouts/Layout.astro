@@ -1,5 +1,7 @@
 ---
 import "../styles/global.css";
+import { THEME_STORAGE_KEY } from "../lib/theme";
+import { ThemeToggle } from "../components/theme/ThemeToggle";
 
 interface Props {
   title?: string;
@@ -16,8 +18,21 @@ const { title = "Reporting Web" } = Astro.props;
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="generator" content={Astro.generator} />
     <title>{title}</title>
+    <script is:inline define:vars={{ THEME_STORAGE_KEY }}>
+      // Applies the theme before first paint to avoid a light/dark flash.
+      // Resolution must match src/lib/theme.ts.
+      const stored = localStorage.getItem(THEME_STORAGE_KEY);
+      const dark =
+        stored === "dark" ||
+        (stored !== "light" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+      document.documentElement.classList.toggle("dark", dark);
+      document.documentElement.style.colorScheme = dark ? "dark" : "light";
+    </script>
   </head>
   <body>
+    <div class="fixed top-4 right-4 z-50">
+      <ThemeToggle client:load />
+    </div>
     <slot />
   </body>
 </html>
