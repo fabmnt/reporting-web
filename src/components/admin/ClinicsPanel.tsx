@@ -44,13 +44,13 @@ import { ProtectedRoute } from "../auth/ProtectedRoute";
 
 type ClinicList = FunctionReturnType<typeof api.clinics.list>;
 type ClinicView = ClinicList["clinics"][number];
-type GroupList = FunctionReturnType<typeof api.clinics.listGroups>;
-type ClinicGroupView = GroupList["groups"][number];
+type ClientList = FunctionReturnType<typeof api.clinics.listClients>;
+type ClientView = ClientList["clients"][number];
 
 type ClinicFormValues = {
   name: string;
   sheetInput: string;
-  clinicGroupId: string;
+  clientId: string;
   externalClinicId: string;
   isActive: boolean;
 };
@@ -58,7 +58,7 @@ type ClinicFormValues = {
 const EMPTY_FORM: ClinicFormValues = {
   name: "",
   sheetInput: "",
-  clinicGroupId: "",
+  clientId: "",
   externalClinicId: "",
   isActive: true,
 };
@@ -66,7 +66,7 @@ const EMPTY_FORM: ClinicFormValues = {
 function ClinicForm({
   title,
   description,
-  groups,
+  clients,
   initialValues,
   pending,
   submitLabel,
@@ -75,7 +75,7 @@ function ClinicForm({
 }: {
   title: string;
   description: string;
-  groups: ClinicGroupView[];
+  clients: ClientView[];
   initialValues: ClinicFormValues;
   pending: boolean;
   submitLabel: string;
@@ -103,8 +103,8 @@ function ClinicForm({
       setValidationError("Paste a Google Sheet URL or ID.");
       return;
     }
-    if (values.clinicGroupId === "") {
-      setValidationError("Choose a clinic group.");
+    if (values.clientId === "") {
+      setValidationError("Choose a client.");
       return;
     }
 
@@ -150,20 +150,20 @@ function ClinicForm({
           />
         </Field>
         <Field>
-          <FieldLabel>Clinic group</FieldLabel>
+          <FieldLabel>Client</FieldLabel>
           <Select
-            value={values.clinicGroupId}
-            onValueChange={(value) => update("clinicGroupId", value ?? "")}
+            value={values.clientId}
+            onValueChange={(value) => update("clientId", value ?? "")}
             disabled={pending}
           >
-            <SelectTrigger aria-label="Clinic group" className="w-full">
-              <SelectValue placeholder="Choose a group" />
+            <SelectTrigger aria-label="Client" className="w-full">
+              <SelectValue placeholder="Choose a client" />
             </SelectTrigger>
             <SelectContent>
               <SelectGroup>
-                {groups.map((group) => (
-                  <SelectItem key={group.groupId} value={group.groupId}>
-                    {group.isActive ? group.name : `${group.name} (inactive)`}
+                {clients.map((client) => (
+                  <SelectItem key={client.clientId} value={client.clientId}>
+                    {client.isActive ? client.name : `${client.name} (inactive)`}
                   </SelectItem>
                 ))}
               </SelectGroup>
@@ -199,12 +199,12 @@ function PanelContent() {
   const current = useQuery(api.staffAccounts.current, isAuthenticated ? {} : "skip");
   const canManage = current?.role === "admin" && current.status === "active";
 
+  const clientsData = useQuery(api.clinics.listClients, canManage ? {} : "skip");
   const clinicsData = useQuery(api.clinics.list, canManage ? {} : "skip");
-  const groupsData = useQuery(api.clinics.listGroups, canManage ? {} : "skip");
   const createClinic = useMutation(api.clinics.create);
   const updateClinic = useMutation(api.clinics.update);
   const removeClinic = useMutation(api.clinics.remove);
-  const createGroup = useMutation(api.clinics.createGroup);
+  const createClient = useMutation(api.clinics.createClient);
 
   const requestedProfile = useRef(false);
   const [error, setError] = useState<string | null>(null);
@@ -212,7 +212,7 @@ function PanelContent() {
   const [pendingClinicId, setPendingClinicId] = useState<Id<"clinics"> | null>(null);
   const [formMode, setFormMode] = useState<"closed" | "creating" | "editing">("closed");
   const [editingClinic, setEditingClinic] = useState<ClinicView | null>(null);
-  const [groupName, setGroupName] = useState("");
+  const [newClientName, setNewClientName] = useState("");
 
   useEffect(() => {
     if (!isAuthenticated || current !== null || requestedProfile.current) return;
@@ -236,13 +236,13 @@ function PanelContent() {
     setIsSaving(true);
     resetError();
     try {
-      const clinicGroupId = values.clinicGroupId as Id<"clinicGroups">;
+      const clientId = values.clientId as Id<"clients">;
       if (formMode === "editing" && editingClinic !== null) {
         await updateClinic({
           clinicId: editingClinic.clinicId,
           name: values.name,
           googleSheetId: values.sheetInput,
-          clinicGroupId,
+          clientId,
           externalClinicId: values.externalClinicId === "" ? null : values.externalClinicId,
           isActive: values.isActive,
         });
@@ -250,7 +250,7 @@ function PanelContent() {
         await createClinic({
           name: values.name,
           googleSheetId: values.sheetInput,
-          clinicGroupId,
+          clientId,
           externalClinicId: values.externalClinicId === "" ? undefined : values.externalClinicId,
           isActive: values.isActive,
         });
@@ -280,15 +280,15 @@ function PanelContent() {
     }
   }
 
-  async function handleAddGroup(event: FormEvent<HTMLFormElement>) {
+  async function handleAddClient(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setIsSaving(true);
     resetError();
     try {
-      await createGroup({ name: groupName });
-      setGroupName("");
+      await createClient({ name: newClientName });
+      setNewClientName("");
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Creating the group failed.");
+      setError(cause instanceof Error ? cause.message : "Creating the client failed.");
     } finally {
       setIsSaving(false);
     }
@@ -322,14 +322,14 @@ function PanelContent() {
     );
   }
 
-  const groups = groupsData?.groups ?? [];
+  const clients = clientsData?.clients ?? [];
   const isEditing = formMode === "editing";
   const formInitialValues: ClinicFormValues =
     isEditing && editingClinic !== null
       ? {
           name: editingClinic.name,
           sheetInput: editingClinic.googleSheetId,
-          clinicGroupId: editingClinic.clinicGroupId,
+          clientId: editingClinic.clientId,
           externalClinicId: editingClinic.externalClinicId ?? "",
           isActive: editingClinic.isActive,
         }
@@ -339,38 +339,39 @@ function PanelContent() {
     <div className="flex flex-col gap-6">
       <Card>
         <CardHeader>
-          <CardTitle>Clinic groups</CardTitle>
+          <CardTitle>Clients</CardTitle>
           <CardDescription>
-            Clinics are organized in groups, like a dental support organization or brand.
+            Clients are organizations that own one or more clinics, like a dental brand or support
+            organization.
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
-          {groups.length === 0 ? (
+          {clients.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              No groups yet. Create the first one before adding clinics.
+              No clients yet. Create the first one before adding clinics.
             </p>
           ) : (
             <div className="flex flex-wrap gap-2">
-              {groups.map((group) => (
-                <Badge key={group.groupId} variant={group.isActive ? "secondary" : "outline"}>
-                  {group.name}
+              {clients.map((client) => (
+                <Badge key={client.clientId} variant={client.isActive ? "secondary" : "outline"}>
+                  {client.name}
                 </Badge>
               ))}
             </div>
           )}
-          <form onSubmit={(event) => void handleAddGroup(event)} className="flex items-end gap-2">
+          <form onSubmit={(event) => void handleAddClient(event)} className="flex items-end gap-2">
             <Field className="w-56">
-              <FieldLabel htmlFor="new-group-name">New group</FieldLabel>
+              <FieldLabel htmlFor="new-client-name">New client</FieldLabel>
               <Input
-                id="new-group-name"
-                value={groupName}
-                onChange={(event) => setGroupName(event.target.value)}
+                id="new-client-name"
+                value={newClientName}
+                onChange={(event) => setNewClientName(event.target.value)}
                 placeholder="e.g. Smilist"
                 disabled={isSaving}
               />
             </Field>
-            <Button type="submit" disabled={isSaving || groupName.trim() === ""}>
-              Add group
+            <Button type="submit" disabled={isSaving || newClientName.trim() === ""}>
+              Add client
             </Button>
           </form>
         </CardContent>
@@ -410,7 +411,7 @@ function PanelContent() {
               description={
                 isEditing ? "Update the clinic details." : "Paste the Google Sheet URL or ID."
               }
-              groups={groups}
+              clients={clients}
               initialValues={formInitialValues}
               pending={isSaving}
               submitLabel={isEditing ? "Save changes" : "Create clinic"}
@@ -422,14 +423,14 @@ function PanelContent() {
             <Skeleton className="h-64 w-full" />
           ) : clinicsData.clinics.length === 0 && formMode === "closed" ? (
             <p className="text-sm text-muted-foreground">
-              No clinics yet. Create a group above, then add the first clinic.
+              No clinics yet. Create a client above, then add the first clinic.
             </p>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>Clinic</TableHead>
-                  <TableHead>Group</TableHead>
+                  <TableHead>Client</TableHead>
                   <TableHead>Google Sheet</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Actions</TableHead>
@@ -450,7 +451,7 @@ function PanelContent() {
                           ) : null}
                         </div>
                       </TableCell>
-                      <TableCell>{clinic.clinicGroupName}</TableCell>
+                      <TableCell>{clinic.clientName}</TableCell>
                       <TableCell className="font-mono text-xs">{clinic.googleSheetId}</TableCell>
                       <TableCell>
                         <Badge variant={clinic.isActive ? "secondary" : "outline"}>

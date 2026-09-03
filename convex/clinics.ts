@@ -6,11 +6,11 @@ import { mutation, query } from "./_generated/server";
 import { requireAdmin } from "./model/staff";
 
 const MAX_CLINICS = 500;
-const MAX_GROUPS = 200;
+const MAX_CLIENTS = 200;
 const DEPENDENT_BATCH_SIZE = 500;
 
-const clinicGroupView = v.object({
-  groupId: v.id("clinicGroups"),
+const clientView = v.object({
+  clientId: v.id("clients"),
   key: v.string(),
   name: v.string(),
   isActive: v.boolean(),
@@ -22,14 +22,14 @@ const clinicView = v.object({
   googleSheetId: v.string(),
   externalClinicId: v.union(v.string(), v.null()),
   isActive: v.boolean(),
-  clinicGroupId: v.id("clinicGroups"),
-  clinicGroupName: v.string(),
+  clientId: v.id("clients"),
+  clientName: v.string(),
 });
 
 const clinicInputFields = {
   name: v.string(),
   googleSheetId: v.string(),
-  clinicGroupId: v.id("clinicGroups"),
+  clientId: v.id("clients"),
 };
 
 function cleanRequiredText(value: string, label: string): string {
@@ -40,19 +40,19 @@ function cleanRequiredText(value: string, label: string): string {
   return trimmed;
 }
 
-function groupKeyFromName(name: string): string {
+function clientKeyFromName(name: string): string {
   return name
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
 }
 
-async function requireGroup(ctx: MutationCtx, clinicGroupId: Id<"clinicGroups">) {
-  const group = await ctx.db.get("clinicGroups", clinicGroupId);
-  if (group === null) {
-    throw new Error("Clinic group was not found.");
+async function requireClient(ctx: MutationCtx, clientId: Id<"clients">) {
+  const client = await ctx.db.get("clients", clientId);
+  if (client === null) {
+    throw new Error("Client was not found.");
   }
-  return group;
+  return client;
 }
 
 async function assertGoogleSheetIdAvailable(
@@ -72,26 +72,24 @@ async function assertGoogleSheetIdAvailable(
 
 async function assertClinicNameAvailable(
   ctx: MutationCtx,
-  clinicGroupId: Id<"clinicGroups">,
+  clientId: Id<"clients">,
   name: string,
   ignoreClinicId?: Id<"clinics">
 ) {
   const existing = await ctx.db
     .query("clinics")
-    .withIndex("by_clinicGroupId_and_name", (query) =>
-      query.eq("clinicGroupId", clinicGroupId).eq("name", name)
-    )
+    .withIndex("by_clientId_and_name", (query) => query.eq("clientId", clientId).eq("name", name))
     .first();
 
   if (existing !== null && existing._id !== ignoreClinicId) {
-    throw new Error("A clinic with this name already exists in the selected group.");
+    throw new Error("A clinic with this name already exists for this client.");
   }
 }
 
-export const listGroups = query({
+export const listClients = query({
   args: {},
   returns: v.object({
-    groups: v.array(clinicGroupView),
+    clients: v.array(clientView),
     limit: v.number(),
     hasMore: v.boolean(),
   }),
@@ -99,48 +97,48 @@ export const listGroups = query({
     await requireAdmin(ctx);
 
     const rows = await ctx.db
-      .query("clinicGroups")
+      .query("clients")
       .withIndex("by_key")
-      .take(MAX_GROUPS + 1);
-    const groups = rows.slice(0, MAX_GROUPS).map((group) => ({
-      groupId: group._id,
-      key: group.key,
-      name: group.name,
-      isActive: group.isActive,
+      .take(MAX_CLIENTS + 1);
+    const clients = rows.slice(0, MAX_CLIENTS).map((client) => ({
+      clientId: client._id,
+      key: client.key,
+      name: client.name,
+      isActive: client.isActive,
     }));
-    groups.sort((a, b) => a.name.localeCompare(b.name));
+    clients.sort((a, b) => a.name.localeCompare(b.name));
 
-    return { groups, limit: MAX_GROUPS, hasMore: rows.length > MAX_GROUPS };
+    return { clients, limit: MAX_CLIENTS, hasMore: rows.length > MAX_CLIENTS };
   },
 });
 
-export const createGroup = mutation({
+export const createClient = mutation({
   args: { name: v.string() },
-  returns: clinicGroupView,
+  returns: clientView,
   handler: async (ctx, args) => {
     await requireAdmin(ctx);
 
-    const name = cleanRequiredText(args.name, "Group name");
-    const key = groupKeyFromName(name);
+    const name = cleanRequiredText(args.name, "Client name");
+    const key = clientKeyFromName(name);
     if (key === "") {
-      throw new Error("Group name must contain letters or numbers.");
+      throw new Error("Client name must contain letters or numbers.");
     }
 
     const existingByKey = await ctx.db
-      .query("clinicGroups")
+      .query("clients")
       .withIndex("by_key", (query) => query.eq("key", key))
       .first();
-    const scannedGroups = await ctx.db.query("clinicGroups").withIndex("by_key").take(MAX_GROUPS);
-    const existingByName = scannedGroups.find(
-      (group) => group.name.toLowerCase() === name.toLowerCase()
+    const scannedClients = await ctx.db.query("clients").withIndex("by_key").take(MAX_CLIENTS);
+    const existingByName = scannedClients.find(
+      (client) => client.name.toLowerCase() === name.toLowerCase()
     );
 
     if (existingByKey !== null || existingByName !== undefined) {
-      throw new Error("A clinic group with this name already exists.");
+      throw new Error("A client with this name already exists.");
     }
 
-    const groupId = await ctx.db.insert("clinicGroups", { key, name, isActive: true });
-    return { groupId, key, name, isActive: true };
+    const clientId = await ctx.db.insert("clients", { key, name, isActive: true });
+    return { clientId, key, name, isActive: true };
   },
 });
 
@@ -156,17 +154,17 @@ export const list = query({
 
     const rows = await ctx.db
       .query("clinics")
-      .withIndex("by_clinicGroupId_and_name")
+      .withIndex("by_clientId_and_name")
       .take(MAX_CLINICS + 1);
 
-    const groupNameById = new Map<Id<"clinicGroups">, string>();
+    const clientNameById = new Map<Id<"clients">, string>();
     const clinics = [];
     for (const row of rows.slice(0, MAX_CLINICS)) {
-      let groupName = groupNameById.get(row.clinicGroupId);
-      if (groupName === undefined) {
-        const group = await ctx.db.get("clinicGroups", row.clinicGroupId);
-        groupName = group?.name ?? "Unknown group";
-        groupNameById.set(row.clinicGroupId, groupName);
+      let clientName = clientNameById.get(row.clientId);
+      if (clientName === undefined) {
+        const client = await ctx.db.get("clients", row.clientId);
+        clientName = client?.name ?? "Unknown client";
+        clientNameById.set(row.clientId, clientName);
       }
       clinics.push({
         clinicId: row._id,
@@ -174,12 +172,12 @@ export const list = query({
         googleSheetId: row.googleSheetId,
         externalClinicId: row.externalClinicId ?? null,
         isActive: row.isActive,
-        clinicGroupId: row.clinicGroupId,
-        clinicGroupName: groupName,
+        clientId: row.clientId,
+        clientName,
       });
     }
     clinics.sort(
-      (a, b) => a.clinicGroupName.localeCompare(b.clinicGroupName) || a.name.localeCompare(b.name)
+      (a, b) => a.clientName.localeCompare(b.clientName) || a.name.localeCompare(b.name)
     );
 
     return { clinics, limit: MAX_CLINICS, hasMore: rows.length > MAX_CLINICS };
@@ -198,14 +196,14 @@ export const create = mutation({
 
     const name = cleanRequiredText(args.name, "Clinic name");
     const googleSheetId = cleanRequiredText(args.googleSheetId, "Google Sheet ID");
-    await requireGroup(ctx, args.clinicGroupId);
+    await requireClient(ctx, args.clientId);
     await assertGoogleSheetIdAvailable(ctx, googleSheetId);
-    await assertClinicNameAvailable(ctx, args.clinicGroupId, name);
+    await assertClinicNameAvailable(ctx, args.clientId, name);
 
     const clinicId = await ctx.db.insert("clinics", {
       name,
       googleSheetId,
-      clinicGroupId: args.clinicGroupId,
+      clientId: args.clientId,
       externalClinicId: args.externalClinicId?.trim() || undefined,
       isActive: args.isActive ?? true,
     });
@@ -232,14 +230,14 @@ export const update = mutation({
 
     const name = cleanRequiredText(args.name, "Clinic name");
     const googleSheetId = cleanRequiredText(args.googleSheetId, "Google Sheet ID");
-    await requireGroup(ctx, args.clinicGroupId);
+    await requireClient(ctx, args.clientId);
     await assertGoogleSheetIdAvailable(ctx, googleSheetId, args.clinicId);
-    await assertClinicNameAvailable(ctx, args.clinicGroupId, name, args.clinicId);
+    await assertClinicNameAvailable(ctx, args.clientId, name, args.clinicId);
 
     await ctx.db.patch(args.clinicId, {
       name,
       googleSheetId,
-      clinicGroupId: args.clinicGroupId,
+      clientId: args.clientId,
       isActive: args.isActive,
       externalClinicId: args.externalClinicId?.trim() || undefined,
     });

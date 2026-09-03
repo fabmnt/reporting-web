@@ -42,7 +42,7 @@ export default defineSchema({
     reportingOperationId: v.id("reportingOperations"),
   }).index("by_userId_and_reportingOperationId", ["userId", "reportingOperationId"]),
 
-  clinicGroups: defineTable({
+  clients: defineTable({
     key: v.string(),
     name: v.string(),
     isActive: v.boolean(),
@@ -50,7 +50,7 @@ export default defineSchema({
 
   clinics: defineTable({
     externalClinicId: v.optional(v.string()),
-    clinicGroupId: v.id("clinicGroups"),
+    clientId: v.id("clients"),
     name: v.string(),
     googleSheetId: v.string(),
     isActive: v.boolean(),
@@ -59,7 +59,7 @@ export default defineSchema({
     workflowAssigneeName: v.optional(v.string()),
   })
     .index("by_externalClinicId", ["externalClinicId"])
-    .index("by_clinicGroupId_and_name", ["clinicGroupId", "name"])
+    .index("by_clientId_and_name", ["clientId", "name"])
     .index("by_googleSheetId", ["googleSheetId"]),
 
   clinicColumnMappings: defineTable({
@@ -69,13 +69,13 @@ export default defineSchema({
   }).index("by_clinicId_and_purpose", ["clinicId", "purpose"]),
 
   reportingScopes: defineTable({
-    clinicGroupId: v.id("clinicGroups"),
+    clientId: v.id("clients"),
     key: v.string(),
     name: v.string(),
     isActive: v.boolean(),
   })
     .index("by_key", ["key"])
-    .index("by_clinicGroupId_and_name", ["clinicGroupId", "name"]),
+    .index("by_clientId_and_name", ["clientId", "name"]),
 
   reportingScopeClinics: defineTable({
     reportingScopeId: v.id("reportingScopes"),
