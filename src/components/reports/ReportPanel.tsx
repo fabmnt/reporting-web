@@ -32,6 +32,27 @@ import { ProtectedRoute } from "../auth/ProtectedRoute";
 type OperationKey = "pending-audit" | "ready-to-upload";
 
 type ReportRow = { rowNumber: number; values: string[] };
+// TEMPORARY while project is in development: mirrors the backend debug shape
+// so testers can see why rows were filtered. Remove with the debug flag.
+type SheetDebug = {
+  totalRows: number;
+  keptRows: number;
+  operationKey: string;
+  verificationFilter: string;
+  updateStatusColumn: string;
+  uploadStatusColumn: string;
+  verificationTypeColumn: string;
+  droppedByReason: Array<{ reason: string; count: number }>;
+  samples: Array<{
+    rowNumber: number;
+    reason: string;
+    l: string;
+    m: string;
+    verification: string;
+    updateStatus: string;
+    uploadStatus: string;
+  }>;
+};
 type SheetResult = {
   clinicId: Id<"clinics">;
   clinicName: string;
@@ -42,6 +63,7 @@ type SheetResult = {
   reviewRows: ReportRow[];
   auditRows: ReportRow[];
   error: string | null;
+  debug: SheetDebug | null;
 };
 type ReportResult = {
   reportRunId: Id<"reportRuns"> | null;
@@ -104,6 +126,82 @@ function ResultTable({
   );
 }
 
+// TEMPORARY while project is in development: shows why rows were filtered so
+// the /reports form can be tested without reading backend code. Delete this
+// component and the debug flag once row rules are stable.
+const DEBUG_REASON_LABELS: Record<string, string> = {
+  too_short: "Row too short, missing columns",
+  verification_mismatch: "Verification type did not match the filter",
+  l_m_condition_failed: "Columns L/M failed, needs DONE or CHECK plus NOT FOUND",
+  update_status_excluded: "Update status is in the exclude list",
+  upload_status_not_empty_or_unchecked: "Upload status is not EMPTY or UNCHECKED",
+  col_l_not_done: "Column L is not DONE",
+  update_status_not_done: "Update status is not DONE",
+  upload_terminal: "Upload already done, UPLOADED or DONE BY",
+  upload_no_match: "Upload status matched neither ready nor review",
+};
+
+function DebugPanel({ debug }: { debug: SheetDebug }) {
+  const sorted = [...debug.droppedByReason].sort((a, b) => b.count - a.count);
+  return (
+    <div className="flex flex-col gap-2 rounded-md border border-dashed p-3">
+      <div className="flex items-center gap-2">
+        <h4 className="text-sm font-medium">Why rows were filtered, temporary debug</h4>
+        <Badge variant="secondary">
+          {debug.keptRows} of {debug.totalRows} kept
+        </Badge>
+      </div>
+      <p className="text-xs text-muted-foreground">
+        Operation {debug.operationKey}, verification {debug.verificationFilter}. Columns: update{" "}
+        {debug.updateStatusColumn}, upload {debug.uploadStatusColumn}, verification{" "}
+        {debug.verificationTypeColumn}. Values below are uppercased, as the filter sees them.
+      </p>
+      {sorted.length === 0 ? (
+        <p className="text-sm text-muted-foreground">No rows were dropped.</p>
+      ) : (
+        <ul className="flex flex-col gap-1 text-sm">
+          {sorted.map((item) => (
+            <li key={item.reason} className="flex items-center gap-2">
+              <Badge variant="outline">{item.count}</Badge>
+              <span>{DEBUG_REASON_LABELS[item.reason] ?? item.reason}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {debug.samples.length > 0 ? (
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Row</TableHead>
+              <TableHead>Reason</TableHead>
+              <TableHead>L</TableHead>
+              <TableHead>M</TableHead>
+              <TableHead>{debug.verificationTypeColumn}</TableHead>
+              <TableHead>{debug.updateStatusColumn}</TableHead>
+              <TableHead>{debug.uploadStatusColumn}</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {debug.samples.map((sample) => (
+              <TableRow key={sample.rowNumber}>
+                <TableCell className="font-mono">{sample.rowNumber}</TableCell>
+                <TableCell className="max-w-48 truncate text-xs">
+                  {DEBUG_REASON_LABELS[sample.reason] ?? sample.reason}
+                </TableCell>
+                <TableCell className="max-w-32 truncate text-xs">{sample.l}</TableCell>
+                <TableCell className="max-w-32 truncate text-xs">{sample.m}</TableCell>
+                <TableCell className="max-w-32 truncate text-xs">{sample.verification}</TableCell>
+                <TableCell className="max-w-32 truncate text-xs">{sample.updateStatus}</TableCell>
+                <TableCell className="max-w-32 truncate text-xs">{sample.uploadStatus}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      ) : null}
+    </div>
+  );
+}
+
 function PanelContent() {
   const scopes = useQuery(api.googleSheets.listRunnableScopes, {});
   const runReport = useAction(api.reports.runSheetReport);
@@ -136,6 +234,9 @@ function PanelContent() {
         startDate,
         endDate,
         verificationFilter: verification,
+        // TEMPORARY while project is in development: always ask for filter
+        // reasons so testers can see why rows were dropped.
+        debug: true,
       });
       setResult(data);
     } catch (cause) {
@@ -332,6 +433,7 @@ function PanelContent() {
                     sheet.auditRows.length === 0 ? (
                       <p className="text-sm text-muted-foreground">No matching rows.</p>
                     ) : null}
+                    {sheet.debug ? <DebugPanel debug={sheet.debug} /> : null}
                   </>
                 )}
               </div>

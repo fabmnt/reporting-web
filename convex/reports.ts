@@ -19,21 +19,29 @@ function cell(row: SheetRow, index: number): string {
 // says CHECK, ERROR, UPLOAD INCOMPLETE, or NOT UPLOADED.
 const REVIEW_UPLOAD_MARKERS = ["CHECK", "ERROR", "UPLOAD INCOMPLETE", "NOT UPLOADED"];
 
-function classifyUploadRow(
+// TEMPORARY while project is in development: cap debug samples per sheet so
+// the response stays small while operators learn the row rules.
+const MAX_DEBUG_SAMPLES = 10;
+
+function getUploadOutcome(
   row: SheetRow,
   updateStatus: number,
   uploadStatus: number
-): "ready" | "review" | null {
+): { bucket: "ready" | "review" | null; reason: string } {
   // Column L (index 11) is the execution control column in every legacy sheet.
-  if (row.length <= Math.max(11, updateStatus, uploadStatus)) return null;
-  if (!cell(row, 11).includes("DONE")) return null;
-  if (!cell(row, updateStatus).includes("DONE")) return null;
+  if (row.length <= Math.max(11, updateStatus, uploadStatus))
+    return { bucket: null, reason: "too_short" };
+  if (!cell(row, 11).includes("DONE")) return { bucket: null, reason: "col_l_not_done" };
+  if (!cell(row, updateStatus).includes("DONE"))
+    return { bucket: null, reason: "update_status_not_done" };
   const upload = cell(row, uploadStatus);
   // Terminal states never need action again.
-  if (upload.includes("UPLOADED") || upload.includes("DONE BY")) return null;
-  if (upload.includes("EMPTY")) return "ready";
-  if (REVIEW_UPLOAD_MARKERS.some((marker) => upload.includes(marker))) return "review";
-  return null;
+  if (upload.includes("UPLOADED") || upload.includes("DONE BY"))
+    return { bucket: null, reason: "upload_terminal" };
+  if (upload.includes("EMPTY")) return { bucket: "ready", reason: "kept_ready" };
+  if (REVIEW_UPLOAD_MARKERS.some((marker) => upload.includes(marker)))
+    return { bucket: "review", reason: "kept_review" };
+  return { bucket: null, reason: "upload_no_match" };
 }
 
 // Old tool rule (get_rows_pending_to_audit_conditions): DONE in column L plus
@@ -56,14 +64,14 @@ const AUDIT_EXCLUDE_STATUS = [
   "REVIEWED BY QA",
 ];
 
-function classifyAuditRow(
+function getAuditDropReason(
   row: SheetRow,
   updateStatus: number,
   uploadStatus: number,
   verificationType: number,
   verificationFilter: "all" | "fbd" | "elg"
-): boolean {
-  if (row.length <= Math.max(13, updateStatus, uploadStatus, verificationType)) return false;
+): string | null {
+  if (row.length <= Math.max(13, updateStatus, uploadStatus, verificationType)) return "too_short";
   const l = cell(row, 11);
   const m = cell(row, 12);
   const verification = cell(row, verificationType);
@@ -71,15 +79,43 @@ function classifyAuditRow(
     verificationFilter === "all"
       ? verification.includes("FBD") || verification.includes("ELG")
       : verification === verificationFilter.toUpperCase();
+  if (!matchesType) return "verification_mismatch";
   const dynamicHit =
     l.includes("DONE") ||
     (l.includes("CHECK") && m.includes("NOT FOUND")) ||
     (l.includes("DONE") && m.includes("TERMED"));
-  if (!(matchesType && dynamicHit)) return false;
-  if (AUDIT_EXCLUDE_STATUS.some((status) => cell(row, updateStatus).includes(status))) return false;
+  if (!dynamicHit) return "l_m_condition_failed";
+  if (AUDIT_EXCLUDE_STATUS.some((status) => cell(row, updateStatus).includes(status)))
+    return "update_status_excluded";
   const upload = cell(row, uploadStatus);
-  return upload === "EMPTY" || upload === "UNCHECKED";
+  if (!(upload === "EMPTY" || upload === "UNCHECKED"))
+    return "upload_status_not_empty_or_unchecked";
+  return null;
 }
+
+// TEMPORARY while project is in development: explains why rows were kept or
+// dropped so operators can test the /reports form without reading backend code.
+const reportSheetDebug = v.object({
+  totalRows: v.number(),
+  keptRows: v.number(),
+  operationKey: v.string(),
+  verificationFilter: v.string(),
+  updateStatusColumn: v.string(),
+  uploadStatusColumn: v.string(),
+  verificationTypeColumn: v.string(),
+  droppedByReason: v.array(v.object({ reason: v.string(), count: v.number() })),
+  samples: v.array(
+    v.object({
+      rowNumber: v.number(),
+      reason: v.string(),
+      l: v.string(),
+      m: v.string(),
+      verification: v.string(),
+      updateStatus: v.string(),
+      uploadStatus: v.string(),
+    })
+  ),
+});
 
 const reportSheetResult = v.object({
   clinicId: v.id("clinics"),
@@ -91,6 +127,8 @@ const reportSheetResult = v.object({
   reviewRows: v.array(v.object({ rowNumber: v.number(), values: v.array(v.string()) })),
   auditRows: v.array(v.object({ rowNumber: v.number(), values: v.array(v.string()) })),
   error: v.union(v.string(), v.null()),
+  // TEMPORARY while project is in development: null unless the client passes debug=true.
+  debug: v.union(reportSheetDebug, v.null()),
 });
 
 async function loadClinicColumns(
@@ -185,6 +223,9 @@ export const runSheetReport = action({
     startDate: v.string(),
     endDate: v.string(),
     verificationFilter: v.optional(v.union(v.literal("all"), v.literal("fbd"), v.literal("elg"))),
+    // TEMPORARY while project is in development: when true each sheet also
+    // returns why rows were dropped so the /reports form can show it.
+    debug: v.optional(v.boolean()),
   },
   returns: v.object({
     reportRunId: v.union(v.id("reportRuns"), v.null()),
@@ -207,6 +248,25 @@ export const runSheetReport = action({
       reviewRows: Array<{ rowNumber: number; values: string[] }>;
       auditRows: Array<{ rowNumber: number; values: string[] }>;
       error: string | null;
+      debug: {
+        totalRows: number;
+        keptRows: number;
+        operationKey: string;
+        verificationFilter: string;
+        updateStatusColumn: string;
+        uploadStatusColumn: string;
+        verificationTypeColumn: string;
+        droppedByReason: Array<{ reason: string; count: number }>;
+        samples: Array<{
+          rowNumber: number;
+          reason: string;
+          l: string;
+          m: string;
+          verification: string;
+          updateStatus: string;
+          uploadStatus: string;
+        }>;
+      } | null;
     }>;
   }> => {
     const { userId }: { userId: Id<"users"> } = await ctx.runQuery(
@@ -215,6 +275,7 @@ export const runSheetReport = action({
     );
     const startedAt = Date.now();
     const verificationFilter = args.verificationFilter ?? "all";
+    const wantDebug = args.debug ?? false;
 
     const config: {
       scopeId: Id<"reportingScopes">;
@@ -255,6 +316,25 @@ export const runSheetReport = action({
       reviewRows: Array<{ rowNumber: number; values: string[] }>;
       auditRows: Array<{ rowNumber: number; values: string[] }>;
       error: string | null;
+      debug: {
+        totalRows: number;
+        keptRows: number;
+        operationKey: string;
+        verificationFilter: string;
+        updateStatusColumn: string;
+        uploadStatusColumn: string;
+        verificationTypeColumn: string;
+        droppedByReason: Array<{ reason: string; count: number }>;
+        samples: Array<{
+          rowNumber: number;
+          reason: string;
+          l: string;
+          m: string;
+          verification: string;
+          updateStatus: string;
+          uploadStatus: string;
+        }>;
+      } | null;
     }> = [];
 
     let succeededClinics = 0;
@@ -273,6 +353,7 @@ export const runSheetReport = action({
           reviewRows: [],
           auditRows: [],
           error: `No tabs found between ${args.startDate} and ${args.endDate}.`,
+          debug: null,
         });
         continue;
       }
@@ -290,26 +371,54 @@ export const runSheetReport = action({
           const readyRows: Array<{ rowNumber: number; values: string[] }> = [];
           const reviewRows: Array<{ rowNumber: number; values: string[] }> = [];
           const auditRows: Array<{ rowNumber: number; values: string[] }> = [];
+          // TEMPORARY while project is in development: count why each row is
+          // dropped so the UI can show it. Same checks as the real filter.
+          const dropCounts = new Map<string, number>();
+          const dropSamples: Array<{
+            rowNumber: number;
+            reason: string;
+            l: string;
+            m: string;
+            verification: string;
+            updateStatus: string;
+            uploadStatus: string;
+          }> = [];
+          function trackDrop(row: SheetRow, rowNumber: number, reason: string) {
+            dropCounts.set(reason, (dropCounts.get(reason) ?? 0) + 1);
+            if (dropSamples.length >= MAX_DEBUG_SAMPLES) return;
+            dropSamples.push({
+              rowNumber,
+              reason,
+              l: cell(row, 11),
+              m: cell(row, 12),
+              verification: cell(row, verificationType),
+              updateStatus: cell(row, updateStatus),
+              uploadStatus: cell(row, uploadStatus),
+            });
+          }
           values.forEach((row, index) => {
             const rowNumber = index + 2;
             if (args.operationKey === "ready-to-upload") {
-              const bucket = classifyUploadRow(row, updateStatus, uploadStatus);
+              const { bucket, reason } = getUploadOutcome(row, updateStatus, uploadStatus);
               if (bucket === "ready") readyRows.push({ rowNumber, values: row });
-              if (bucket === "review") reviewRows.push({ rowNumber, values: row });
+              else if (bucket === "review") reviewRows.push({ rowNumber, values: row });
+              else if (wantDebug) trackDrop(row, rowNumber, reason);
             } else {
-              if (
-                classifyAuditRow(
-                  row,
-                  updateStatus,
-                  uploadStatus,
-                  verificationType,
-                  verificationFilter
-                )
-              ) {
+              const dropReason = getAuditDropReason(
+                row,
+                updateStatus,
+                uploadStatus,
+                verificationType,
+                verificationFilter
+              );
+              if (dropReason === null) {
                 auditRows.push({ rowNumber, values: row });
+              } else if (wantDebug) {
+                trackDrop(row, rowNumber, dropReason);
               }
             }
           });
+          const keptRows = readyRows.length + reviewRows.length + auditRows.length;
           sheets.push({
             clinicId: clinic.clinicId,
             clinicName: clinic.name,
@@ -320,6 +429,22 @@ export const runSheetReport = action({
             reviewRows,
             auditRows,
             error: null,
+            debug: wantDebug
+              ? {
+                  totalRows: values.length,
+                  keptRows,
+                  operationKey: args.operationKey,
+                  verificationFilter,
+                  updateStatusColumn: clinic.updateStatusColumn,
+                  uploadStatusColumn: clinic.uploadStatusColumn,
+                  verificationTypeColumn: clinic.verificationTypeColumn,
+                  droppedByReason: [...dropCounts.entries()].map(([reason, count]) => ({
+                    reason,
+                    count,
+                  })),
+                  samples: dropSamples,
+                }
+              : null,
           });
         } catch (error) {
           clinicFailed = true;
@@ -333,6 +458,7 @@ export const runSheetReport = action({
             reviewRows: [],
             auditRows: [],
             error: error instanceof Error ? error.message : String(error),
+            debug: null,
           });
         }
       }
