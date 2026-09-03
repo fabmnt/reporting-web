@@ -101,20 +101,23 @@ function HomeContent() {
       </CardHeader>
       <CardContent>
         <p className="text-sm text-muted-foreground">
-          Reporting workflows will appear here as they are migrated from the desktop app.
+          Run audit and upload reports against live Google Sheets.
         </p>
       </CardContent>
       <CardFooter className="flex justify-between gap-3">
-        {account.role === "admin" ? (
-          <div className="flex gap-3">
-            <Button render={<a href="/admin" />}>Manage accounts</Button>
-            <Button variant="outline" render={<a href="/admin/clinics" />}>
-              Manage clinics
-            </Button>
-          </div>
-        ) : (
-          <span />
-        )}
+        <div className="flex gap-3">
+          <Button render={<a href="/reports" />}>Run report</Button>
+          {account.role === "admin" ? (
+            <>
+              <Button variant="outline" render={<a href="/admin" />}>
+                Manage accounts
+              </Button>
+              <Button variant="outline" render={<a href="/admin/clinics" />}>
+                Manage clinics
+              </Button>
+            </>
+          ) : null}
+        </div>
         <Button variant="outline" onClick={() => void handleSignOut()}>
           Sign out
         </Button>

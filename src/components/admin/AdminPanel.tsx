@@ -152,6 +152,11 @@ function PanelContent() {
                     </TableCell>
                     <TableCell>
                       <Select
+                        items={[
+                          { value: "admin", label: "Admin" },
+                          { value: "operator", label: "Operator" },
+                          { value: "viewer", label: "Viewer" },
+                        ]}
                         value={account.role}
                         onValueChange={(role) => {
                           if (role) void updateRole(account.profileId, role as StaffRole);

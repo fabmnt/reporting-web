@@ -4,6 +4,15 @@ import { v } from "convex/values";
 
 export const staffRole = v.union(v.literal("admin"), v.literal("operator"), v.literal("viewer"));
 export const staffStatus = v.union(v.literal("active"), v.literal("disabled"));
+export const reportOperationKey = v.union(
+  v.literal("pending-audit"),
+  v.literal("pending-execution"),
+  v.literal("ready-to-upload"),
+  v.literal("smilist-filters"),
+  v.literal("luna-formulas"),
+  v.literal("diva-formulas"),
+  v.literal("depot-row-highlight")
+);
 const columnPurpose = v.union(
   v.literal("updateStatus"),
   v.literal("uploadStatus"),
@@ -29,18 +38,6 @@ export default defineSchema({
     role: staffRole,
     status: staffStatus,
   }).index("by_userId", ["userId"]),
-
-  reportingOperations: defineTable({
-    key: v.string(),
-    name: v.string(),
-    description: v.optional(v.string()),
-    isActive: v.boolean(),
-  }).index("by_key", ["key"]),
-
-  userReportingOperationGrants: defineTable({
-    userId: v.id("users"),
-    reportingOperationId: v.id("reportingOperations"),
-  }).index("by_userId_and_reportingOperationId", ["userId", "reportingOperationId"]),
 
   clients: defineTable({
     key: v.string(),
@@ -85,11 +82,6 @@ export default defineSchema({
     .index("by_reportingScopeId_and_clinicId", ["reportingScopeId", "clinicId"])
     .index("by_clinicId_and_reportingScopeId", ["clinicId", "reportingScopeId"]),
 
-  userReportingScopeGrants: defineTable({
-    userId: v.id("users"),
-    reportingScopeId: v.id("reportingScopes"),
-  }).index("by_userId_and_reportingScopeId", ["userId", "reportingScopeId"]),
-
   qaGroups: defineTable({
     key: v.string(),
     name: v.string(),
@@ -105,7 +97,7 @@ export default defineSchema({
 
   reportRuns: defineTable({
     initiatedByUserId: v.id("users"),
-    reportingOperationId: v.id("reportingOperations"),
+    operationKey: reportOperationKey,
     reportingScopeId: v.id("reportingScopes"),
     status: reportRunStatus,
     startedAt: v.number(),

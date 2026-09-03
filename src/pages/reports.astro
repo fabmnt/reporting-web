@@ -1,0 +1,12 @@
+---
+import { ReportPanel } from "../components/reports/ReportPanel";
+import Layout from "../layouts/Layout.astro";
+---
+
+<Layout title="Run report | Reporting Web">
+  <main class="mx-auto flex min-h-screen w-full max-w-5xl items-start p-6">
+    <div class="w-full">
+      <ReportPanel convexUrl={import.meta.env.CONVEX_URL} client:load />
+    </div>
+  </main>
+</Layout>

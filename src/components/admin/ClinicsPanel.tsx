@@ -152,6 +152,10 @@ function ClinicForm({
         <Field>
           <FieldLabel>Client</FieldLabel>
           <Select
+            items={clients.map((client) => ({
+              value: client.clientId,
+              label: client.isActive ? client.name : `${client.name} (inactive)`,
+            }))}
             value={values.clientId}
             onValueChange={(value) => update("clientId", value ?? "")}
             disabled={pending}
