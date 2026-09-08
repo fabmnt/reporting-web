@@ -2,6 +2,8 @@ import { authTables } from "@convex-dev/auth/server";
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 
+import { clinicSheetColumns } from "./model/clinicSheetColumns";
+
 export const staffRole = v.union(v.literal("admin"), v.literal("operator"), v.literal("viewer"));
 export const staffStatus = v.union(v.literal("active"), v.literal("disabled"));
 export const reportOperationKey = v.union(
@@ -12,14 +14,6 @@ export const reportOperationKey = v.union(
   v.literal("luna-formulas"),
   v.literal("diva-formulas"),
   v.literal("depot-row-highlight")
-);
-const columnPurpose = v.union(
-  v.literal("updateStatus"),
-  v.literal("uploadStatus"),
-  v.literal("fileUrl"),
-  v.literal("verificationType"),
-  v.literal("url"),
-  v.literal("conditionalFormatting")
 );
 const reportRunStatus = v.union(
   v.literal("pending"),
@@ -51,49 +45,23 @@ export default defineSchema({
     name: v.string(),
     googleSheetId: v.string(),
     isActive: v.boolean(),
-    messagingThreadId: v.optional(v.string()),
-    workflowAssigneeExternalId: v.optional(v.string()),
-    workflowAssigneeName: v.optional(v.string()),
+    sheetColumns: clinicSheetColumns,
+    qaGroupKeys: v.array(v.string()),
   })
     .index("by_externalClinicId", ["externalClinicId"])
     .index("by_clientId_and_name", ["clientId", "name"])
     .index("by_googleSheetId", ["googleSheetId"]),
-
-  clinicColumnMappings: defineTable({
-    clinicId: v.id("clinics"),
-    purpose: columnPurpose,
-    columnName: v.string(),
-  }).index("by_clinicId_and_purpose", ["clinicId", "purpose"]),
 
   reportingScopes: defineTable({
     clientId: v.id("clients"),
     key: v.string(),
     name: v.string(),
     isActive: v.boolean(),
+    clinicIds: v.array(v.id("clinics")),
+    allowedUserIds: v.array(v.id("users")),
   })
     .index("by_key", ["key"])
     .index("by_clientId_and_name", ["clientId", "name"]),
-
-  reportingScopeClinics: defineTable({
-    reportingScopeId: v.id("reportingScopes"),
-    clinicId: v.id("clinics"),
-    position: v.number(),
-  })
-    .index("by_reportingScopeId_and_clinicId", ["reportingScopeId", "clinicId"])
-    .index("by_clinicId_and_reportingScopeId", ["clinicId", "reportingScopeId"]),
-
-  qaGroups: defineTable({
-    key: v.string(),
-    name: v.string(),
-    isActive: v.boolean(),
-  }).index("by_key", ["key"]),
-
-  clinicQaGroupAssignments: defineTable({
-    clinicId: v.id("clinics"),
-    qaGroupId: v.id("qaGroups"),
-  })
-    .index("by_clinicId_and_qaGroupId", ["clinicId", "qaGroupId"])
-    .index("by_qaGroupId_and_clinicId", ["qaGroupId", "clinicId"]),
 
   reportRuns: defineTable({
     initiatedByUserId: v.id("users"),

@@ -3,11 +3,12 @@ import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
 import { mutation, query } from "./_generated/server";
+import { clinicSheetColumns } from "./model/clinicSheetColumns";
 import { requireAdmin } from "./model/staff";
 
 const MAX_CLINICS = 500;
 const MAX_CLIENTS = 200;
-const DEPENDENT_BATCH_SIZE = 500;
+const MAX_SCOPES = 200;
 
 const clientView = v.object({
   clientId: v.id("clients"),
@@ -24,6 +25,8 @@ const clinicView = v.object({
   isActive: v.boolean(),
   clientId: v.id("clients"),
   clientName: v.string(),
+  sheetColumns: clinicSheetColumns,
+  qaGroupKeys: v.array(v.string()),
 });
 
 const clinicInputFields = {
@@ -45,6 +48,18 @@ function clientKeyFromName(name: string): string {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
+}
+
+function cleanQaGroupKeys(keys: string[]): string[] {
+  const seen = new Set<string>();
+  const cleaned: string[] = [];
+  for (const key of keys) {
+    const trimmed = key.trim();
+    if (trimmed === "" || seen.has(trimmed)) continue;
+    seen.add(trimmed);
+    cleaned.push(trimmed);
+  }
+  return cleaned;
 }
 
 async function requireClient(ctx: MutationCtx, clientId: Id<"clients">) {
@@ -83,6 +98,16 @@ async function assertClinicNameAvailable(
 
   if (existing !== null && existing._id !== ignoreClinicId) {
     throw new Error("A clinic with this name already exists for this client.");
+  }
+}
+
+async function removeClinicFromScopes(ctx: MutationCtx, clinicId: Id<"clinics">) {
+  const scopes = await ctx.db.query("reportingScopes").withIndex("by_key").take(MAX_SCOPES);
+  for (const scope of scopes) {
+    if (!scope.clinicIds.includes(clinicId)) continue;
+    await ctx.db.patch(scope._id, {
+      clinicIds: scope.clinicIds.filter((id) => id !== clinicId),
+    });
   }
 }
 
@@ -174,6 +199,8 @@ export const list = query({
         isActive: row.isActive,
         clientId: row.clientId,
         clientName,
+        sheetColumns: row.sheetColumns,
+        qaGroupKeys: row.qaGroupKeys,
       });
     }
     clinics.sort(
@@ -189,6 +216,8 @@ export const create = mutation({
     ...clinicInputFields,
     externalClinicId: v.optional(v.string()),
     isActive: v.optional(v.boolean()),
+    sheetColumns: v.optional(clinicSheetColumns),
+    qaGroupKeys: v.optional(v.array(v.string())),
   },
   returns: v.object({ clinicId: v.id("clinics") }),
   handler: async (ctx, args) => {
@@ -206,6 +235,8 @@ export const create = mutation({
       clientId: args.clientId,
       externalClinicId: args.externalClinicId?.trim() || undefined,
       isActive: args.isActive ?? true,
+      sheetColumns: args.sheetColumns ?? {},
+      qaGroupKeys: cleanQaGroupKeys(args.qaGroupKeys ?? []),
     });
 
     return { clinicId };
@@ -218,6 +249,8 @@ export const update = mutation({
     ...clinicInputFields,
     externalClinicId: v.union(v.string(), v.null()),
     isActive: v.boolean(),
+    sheetColumns: v.optional(clinicSheetColumns),
+    qaGroupKeys: v.optional(v.array(v.string())),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
@@ -240,53 +273,15 @@ export const update = mutation({
       clientId: args.clientId,
       isActive: args.isActive,
       externalClinicId: args.externalClinicId?.trim() || undefined,
+      sheetColumns: args.sheetColumns ?? clinic.sheetColumns,
+      qaGroupKeys: args.qaGroupKeys !== undefined
+        ? cleanQaGroupKeys(args.qaGroupKeys)
+        : clinic.qaGroupKeys,
     });
 
     return null;
   },
 });
-
-async function deleteColumnMappings(ctx: MutationCtx, clinicId: Id<"clinics">) {
-  while (true) {
-    const rows = await ctx.db
-      .query("clinicColumnMappings")
-      .withIndex("by_clinicId_and_purpose", (query) => query.eq("clinicId", clinicId))
-      .take(DEPENDENT_BATCH_SIZE);
-    if (rows.length === 0) return;
-
-    for (const row of rows) {
-      await ctx.db.delete("clinicColumnMappings", row._id);
-    }
-  }
-}
-
-async function deleteQaGroupAssignments(ctx: MutationCtx, clinicId: Id<"clinics">) {
-  while (true) {
-    const rows = await ctx.db
-      .query("clinicQaGroupAssignments")
-      .withIndex("by_clinicId_and_qaGroupId", (query) => query.eq("clinicId", clinicId))
-      .take(DEPENDENT_BATCH_SIZE);
-    if (rows.length === 0) return;
-
-    for (const row of rows) {
-      await ctx.db.delete("clinicQaGroupAssignments", row._id);
-    }
-  }
-}
-
-async function deleteReportingScopeLinks(ctx: MutationCtx, clinicId: Id<"clinics">) {
-  while (true) {
-    const rows = await ctx.db
-      .query("reportingScopeClinics")
-      .withIndex("by_clinicId_and_reportingScopeId", (query) => query.eq("clinicId", clinicId))
-      .take(DEPENDENT_BATCH_SIZE);
-    if (rows.length === 0) return;
-
-    for (const row of rows) {
-      await ctx.db.delete("reportingScopeClinics", row._id);
-    }
-  }
-}
 
 export const remove = mutation({
   args: { clinicId: v.id("clinics") },
@@ -299,9 +294,7 @@ export const remove = mutation({
       throw new Error("Clinic was not found.");
     }
 
-    await deleteColumnMappings(ctx, args.clinicId);
-    await deleteQaGroupAssignments(ctx, args.clinicId);
-    await deleteReportingScopeLinks(ctx, args.clinicId);
+    await removeClinicFromScopes(ctx, args.clinicId);
     await ctx.db.delete("clinics", args.clinicId);
 
     return null;

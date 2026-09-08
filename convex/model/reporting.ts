@@ -2,6 +2,11 @@ import { ConvexError } from "convex/values";
 
 import type { Id } from "../_generated/dataModel";
 import type { QueryCtx } from "../_generated/server";
+import type { Infer } from "convex/values";
+import { resolveClinicSheetColumns, type ResolvedClinicSheetColumns } from "./clinicSheetColumns";
+import type { staffRole } from "../schema";
+
+export type StaffRole = Infer<typeof staffRole>;
 
 export type ReportingScopeDoc = {
   _id: Id<"reportingScopes">;
@@ -9,6 +14,8 @@ export type ReportingScopeDoc = {
   key: string;
   name: string;
   isActive: boolean;
+  clinicIds: Id<"clinics">[];
+  allowedUserIds: Id<"users">[];
 };
 
 export type ReportingClinicDoc = {
@@ -17,31 +24,35 @@ export type ReportingClinicDoc = {
   name: string;
   googleSheetId: string;
   isActive: boolean;
+  sheetColumns: ResolvedClinicSheetColumns;
+  qaGroupKeys: string[];
 };
 
 type ReportingCtx = QueryCtx;
 
 const MAX_SCOPE_CLINICS = 200;
 
+export function canAccessReportingScope(
+  scope: ReportingScopeDoc,
+  userId: Id<"users">,
+  role: StaffRole
+): boolean {
+  if (role === "admin") return true;
+  return scope.allowedUserIds.includes(userId);
+}
+
 // A reporting scope is a named group of clinics that run together, for
-// example "The Smilist 2" or "DD ALL". Rows are ordered by `position` so the
-// report prints clinics in a stable order.
+// example "The Smilist 2" or "DD ALL". clinicIds order is the report order.
 export async function listScopeClinics(
   ctx: ReportingCtx,
   scope: ReportingScopeDoc
 ): Promise<ReportingClinicDoc[]> {
-  const links = await ctx.db
-    .query("reportingScopeClinics")
-    .withIndex("by_reportingScopeId_and_clinicId", (q) => q.eq("reportingScopeId", scope._id))
-    .take(MAX_SCOPE_CLINICS + 1);
-
-  const ordered = links.slice(0, MAX_SCOPE_CLINICS).sort((a, b) => a.position - b.position);
+  const clinicIds = scope.clinicIds.slice(0, MAX_SCOPE_CLINICS);
   const clinics: ReportingClinicDoc[] = [];
-  for (const link of ordered) {
-    const clinic = await ctx.db.get("clinics", link.clinicId);
+
+  for (const clinicId of clinicIds) {
+    const clinic = await ctx.db.get("clinics", clinicId);
     if (clinic === null) continue;
-    // A scope belongs to one client, so a clinic from another client is a
-    // data error rather than something to silently include.
     if (clinic.clientId !== scope.clientId) continue;
     if (!clinic.isActive) continue;
     clinics.push({
@@ -50,8 +61,11 @@ export async function listScopeClinics(
       name: clinic.name,
       googleSheetId: clinic.googleSheetId,
       isActive: clinic.isActive,
+      sheetColumns: resolveClinicSheetColumns(clinic.sheetColumns),
+      qaGroupKeys: clinic.qaGroupKeys,
     });
   }
+
   return clinics;
 }
 
@@ -65,6 +79,19 @@ export async function requireReportingScope(
   }
   if (!scope.isActive) {
     throw new ConvexError({ code: "FORBIDDEN", message: "This reporting scope is disabled." });
+  }
+  return scope;
+}
+
+export async function requireReportingScopeAccess(
+  ctx: ReportingCtx,
+  reportingScopeId: Id<"reportingScopes">,
+  userId: Id<"users">,
+  role: StaffRole
+): Promise<ReportingScopeDoc> {
+  const scope = await requireReportingScope(ctx, reportingScopeId);
+  if (!canAccessReportingScope(scope, userId, role)) {
+    throw new ConvexError({ code: "FORBIDDEN", message: "You do not have access to this scope." });
   }
   return scope;
 }

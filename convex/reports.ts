@@ -1,12 +1,11 @@
-import { v } from "convex/values";
+import { v, type Infer } from "convex/values";
 
 import type { Id } from "./_generated/dataModel";
 import type { QueryCtx } from "./_generated/server";
 import { action, internalMutation, internalQuery } from "./_generated/server";
 import { internal } from "./_generated/api.js";
-import { columnLetterToIndex, listScopeClinics, requireReportingScope } from "./model/reporting";
-import type { ReportingClinicDoc } from "./model/reporting";
-import { reportOperationKey } from "./schema";
+import { columnLetterToIndex, listScopeClinics, requireReportingScopeAccess } from "./model/reporting";
+import { reportOperationKey, staffRole } from "./schema";
 
 type SheetRow = string[];
 
@@ -131,29 +130,11 @@ const reportSheetResult = v.object({
   debug: v.union(reportSheetDebug, v.null()),
 });
 
-async function loadClinicColumns(
-  ctx: QueryCtx,
-  clinic: ReportingClinicDoc
-): Promise<{ updateStatus: string; uploadStatus: string; verificationType: string }> {
-  const fallback = { updateStatus: "T", uploadStatus: "R", verificationType: "N" };
-  const mappings = await ctx.db
-    .query("clinicColumnMappings")
-    .withIndex("by_clinicId_and_purpose", (q) => q.eq("clinicId", clinic._id))
-    .take(10);
-  const byPurpose = new Map(mappings.map((m) => [m.purpose, m.columnName]));
-  return {
-    updateStatus: byPurpose.get("updateStatus") ?? fallback.updateStatus,
-    uploadStatus: byPurpose.get("uploadStatus") ?? fallback.uploadStatus,
-    verificationType: byPurpose.get("verificationType") ?? fallback.verificationType,
-  };
-}
-
-// Config an operator needs before running: the scope, its clinics, and each
-// clinic's status columns (per-clinic override or legacy T/R/N fallback).
-// Kept as a named internal query so runSheetReport has one config entrypoint.
 async function reportRunConfigForScope(
   ctx: QueryCtx,
-  reportingScopeId: Id<"reportingScopes">
+  reportingScopeId: Id<"reportingScopes">,
+  userId: Id<"users">,
+  role: Infer<typeof staffRole>
 ): Promise<{
   scopeId: Id<"reportingScopes">;
   scopeName: string;
@@ -166,18 +147,17 @@ async function reportRunConfigForScope(
     verificationTypeColumn: string;
   }>;
 }> {
-  const scope = await requireReportingScope(ctx, reportingScopeId);
+  const scope = await requireReportingScopeAccess(ctx, reportingScopeId, userId, role);
   const clinics = await listScopeClinics(ctx, scope);
   const rows = [];
   for (const clinic of clinics) {
-    const columns = await loadClinicColumns(ctx, clinic);
     rows.push({
       clinicId: clinic._id,
       name: clinic.name,
       googleSheetId: clinic.googleSheetId,
-      updateStatusColumn: columns.updateStatus,
-      uploadStatusColumn: columns.uploadStatus,
-      verificationTypeColumn: columns.verificationType,
+      updateStatusColumn: clinic.sheetColumns.updateStatus,
+      uploadStatusColumn: clinic.sheetColumns.uploadStatus,
+      verificationTypeColumn: clinic.sheetColumns.verificationType,
     });
   }
   return { scopeId: scope._id, scopeName: scope.name, clinics: rows };
@@ -269,10 +249,8 @@ export const runSheetReport = action({
       } | null;
     }>;
   }> => {
-    const { userId }: { userId: Id<"users"> } = await ctx.runQuery(
-      internal.staffAuth.currentOperator,
-      {}
-    );
+    const { userId, role }: { userId: Id<"users">; role: Infer<typeof staffRole> } =
+      await ctx.runQuery(internal.staffAuth.currentOperator, {});
     const startedAt = Date.now();
     const verificationFilter = args.verificationFilter ?? "all";
     const wantDebug = args.debug ?? false;
@@ -292,6 +270,8 @@ export const runSheetReport = action({
       reportingScopeId: args.reportingScopeId,
       startDate: args.startDate,
       endDate: args.endDate,
+      userId,
+      role,
     });
 
     const { tabsForClinic }: { tabsForClinic: Record<string, string[]> } = await ctx.runAction(
@@ -494,6 +474,8 @@ export const runSheetReportConfig = internalQuery({
     reportingScopeId: v.id("reportingScopes"),
     startDate: v.string(),
     endDate: v.string(),
+    userId: v.id("users"),
+    role: staffRole,
   },
   returns: v.object({
     scopeId: v.id("reportingScopes"),
@@ -513,6 +495,6 @@ export const runSheetReportConfig = internalQuery({
     if (args.startDate > args.endDate) {
       throw new Error("The start date must be on or before the end date.");
     }
-    return reportRunConfigForScope(ctx, args.reportingScopeId);
+    return reportRunConfigForScope(ctx, args.reportingScopeId, args.userId, args.role);
   },
 });

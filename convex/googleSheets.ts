@@ -3,6 +3,8 @@ import { v } from "convex/values";
 import { action, query } from "./_generated/server";
 import { internal } from "./_generated/api.js";
 import { env } from "./_generated/server";
+import { canAccessReportingScope } from "./model/reporting";
+import { requireOperator } from "./model/staff";
 
 type GoogleTokenResponse = {
   access_token?: string;
@@ -84,8 +86,8 @@ export const listSheetTabs = action({
   },
 });
 
-// Scopes with their clinics, for the report form. Operators see every active
-// scope; admin-only config stays behind requireAdmin elsewhere.
+// Scopes the caller may run, for the report form. Admins see every active
+// scope; operators only see scopes that list them in allowedUserIds.
 export const listRunnableScopes = query({
   args: {},
   returns: v.array(
@@ -96,19 +98,15 @@ export const listRunnableScopes = query({
     })
   ),
   handler: async (ctx) => {
-    const { userId } = await ctx.runQuery(internal.staffAuth.currentOperator, {});
-    void userId;
+    const { userId, profile } = await requireOperator(ctx);
     const scopes = await ctx.db.query("reportingScopes").withIndex("by_key").take(200);
     const rows = [];
     for (const scope of scopes.filter((s) => s.isActive)) {
-      const links = await ctx.db
-        .query("reportingScopeClinics")
-        .withIndex("by_reportingScopeId_and_clinicId", (q) => q.eq("reportingScopeId", scope._id))
-        .take(201);
+      if (!canAccessReportingScope(scope, userId, profile.role)) continue;
       rows.push({
         reportingScopeId: scope._id,
         name: scope.name,
-        clinicCount: links.length,
+        clinicCount: scope.clinicIds.length,
       });
     }
     rows.sort((a, b) => a.name.localeCompare(b.name));
