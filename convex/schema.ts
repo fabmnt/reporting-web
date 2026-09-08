@@ -45,8 +45,8 @@ export default defineSchema({
     name: v.string(),
     googleSheetId: v.string(),
     isActive: v.boolean(),
-    sheetColumns: clinicSheetColumns,
-    qaGroupKeys: v.array(v.string()),
+    sheetColumns: v.optional(clinicSheetColumns),
+    qaGroupKeys: v.optional(v.array(v.string())),
   })
     .index("by_externalClinicId", ["externalClinicId"])
     .index("by_clientId_and_name", ["clientId", "name"])
@@ -57,8 +57,8 @@ export default defineSchema({
     key: v.string(),
     name: v.string(),
     isActive: v.boolean(),
-    clinicIds: v.array(v.id("clinics")),
-    allowedUserIds: v.array(v.id("users")),
+    clinicIds: v.optional(v.array(v.id("clinics"))),
+    allowedUserIds: v.optional(v.array(v.id("users"))),
   })
     .index("by_key", ["key"])
     .index("by_clientId_and_name", ["clientId", "name"]),

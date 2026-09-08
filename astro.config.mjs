@@ -13,7 +13,8 @@ export default defineConfig({
   integrations: [react()],
   vite: {
     server: {
-      strictPort: true,
+      // Pick the next free port when 4322 is taken by another Astro project.
+      strictPort: false,
     },
     plugins: [tailwindcss()],
   },

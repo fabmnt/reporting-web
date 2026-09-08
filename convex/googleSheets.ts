@@ -106,7 +106,7 @@ export const listRunnableScopes = query({
       rows.push({
         reportingScopeId: scope._id,
         name: scope.name,
-        clinicCount: scope.clinicIds.length,
+        clinicCount: (scope.clinicIds ?? []).length,
       });
     }
     rows.sort((a, b) => a.name.localeCompare(b.name));

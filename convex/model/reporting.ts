@@ -14,8 +14,8 @@ export type ReportingScopeDoc = {
   key: string;
   name: string;
   isActive: boolean;
-  clinicIds: Id<"clinics">[];
-  allowedUserIds: Id<"users">[];
+  clinicIds?: Id<"clinics">[];
+  allowedUserIds?: Id<"users">[];
 };
 
 export type ReportingClinicDoc = {
@@ -38,7 +38,7 @@ export function canAccessReportingScope(
   role: StaffRole
 ): boolean {
   if (role === "admin") return true;
-  return scope.allowedUserIds.includes(userId);
+  return (scope.allowedUserIds ?? []).includes(userId);
 }
 
 // A reporting scope is a named group of clinics that run together, for
@@ -47,7 +47,7 @@ export async function listScopeClinics(
   ctx: ReportingCtx,
   scope: ReportingScopeDoc
 ): Promise<ReportingClinicDoc[]> {
-  const clinicIds = scope.clinicIds.slice(0, MAX_SCOPE_CLINICS);
+  const clinicIds = (scope.clinicIds ?? []).slice(0, MAX_SCOPE_CLINICS);
   const clinics: ReportingClinicDoc[] = [];
 
   for (const clinicId of clinicIds) {
@@ -62,7 +62,7 @@ export async function listScopeClinics(
       googleSheetId: clinic.googleSheetId,
       isActive: clinic.isActive,
       sheetColumns: resolveClinicSheetColumns(clinic.sheetColumns),
-      qaGroupKeys: clinic.qaGroupKeys,
+      qaGroupKeys: clinic.qaGroupKeys ?? [],
     });
   }
 

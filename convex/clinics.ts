@@ -104,9 +104,9 @@ async function assertClinicNameAvailable(
 async function removeClinicFromScopes(ctx: MutationCtx, clinicId: Id<"clinics">) {
   const scopes = await ctx.db.query("reportingScopes").withIndex("by_key").take(MAX_SCOPES);
   for (const scope of scopes) {
-    if (!scope.clinicIds.includes(clinicId)) continue;
+    if (!(scope.clinicIds ?? []).includes(clinicId)) continue;
     await ctx.db.patch(scope._id, {
-      clinicIds: scope.clinicIds.filter((id) => id !== clinicId),
+      clinicIds: (scope.clinicIds ?? []).filter((id) => id !== clinicId),
     });
   }
 }
@@ -199,8 +199,8 @@ export const list = query({
         isActive: row.isActive,
         clientId: row.clientId,
         clientName,
-        sheetColumns: row.sheetColumns,
-        qaGroupKeys: row.qaGroupKeys,
+        sheetColumns: row.sheetColumns ?? {},
+        qaGroupKeys: row.qaGroupKeys ?? [],
       });
     }
     clinics.sort(
@@ -273,10 +273,11 @@ export const update = mutation({
       clientId: args.clientId,
       isActive: args.isActive,
       externalClinicId: args.externalClinicId?.trim() || undefined,
-      sheetColumns: args.sheetColumns ?? clinic.sheetColumns,
-      qaGroupKeys: args.qaGroupKeys !== undefined
-        ? cleanQaGroupKeys(args.qaGroupKeys)
-        : clinic.qaGroupKeys,
+      sheetColumns: args.sheetColumns ?? clinic.sheetColumns ?? {},
+      qaGroupKeys:
+        args.qaGroupKeys !== undefined
+          ? cleanQaGroupKeys(args.qaGroupKeys)
+          : (clinic.qaGroupKeys ?? []),
     });
 
     return null;
