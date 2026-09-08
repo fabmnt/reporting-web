@@ -8,6 +8,7 @@ import { requireAdmin } from "./model/staff";
 
 const MAX_CLINICS = 500;
 const MAX_CLIENTS = 200;
+const MAX_STAFF_PROFILES = 500;
 
 const clientView = v.object({
   clientId: v.id("clients"),
@@ -97,6 +98,17 @@ async function assertClinicNameAvailable(
 
   if (existing !== null && existing._id !== ignoreClinicId) {
     throw new Error("A clinic with this name already exists for this client.");
+  }
+}
+
+async function removeClinicFromStaffProfiles(ctx: MutationCtx, clinicId: Id<"clinics">) {
+  const profiles = await ctx.db.query("staffProfiles").withIndex("by_userId").take(MAX_STAFF_PROFILES);
+  for (const profile of profiles) {
+    const assignedClinicIds = profile.assignedClinicIds ?? [];
+    if (!assignedClinicIds.includes(clinicId)) continue;
+    await ctx.db.patch(profile._id, {
+      assignedClinicIds: assignedClinicIds.filter((id) => id !== clinicId),
+    });
   }
 }
 
@@ -284,6 +296,7 @@ export const remove = mutation({
       throw new Error("Clinic was not found.");
     }
 
+    await removeClinicFromStaffProfiles(ctx, args.clinicId);
     await ctx.db.delete("clinics", args.clinicId);
 
     return null;

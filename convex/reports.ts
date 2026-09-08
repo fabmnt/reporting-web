@@ -4,7 +4,7 @@ import type { Id } from "./_generated/dataModel";
 import type { QueryCtx } from "./_generated/server";
 import { action, internalMutation, internalQuery } from "./_generated/server";
 import { internal } from "./_generated/api.js";
-import { columnLetterToIndex, listClientClinics, requireRunnableClient } from "./model/reporting";
+import { columnLetterToIndex, listProfileClinics } from "./model/reporting";
 import { reportOperationKey } from "./schema";
 
 type SheetRow = string[];
@@ -204,7 +204,7 @@ function buildRunDebugSummary(
   }>
 ): string {
   if (clinicCount === 0) {
-    return "This client has no active clinics. Add a clinic for this client in admin first.";
+    return "No assigned clinics to read. Ask an admin to assign clinics to your account.";
   }
   const tabsInRangeTotal = clinics.reduce((sum, clinic) => sum + clinic.tabsInRange.length, 0);
   if (tabsInRangeTotal === 0) {
@@ -300,14 +300,13 @@ function buildRunDebug(
   };
 }
 
-async function reportRunConfigForClient(
+async function reportRunConfigForUser(
   ctx: QueryCtx,
-  clientId: Id<"clients">
+  userId: Id<"users">
 ): Promise<{
-  clientId: Id<"clients">;
-  clientName: string;
   clinics: Array<{
     clinicId: Id<"clinics">;
+    clientId: Id<"clients">;
     name: string;
     googleSheetId: string;
     updateStatusColumn: string;
@@ -315,26 +314,35 @@ async function reportRunConfigForClient(
     verificationTypeColumn: string;
   }>;
 }> {
-  const client = await requireRunnableClient(ctx, clientId);
-  const clinics = await listClientClinics(ctx, client._id);
-  const rows = [];
-  for (const clinic of clinics) {
-    rows.push({
+  const profile = await ctx.db
+    .query("staffProfiles")
+    .withIndex("by_userId", (query) => query.eq("userId", userId))
+    .unique();
+  if (profile === null || profile.status !== "active") {
+    throw new Error("An active staff account is required.");
+  }
+  if (profile.role !== "admin" && profile.role !== "operator") {
+    throw new Error("Operator access is required.");
+  }
+
+  const clinics = await listProfileClinics(ctx, profile);
+  return {
+    clinics: clinics.map((clinic) => ({
       clinicId: clinic._id,
+      clientId: clinic.clientId,
       name: clinic.name,
       googleSheetId: clinic.googleSheetId,
       updateStatusColumn: clinic.sheetColumns.updateStatus,
       uploadStatusColumn: clinic.sheetColumns.uploadStatus,
       verificationTypeColumn: clinic.sheetColumns.verificationType,
-    });
-  }
-  return { clientId: client._id, clientName: client.name, clinics: rows };
+    })),
+  };
 }
 
 export const recordReportRun = internalMutation({
   args: {
     operationKey: reportOperationKey,
-    clientId: v.id("clients"),
+    clientId: v.optional(v.id("clients")),
     status: v.union(v.literal("completed"), v.literal("failed"), v.literal("cancelled")),
     initiatedByUserId: v.id("users"),
     startedAt: v.number(),
@@ -366,18 +374,15 @@ export const recordReportRun = internalMutation({
 // carrier API data and comes later.
 export const runSheetReport = action({
   args: {
-    clientId: v.id("clients"),
     operationKey: v.union(v.literal("pending-audit"), v.literal("ready-to-upload")),
     startDate: v.string(),
     endDate: v.string(),
     verificationFilter: v.optional(v.union(v.literal("all"), v.literal("fbd"), v.literal("elg"))),
-    // TEMPORARY while project is in development: when true each sheet also
-    // returns why rows were dropped so the /reports form can show it.
     debug: v.optional(v.boolean()),
   },
   returns: v.object({
     reportRunId: v.union(v.id("reportRuns"), v.null()),
-    clientName: v.string(),
+    assignedClinicCount: v.number(),
     sheets: v.array(reportSheetResult),
     runDebug: v.union(reportRunDebug, v.null()),
   }),
@@ -386,7 +391,7 @@ export const runSheetReport = action({
     args
   ): Promise<{
     reportRunId: Id<"reportRuns"> | null;
-    clientName: string;
+    assignedClinicCount: number;
     sheets: SheetResultEntry[];
     runDebug: ReturnType<typeof buildRunDebug> | null;
   }> => {
@@ -399,10 +404,9 @@ export const runSheetReport = action({
     const wantDebug = args.debug ?? false;
 
     const config: {
-      clientId: Id<"clients">;
-      clientName: string;
       clinics: Array<{
         clinicId: Id<"clinics">;
+        clientId: Id<"clients">;
         name: string;
         googleSheetId: string;
         updateStatusColumn: string;
@@ -410,7 +414,7 @@ export const runSheetReport = action({
         verificationTypeColumn: string;
       }>;
     } = await ctx.runQuery(internal.reports.runSheetReportConfig, {
-      clientId: args.clientId,
+      userId,
       startDate: args.startDate,
       endDate: args.endDate,
     });
@@ -564,11 +568,14 @@ export const runSheetReport = action({
       }
     }
 
+    const clientIds = new Set(config.clinics.map((clinic) => clinic.clientId));
+    const reportClientId = clientIds.size === 1 ? config.clinics[0]?.clientId : undefined;
+
     const { reportRunId }: { reportRunId: Id<"reportRuns"> } = await ctx.runMutation(
       internal.reports.recordReportRun,
       {
         operationKey: args.operationKey,
-        clientId: config.clientId,
+        clientId: reportClientId,
         status: succeededClinics === 0 ? "failed" : "completed",
         initiatedByUserId: userId,
         startedAt,
@@ -581,7 +588,7 @@ export const runSheetReport = action({
 
     return {
       reportRunId,
-      clientName: config.clientName,
+      assignedClinicCount: config.clinics.length,
       sheets,
       runDebug: wantDebug
         ? buildRunDebug(
@@ -603,16 +610,15 @@ export const runSheetReport = action({
 // Thin wrapper so runSheetReport keeps one internal config entrypoint.
 export const runSheetReportConfig = internalQuery({
   args: {
-    clientId: v.id("clients"),
+    userId: v.id("users"),
     startDate: v.string(),
     endDate: v.string(),
   },
   returns: v.object({
-    clientId: v.id("clients"),
-    clientName: v.string(),
     clinics: v.array(
       v.object({
         clinicId: v.id("clinics"),
+        clientId: v.id("clients"),
         name: v.string(),
         googleSheetId: v.string(),
         updateStatusColumn: v.string(),
@@ -625,6 +631,6 @@ export const runSheetReportConfig = internalQuery({
     if (args.startDate > args.endDate) {
       throw new Error("The start date must be on or before the end date.");
     }
-    return reportRunConfigForClient(ctx, args.clientId);
+    return reportRunConfigForUser(ctx, args.userId);
   },
 });

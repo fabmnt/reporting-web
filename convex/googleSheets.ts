@@ -3,7 +3,7 @@ import { v } from "convex/values";
 import { action, query } from "./_generated/server";
 import { internal } from "./_generated/api.js";
 import { env } from "./_generated/server";
-import { countClientClinics } from "./model/reporting";
+import { listProfileClinics, profileUsesAllClinics } from "./model/reporting";
 import { requireOperator } from "./model/staff";
 
 type GoogleTokenResponse = {
@@ -86,28 +86,39 @@ export const listSheetTabs = action({
   },
 });
 
-// Active clients the caller may run reports for.
-export const listRunnableClients = query({
+export const listAssignedReportClinics = query({
   args: {},
-  returns: v.array(
-    v.object({
-      clientId: v.id("clients"),
-      name: v.string(),
-      clinicCount: v.number(),
-    })
-  ),
+  returns: v.object({
+    usesAllClinics: v.boolean(),
+    clinics: v.array(
+      v.object({
+        clinicId: v.id("clinics"),
+        name: v.string(),
+        clientName: v.string(),
+      })
+    ),
+  }),
   handler: async (ctx) => {
-    await requireOperator(ctx);
-    const clients = await ctx.db.query("clients").withIndex("by_key").take(200);
-    const rows = [];
-    for (const client of clients.filter((entry) => entry.isActive)) {
-      rows.push({
-        clientId: client._id,
-        name: client.name,
-        clinicCount: await countClientClinics(ctx, client._id),
+    const { profile } = await requireOperator(ctx);
+    const assigned = await listProfileClinics(ctx, profile);
+    const clientNameById = new Map<string, string>();
+    const clinics = [];
+    for (const clinic of assigned) {
+      let clientName = clientNameById.get(clinic.clientId);
+      if (clientName === undefined) {
+        const client = await ctx.db.get("clients", clinic.clientId);
+        clientName = client?.name ?? "Unknown client";
+        clientNameById.set(clinic.clientId, clientName);
+      }
+      clinics.push({
+        clinicId: clinic._id,
+        name: clinic.name,
+        clientName,
       });
     }
-    rows.sort((a, b) => a.name.localeCompare(b.name));
-    return rows;
+    return {
+      usesAllClinics: profileUsesAllClinics(profile),
+      clinics,
+    };
   },
 });

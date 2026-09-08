@@ -40,6 +40,14 @@ import {
 } from "@/components/ui/table";
 
 import { parseSpreadsheetId } from "@/lib/googleSheets";
+import {
+  buildSheetColumnsInput,
+  CLINIC_SHEET_COLUMN_DEFAULTS,
+  EMPTY_SHEET_COLUMN_FORM,
+  formatSheetColumnSummary,
+  sheetColumnsToFormValues,
+  type SheetColumnFormValues,
+} from "@/lib/clinicSheetColumns";
 import { ProtectedRoute } from "../auth/ProtectedRoute";
 
 type ClinicList = FunctionReturnType<typeof api.clinics.list>;
@@ -53,6 +61,7 @@ type ClinicFormValues = {
   clientId: string;
   externalClinicId: string;
   isActive: boolean;
+  sheetColumns: SheetColumnFormValues;
 };
 
 const EMPTY_FORM: ClinicFormValues = {
@@ -61,7 +70,108 @@ const EMPTY_FORM: ClinicFormValues = {
   clientId: "",
   externalClinicId: "",
   isActive: true,
+  sheetColumns: EMPTY_SHEET_COLUMN_FORM,
 };
+
+function SheetColumnFields({
+  values,
+  onChange,
+  disabled,
+}: {
+  values: SheetColumnFormValues;
+  onChange: (values: SheetColumnFormValues) => void;
+  disabled: boolean;
+}) {
+  function update<K extends keyof SheetColumnFormValues>(key: K, value: SheetColumnFormValues[K]) {
+    onChange({ ...values, [key]: value });
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-1">
+        <h4 className="text-sm font-medium">Sheet columns</h4>
+        <p className="text-xs text-muted-foreground">
+          Leave a field empty to use the global default shown in the placeholder.
+        </p>
+      </div>
+      <div className="grid gap-4 md:grid-cols-3">
+        <Field>
+          <FieldLabel htmlFor="column-update-status">Update status</FieldLabel>
+          <Input
+            id="column-update-status"
+            value={values.updateStatus}
+            onChange={(event) => update("updateStatus", event.target.value.toUpperCase())}
+            placeholder={CLINIC_SHEET_COLUMN_DEFAULTS.updateStatus}
+            disabled={disabled}
+            className="font-mono uppercase"
+          />
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="column-upload-status">Upload status</FieldLabel>
+          <Input
+            id="column-upload-status"
+            value={values.uploadStatus}
+            onChange={(event) => update("uploadStatus", event.target.value.toUpperCase())}
+            placeholder={CLINIC_SHEET_COLUMN_DEFAULTS.uploadStatus}
+            disabled={disabled}
+            className="font-mono uppercase"
+          />
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="column-verification-type">Verification type</FieldLabel>
+          <Input
+            id="column-verification-type"
+            value={values.verificationType}
+            onChange={(event) => update("verificationType", event.target.value.toUpperCase())}
+            placeholder={CLINIC_SHEET_COLUMN_DEFAULTS.verificationType}
+            disabled={disabled}
+            className="font-mono uppercase"
+          />
+        </Field>
+      </div>
+      <details className="rounded-md border px-3 py-2">
+        <summary className="cursor-pointer text-sm font-medium">Advanced columns</summary>
+        <div className="mt-4 grid gap-4 md:grid-cols-3">
+          <Field>
+            <FieldLabel htmlFor="column-file-url">File URL</FieldLabel>
+            <Input
+              id="column-file-url"
+              value={values.fileUrl}
+              onChange={(event) => update("fileUrl", event.target.value.toUpperCase())}
+              placeholder={CLINIC_SHEET_COLUMN_DEFAULTS.fileUrl}
+              disabled={disabled}
+              className="font-mono uppercase"
+            />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="column-url">URL</FieldLabel>
+            <Input
+              id="column-url"
+              value={values.url}
+              onChange={(event) => update("url", event.target.value.toUpperCase())}
+              placeholder={CLINIC_SHEET_COLUMN_DEFAULTS.url}
+              disabled={disabled}
+              className="font-mono uppercase"
+            />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="column-conditional-formatting">Conditional formatting</FieldLabel>
+            <Input
+              id="column-conditional-formatting"
+              value={values.conditionalFormatting}
+              onChange={(event) =>
+                update("conditionalFormatting", event.target.value.toUpperCase())
+              }
+              placeholder={CLINIC_SHEET_COLUMN_DEFAULTS.conditionalFormatting}
+              disabled={disabled}
+              className="font-mono uppercase"
+            />
+          </Field>
+        </div>
+      </details>
+    </div>
+  );
+}
 
 function ClinicForm({
   title,
@@ -184,6 +294,11 @@ function ClinicForm({
           <FieldLabel htmlFor="clinic-active">Active</FieldLabel>
         </Field>
       </div>
+      <SheetColumnFields
+        values={values.sheetColumns}
+        onChange={(sheetColumns) => update("sheetColumns", sheetColumns)}
+        disabled={pending}
+      />
       {validationError ? <p className="text-sm text-destructive">{validationError}</p> : null}
       <div className="flex justify-end gap-2">
         <Button type="button" variant="outline" onClick={onCancel} disabled={pending}>
@@ -241,6 +356,7 @@ function PanelContent() {
     resetError();
     try {
       const clientId = values.clientId as Id<"clients">;
+      const sheetColumns = buildSheetColumnsInput(values.sheetColumns) ?? {};
       if (formMode === "editing" && editingClinic !== null) {
         await updateClinic({
           clinicId: editingClinic.clinicId,
@@ -249,6 +365,7 @@ function PanelContent() {
           clientId,
           externalClinicId: values.externalClinicId === "" ? null : values.externalClinicId,
           isActive: values.isActive,
+          sheetColumns,
         });
       } else {
         await createClinic({
@@ -257,6 +374,7 @@ function PanelContent() {
           clientId,
           externalClinicId: values.externalClinicId === "" ? undefined : values.externalClinicId,
           isActive: values.isActive,
+          sheetColumns,
         });
       }
       closeForm();
@@ -336,6 +454,7 @@ function PanelContent() {
           clientId: editingClinic.clientId,
           externalClinicId: editingClinic.externalClinicId ?? "",
           isActive: editingClinic.isActive,
+          sheetColumns: sheetColumnsToFormValues(editingClinic.sheetColumns),
         }
       : EMPTY_FORM;
 
@@ -413,7 +532,9 @@ function PanelContent() {
               key={isEditing && editingClinic ? editingClinic.clinicId : "creating"}
               title={isEditing ? "Edit clinic" : "New clinic"}
               description={
-                isEditing ? "Update the clinic details." : "Paste the Google Sheet URL or ID."
+                isEditing
+                  ? "Update clinic details and sheet column letters."
+                  : "Paste the Google Sheet URL or ID and set column letters if this clinic differs from the defaults."
               }
               clients={clients}
               initialValues={formInitialValues}
@@ -436,6 +557,7 @@ function PanelContent() {
                   <TableHead>Clinic</TableHead>
                   <TableHead>Client</TableHead>
                   <TableHead>Google Sheet</TableHead>
+                  <TableHead>Columns</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Actions</TableHead>
                 </TableRow>
@@ -457,6 +579,9 @@ function PanelContent() {
                       </TableCell>
                       <TableCell>{clinic.clientName}</TableCell>
                       <TableCell className="font-mono text-xs">{clinic.googleSheetId}</TableCell>
+                      <TableCell className="font-mono text-xs">
+                        {formatSheetColumnSummary(clinic.sheetColumns)}
+                      </TableCell>
                       <TableCell>
                         <Badge variant={clinic.isActive ? "secondary" : "outline"}>
                           {clinic.isActive ? "Active" : "Inactive"}

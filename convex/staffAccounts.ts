@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 
+import type { Id } from "./_generated/dataModel";
 import { mutation, query } from "./_generated/server";
 import { getStaffProfile, requireAdmin, requireCurrentUserId } from "./model/staff";
 import { staffRole, staffStatus } from "./schema";
@@ -15,9 +16,24 @@ const currentAccount = v.object({
 
 const managedAccount = currentAccount.extend({
   isCurrentUser: v.boolean(),
+  assignedClinicIds: v.array(v.id("clinics")),
 });
 
+const MAX_ASSIGNED_CLINICS = 200;
 const MAX_MANAGED_ACCOUNTS = 100;
+
+function cleanAssignedClinicIds(clinicIds: Id<"clinics">[]): Id<"clinics">[] {
+  const seen = new Set<string>();
+  const cleaned: Id<"clinics">[] = [];
+  for (const clinicId of clinicIds) {
+    const key = clinicId as string;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    cleaned.push(clinicId);
+    if (cleaned.length >= MAX_ASSIGNED_CLINICS) break;
+  }
+  return cleaned;
+}
 
 export const ensureCurrentProfile = mutation({
   args: {},
@@ -117,6 +133,7 @@ export const listManaged = query({
           role: profile.role,
           status: profile.status,
           isCurrentUser: profile.userId === userId,
+          assignedClinicIds: profile.assignedClinicIds ?? [],
         };
       })
     );
@@ -169,6 +186,32 @@ export const setStatus = mutation({
     }
 
     await ctx.db.patch("staffProfiles", args.profileId, { status: args.status });
+    return null;
+  },
+});
+
+export const setAssignedClinics = mutation({
+  args: {
+    profileId: v.id("staffProfiles"),
+    clinicIds: v.array(v.id("clinics")),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await requireAdmin(ctx);
+    const target = await ctx.db.get("staffProfiles", args.profileId);
+    if (target === null) {
+      throw new Error("Staff profile was not found.");
+    }
+
+    const clinicIds = cleanAssignedClinicIds(args.clinicIds);
+    for (const clinicId of clinicIds) {
+      const clinic = await ctx.db.get("clinics", clinicId);
+      if (clinic === null) {
+        throw new Error("One of the selected clinics was not found.");
+      }
+    }
+
+    await ctx.db.patch("staffProfiles", args.profileId, { assignedClinicIds: clinicIds });
     return null;
   },
 });

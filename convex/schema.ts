@@ -31,6 +31,7 @@ export default defineSchema({
     displayName: v.string(),
     role: staffRole,
     status: staffStatus,
+    assignedClinicIds: v.optional(v.array(v.id("clinics"))),
   }).index("by_userId", ["userId"]),
 
   clients: defineTable({
@@ -55,7 +56,7 @@ export default defineSchema({
   reportRuns: defineTable({
     initiatedByUserId: v.id("users"),
     operationKey: reportOperationKey,
-    clientId: v.id("clients"),
+    clientId: v.optional(v.id("clients")),
     status: reportRunStatus,
     startedAt: v.number(),
     completedAt: v.optional(v.number()),

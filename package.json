@@ -20,7 +20,8 @@
     "test:watch": "vitest",
     "e2e": "playwright test",
     "typecheck": "astro check",
-    "google:token": "node --env-file-if-exists=.env.local scripts/generate-google-token.ts"
+    "google:token": "node --env-file-if-exists=.env.local scripts/generate-google-token.ts",
+    "import:legacy-columns": "node --env-file-if-exists=.env.local scripts/import-legacy-clinic-columns.ts"
   },
   "dependencies": {
     "@astrojs/react": "^6.0.5",
@@ -32,10 +33,13 @@
     "astro": "^7.2.10",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "cn": "^0.2.6",
     "convex": "^1.45.0",
+    "date-fns": "^4.4.0",
     "jose": "^6.2.10",
     "lucide-react": "^1.39.0",
     "react": "^19.2.8",
+    "react-day-picker": "^10.0.1",
     "react-dom": "^19.2.8",
     "shadcn": "^4.19.1",
     "tailwind-merge": "^3.6.0",

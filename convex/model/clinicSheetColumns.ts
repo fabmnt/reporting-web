@@ -30,7 +30,7 @@ export type ResolvedClinicSheetColumns = {
   conditionalFormatting: string;
 };
 
-const DEFAULTS: ResolvedClinicSheetColumns = {
+export const CLINIC_SHEET_COLUMN_DEFAULTS: ResolvedClinicSheetColumns = {
   updateStatus: "T",
   uploadStatus: "R",
   verificationType: "N",
@@ -38,6 +38,8 @@ const DEFAULTS: ResolvedClinicSheetColumns = {
   url: "Y",
   conditionalFormatting: "AC",
 };
+
+const DEFAULTS = CLINIC_SHEET_COLUMN_DEFAULTS;
 
 export function resolveClinicSheetColumns(
   columns: ClinicSheetColumnsInput | undefined

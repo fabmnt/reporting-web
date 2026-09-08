@@ -1,8 +1,17 @@
 import { ConvexError } from "convex/values";
+import type { Infer } from "convex/values";
 
 import type { Id } from "../_generated/dataModel";
 import type { QueryCtx } from "../_generated/server";
 import { resolveClinicSheetColumns, type ResolvedClinicSheetColumns } from "./clinicSheetColumns";
+import type { staffRole } from "../schema";
+
+export type StaffRole = Infer<typeof staffRole>;
+
+export type StaffProfileForReporting = {
+  role: StaffRole;
+  assignedClinicIds?: Id<"clinics">[];
+};
 
 export type ReportingClientDoc = {
   _id: Id<"clients">;
@@ -24,6 +33,59 @@ export type ReportingClinicDoc = {
 type ReportingCtx = QueryCtx;
 
 const MAX_CLIENT_CLINICS = 200;
+const MAX_ASSIGNED_CLINICS = 200;
+
+function toReportingClinic(clinic: {
+  _id: Id<"clinics">;
+  clientId: Id<"clients">;
+  name: string;
+  googleSheetId: string;
+  isActive: boolean;
+  sheetColumns?: Parameters<typeof resolveClinicSheetColumns>[0];
+  qaGroupKeys?: string[];
+}): ReportingClinicDoc {
+  return {
+    _id: clinic._id,
+    clientId: clinic.clientId,
+    name: clinic.name,
+    googleSheetId: clinic.googleSheetId,
+    isActive: clinic.isActive,
+    sheetColumns: resolveClinicSheetColumns(clinic.sheetColumns),
+    qaGroupKeys: clinic.qaGroupKeys ?? [],
+  };
+}
+
+// Admins with no assignments see every active clinic. Everyone else runs only
+// their assignedClinicIds (active clinics only, unknown ids are skipped).
+export async function listProfileClinics(
+  ctx: ReportingCtx,
+  profile: StaffProfileForReporting
+): Promise<ReportingClinicDoc[]> {
+  const assignedIds = (profile.assignedClinicIds ?? []).slice(0, MAX_ASSIGNED_CLINICS);
+
+  if (profile.role === "admin" && assignedIds.length === 0) {
+    const rows = await ctx.db
+      .query("clinics")
+      .withIndex("by_clientId_and_name")
+      .take(MAX_CLIENT_CLINICS);
+    const clinics = rows.filter((clinic) => clinic.isActive).map(toReportingClinic);
+    clinics.sort((a, b) => a.name.localeCompare(b.name));
+    return clinics;
+  }
+
+  const clinics: ReportingClinicDoc[] = [];
+  for (const clinicId of assignedIds) {
+    const clinic = await ctx.db.get("clinics", clinicId);
+    if (clinic === null || !clinic.isActive) continue;
+    clinics.push(toReportingClinic(clinic));
+  }
+  clinics.sort((a, b) => a.name.localeCompare(b.name));
+  return clinics;
+}
+
+export function profileUsesAllClinics(profile: StaffProfileForReporting): boolean {
+  return profile.role === "admin" && (profile.assignedClinicIds ?? []).length === 0;
+}
 
 export async function countClientClinics(
   ctx: ReportingCtx,
@@ -48,15 +110,7 @@ export async function listClientClinics(
 
   for (const clinic of rows) {
     if (!clinic.isActive) continue;
-    clinics.push({
-      _id: clinic._id,
-      clientId: clinic.clientId,
-      name: clinic.name,
-      googleSheetId: clinic.googleSheetId,
-      isActive: clinic.isActive,
-      sheetColumns: resolveClinicSheetColumns(clinic.sheetColumns),
-      qaGroupKeys: clinic.qaGroupKeys ?? [],
-    });
+    clinics.push(toReportingClinic(clinic));
   }
 
   clinics.sort((a, b) => a.name.localeCompare(b.name));

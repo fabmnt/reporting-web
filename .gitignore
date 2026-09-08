@@ -24,3 +24,6 @@ convex/_generated/
 
 # jetbrains setting folder
 .idea/
+
+# migration script output
+scripts/output/

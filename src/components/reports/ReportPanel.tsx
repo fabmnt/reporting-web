@@ -7,8 +7,8 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { Field, FieldLabel } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -28,6 +28,7 @@ import {
 } from "@/components/ui/table";
 
 import { ProtectedRoute } from "../auth/ProtectedRoute";
+import { todayIso } from "@/lib/dates";
 
 type OperationKey = "pending-audit" | "ready-to-upload";
 
@@ -67,7 +68,7 @@ type SheetResult = {
 };
 type ReportResult = {
   reportRunId: Id<"reportRuns"> | null;
-  clientName: string;
+  assignedClinicCount: number;
   sheets: SheetResult[];
   runDebug: RunDebug | null;
 };
@@ -92,14 +93,19 @@ type RunDebug = {
   aggregateDropReasons: Array<{ reason: string; count: number }>;
 };
 
-const OPERATIONS: Array<{ key: OperationKey; label: string }> = [
-  { key: "pending-audit", label: "Pending audit" },
-  { key: "ready-to-upload", label: "Ready to upload" },
+const OPERATIONS: Array<{ key: OperationKey; label: string; description: string }> = [
+  {
+    key: "pending-audit",
+    label: "Pending audit",
+    description: "Rows waiting for QA review before upload.",
+  },
+  {
+    key: "ready-to-upload",
+    label: "Ready to upload (incl. review)",
+    description:
+      "Rows ready to upload and rows that need review. Both groups come from the same report.",
+  },
 ];
-
-function todayIso(): string {
-  return new Date().toISOString().slice(0, 10);
-}
 
 function ResultTable({
   title,
@@ -184,7 +190,7 @@ function RunDebugPanel({ runDebug }: { runDebug: RunDebug }) {
       </p>
       {runDebug.clinicCount === 0 ? (
         <p className="text-sm text-muted-foreground">
-          Add an active clinic for this client in admin before running the report again.
+          Ask an admin to assign clinics to your account before running the report again.
         </p>
       ) : (
         <div className="flex flex-col gap-3">
@@ -287,24 +293,26 @@ function DebugPanel({ debug }: { debug: SheetDebug }) {
 }
 
 function PanelContent() {
-  const clients = useQuery(api.googleSheets.listRunnableClients, {});
+  const assignment = useQuery(api.googleSheets.listAssignedReportClinics, {});
   const runReport = useAction(api.reports.runSheetReport);
 
-  const [clientId, setClientId] = useState("");
   const [operation, setOperation] = useState<OperationKey>("pending-audit");
-  const [startDate, setStartDate] = useState(todayIso());
-  const [endDate, setEndDate] = useState(todayIso());
+  const [dateRange, setDateRange] = useState({ startDate: todayIso(), endDate: todayIso() });
   const [verification, setVerification] = useState<"all" | "fbd" | "elg">("all");
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<ReportResult | null>(null);
 
   async function handleRun() {
-    if (!clientId) {
-      setError("Choose a client first.");
+    if ((assignment?.clinics.length ?? 0) === 0) {
+      setError("No assigned clinics to run.");
       return;
     }
-    if (startDate > endDate) {
+    if (!dateRange.startDate || !dateRange.endDate) {
+      setError("Pick a start and end date.");
+      return;
+    }
+    if (dateRange.startDate > dateRange.endDate) {
       setError("The start date must be on or before the end date.");
       return;
     }
@@ -313,10 +321,9 @@ function PanelContent() {
     setResult(null);
     try {
       const data = await runReport({
-        clientId: clientId as Id<"clients">,
         operationKey: operation,
-        startDate,
-        endDate,
+        startDate: dateRange.startDate,
+        endDate: dateRange.endDate,
         verificationFilter: verification,
         // TEMPORARY while project is in development: always ask for filter
         // reasons so testers can see why rows were dropped.
@@ -330,17 +337,17 @@ function PanelContent() {
     }
   }
 
-  if (clients === undefined) return <Skeleton className="h-80 w-full" />;
+  if (assignment === undefined) return <Skeleton className="h-80 w-full" />;
 
-  const selectedClient = clients.find((client) => client.clientId === clientId);
-  const selectedClientClinicCount = selectedClient?.clinicCount ?? 0;
+  const assignedClinicCount = assignment.clinics.length;
 
   const totalRows =
-    result?.sheets.reduce(
-      (sum, sheet) =>
-        sum + sheet.readyRows.length + sheet.reviewRows.length + sheet.auditRows.length,
-      0
-    ) ?? 0;
+    result?.sheets.reduce((sum, sheet) => {
+      if (operation === "pending-audit") return sum + sheet.auditRows.length;
+      return sum + sheet.readyRows.length + sheet.reviewRows.length;
+    }, 0) ?? 0;
+
+  const selectedOperation = OPERATIONS.find((item) => item.key === operation);
 
   return (
     <div className="flex flex-col gap-6">
@@ -348,7 +355,7 @@ function PanelContent() {
         <CardHeader>
           <CardTitle>Run report</CardTitle>
           <CardDescription>
-            Pick a client and date range. The backend reads each clinic sheet tab in that range and
+            Pick a date range. The backend reads your assigned clinic sheets in that range and
             applies the same row rules as the desktop tool.
           </CardDescription>
         </CardHeader>
@@ -360,50 +367,14 @@ function PanelContent() {
             </Alert>
           ) : null}
           <div className="grid gap-4 md:grid-cols-2">
-            <Field>
-              <FieldLabel htmlFor="report-start">Start date</FieldLabel>
-              <Input
-                id="report-start"
-                type="date"
-                value={startDate}
-                onChange={(event) => setStartDate(event.target.value)}
+            <Field className="md:col-span-2">
+              <FieldLabel htmlFor="report-date-range">Date range</FieldLabel>
+              <DateRangePicker
+                id="report-date-range"
+                value={dateRange}
+                onChange={setDateRange}
                 disabled={running}
               />
-            </Field>
-            <Field>
-              <FieldLabel htmlFor="report-end">End date</FieldLabel>
-              <Input
-                id="report-end"
-                type="date"
-                value={endDate}
-                onChange={(event) => setEndDate(event.target.value)}
-                disabled={running}
-              />
-            </Field>
-            <Field>
-              <FieldLabel>Client</FieldLabel>
-              <Select
-                items={clients.map((client) => ({
-                  value: client.clientId,
-                  label: `${client.name} (${client.clinicCount})`,
-                }))}
-                value={clientId}
-                onValueChange={(value) => setClientId(value ?? "")}
-                disabled={running}
-              >
-                <SelectTrigger aria-label="Client" className="w-full">
-                  <SelectValue placeholder="Choose a client" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectGroup>
-                    {clients.map((client) => (
-                      <SelectItem key={client.clientId} value={client.clientId}>
-                        {client.name} ({client.clinicCount})
-                      </SelectItem>
-                    ))}
-                  </SelectGroup>
-                </SelectContent>
-              </Select>
             </Field>
             <Field>
               <FieldLabel>Report type</FieldLabel>
@@ -426,6 +397,9 @@ function PanelContent() {
                   </SelectGroup>
                 </SelectContent>
               </Select>
+              {selectedOperation ? (
+                <p className="text-xs text-muted-foreground">{selectedOperation.description}</p>
+              ) : null}
             </Field>
             {operation === "pending-audit" ? (
               <Field>
@@ -456,25 +430,36 @@ function PanelContent() {
               </Field>
             ) : null}
           </div>
-          {selectedClient && selectedClientClinicCount === 0 ? (
-            <Alert>
-              <AlertTitle>No clinics for this client</AlertTitle>
-              <AlertDescription>
-                &quot;{selectedClient.name}&quot; has no active clinics. Add a clinic for this client
-                in admin first.
-              </AlertDescription>
-            </Alert>
-          ) : null}
+          <div className="flex flex-col gap-2 rounded-md border p-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <h4 className="text-sm font-medium">Your clinics</h4>
+              <Badge variant="secondary">{assignedClinicCount}</Badge>
+              {assignment.usesAllClinics ? (
+                <Badge variant="outline">All clinics (admin)</Badge>
+              ) : null}
+            </div>
+            {assignedClinicCount === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                No clinics assigned yet. Ask an admin to assign clinics to your account.
+              </p>
+            ) : (
+              <ul className="flex flex-col gap-1 text-sm text-muted-foreground">
+                {assignment.clinics.map((clinic) => (
+                  <li key={clinic.clinicId}>
+                    {clinic.name} · {clinic.clientName}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
           <div>
-            <Button onClick={() => void handleRun()} disabled={running || clients.length === 0}>
+            <Button
+              onClick={() => void handleRun()}
+              disabled={running || assignedClinicCount === 0}
+            >
               {running ? "Running..." : "Run report"}
             </Button>
           </div>
-          {clients.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No active clients yet. Ask an admin to create a client and add clinics first.
-            </p>
-          ) : null}
         </CardContent>
       </Card>
 
@@ -482,17 +467,18 @@ function PanelContent() {
         <Card>
           <CardHeader>
             <CardTitle>
-              {result.clientName} <Badge variant="secondary">{totalRows} rows</Badge>
+              Report results <Badge variant="secondary">{totalRows} rows</Badge>
             </CardTitle>
             <CardDescription>
-              {startDate} to {endDate}. Sheet row numbers match the Google Sheet.
+              {result.assignedClinicCount} clinic(s), {dateRange.startDate} to {dateRange.endDate}.
+              Sheet row numbers match the Google Sheet.
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-6">
             {result.runDebug ? <RunDebugPanel runDebug={result.runDebug} /> : null}
             {result.sheets.length === 0 && !result.runDebug ? (
               <p className="text-sm text-muted-foreground">
-                No sheets were processed. Enable debug or check the client and clinic configuration.
+                No sheets were processed. Enable debug or check your assigned clinics.
               </p>
             ) : null}
             {result.sheets.map((sheet) => (
@@ -512,27 +498,35 @@ function PanelContent() {
                   </Alert>
                 ) : (
                   <>
-                    <ResultTable
-                      title="Ready to upload"
-                      count={sheet.readyRows.length}
-                      headers={sheet.headers}
-                      rows={sheet.readyRows}
-                    />
-                    <ResultTable
-                      title="Needs review"
-                      count={sheet.reviewRows.length}
-                      headers={sheet.headers}
-                      rows={sheet.reviewRows}
-                    />
-                    <ResultTable
-                      title="Pending audit"
-                      count={sheet.auditRows.length}
-                      headers={sheet.headers}
-                      rows={sheet.auditRows}
-                    />
-                    {sheet.readyRows.length === 0 &&
-                    sheet.reviewRows.length === 0 &&
-                    sheet.auditRows.length === 0 ? (
+                    {operation === "ready-to-upload" ? (
+                      <>
+                        <ResultTable
+                          title="Ready to upload"
+                          count={sheet.readyRows.length}
+                          headers={sheet.headers}
+                          rows={sheet.readyRows}
+                        />
+                        <ResultTable
+                          title="Needs review"
+                          count={sheet.reviewRows.length}
+                          headers={sheet.headers}
+                          rows={sheet.reviewRows}
+                        />
+                      </>
+                    ) : (
+                      <ResultTable
+                        title="Pending audit"
+                        count={sheet.auditRows.length}
+                        headers={sheet.headers}
+                        rows={sheet.auditRows}
+                      />
+                    )}
+                    {operation === "ready-to-upload" &&
+                    sheet.readyRows.length === 0 &&
+                    sheet.reviewRows.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">No matching rows.</p>
+                    ) : null}
+                    {operation === "pending-audit" && sheet.auditRows.length === 0 ? (
                       <p className="text-sm text-muted-foreground">No matching rows.</p>
                     ) : null}
                     {sheet.debug ? <DebugPanel debug={sheet.debug} /> : null}
