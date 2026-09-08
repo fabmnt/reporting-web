@@ -8,7 +8,6 @@ import { requireAdmin } from "./model/staff";
 
 const MAX_CLINICS = 500;
 const MAX_CLIENTS = 200;
-const MAX_SCOPES = 200;
 
 const clientView = v.object({
   clientId: v.id("clients"),
@@ -98,16 +97,6 @@ async function assertClinicNameAvailable(
 
   if (existing !== null && existing._id !== ignoreClinicId) {
     throw new Error("A clinic with this name already exists for this client.");
-  }
-}
-
-async function removeClinicFromScopes(ctx: MutationCtx, clinicId: Id<"clinics">) {
-  const scopes = await ctx.db.query("reportingScopes").withIndex("by_key").take(MAX_SCOPES);
-  for (const scope of scopes) {
-    if (!(scope.clinicIds ?? []).includes(clinicId)) continue;
-    await ctx.db.patch(scope._id, {
-      clinicIds: (scope.clinicIds ?? []).filter((id) => id !== clinicId),
-    });
   }
 }
 
@@ -295,7 +284,6 @@ export const remove = mutation({
       throw new Error("Clinic was not found.");
     }
 
-    await removeClinicFromScopes(ctx, args.clinicId);
     await ctx.db.delete("clinics", args.clinicId);
 
     return null;

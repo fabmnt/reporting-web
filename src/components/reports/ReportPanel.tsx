@@ -67,8 +67,29 @@ type SheetResult = {
 };
 type ReportResult = {
   reportRunId: Id<"reportRuns"> | null;
-  scopeName: string;
+  clientName: string;
   sheets: SheetResult[];
+  runDebug: RunDebug | null;
+};
+type RunDebug = {
+  clinicCount: number;
+  startDate: string;
+  endDate: string;
+  operationKey: string;
+  verificationFilter: string;
+  summary: string;
+  totalSheetRowsRead: number;
+  totalRowsKept: number;
+  clinics: Array<{
+    clinicName: string;
+    googleSheetId: string;
+    tabsInRange: string[];
+    dateTabsOutsideRange: string[];
+    nonDateTabCount: number;
+    nonDateTabSamples: string[];
+    sheetError: string | null;
+  }>;
+  aggregateDropReasons: Array<{ reason: string; count: number }>;
 };
 
 const OPERATIONS: Array<{ key: OperationKey; label: string }> = [
@@ -141,6 +162,69 @@ const DEBUG_REASON_LABELS: Record<string, string> = {
   upload_no_match: "Upload status matched neither ready nor review",
 };
 
+function formatTabList(tabs: string[], max = 6): string {
+  if (tabs.length === 0) return "none";
+  const shown = tabs.slice(0, max).join(", ");
+  if (tabs.length <= max) return shown;
+  return `${shown}, and ${tabs.length - max} more`;
+}
+
+function RunDebugPanel({ runDebug }: { runDebug: RunDebug }) {
+  return (
+    <div className="flex flex-col gap-3 rounded-md border border-dashed p-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <h4 className="text-sm font-medium">Why this run returned {runDebug.totalRowsKept} rows</h4>
+        <Badge variant="secondary">{runDebug.clinicCount} clinics</Badge>
+      </div>
+      <p className="text-sm">{runDebug.summary}</p>
+      <p className="text-xs text-muted-foreground">
+        Date range {runDebug.startDate} to {runDebug.endDate}. Operation {runDebug.operationKey},
+        verification {runDebug.verificationFilter}. Read {runDebug.totalSheetRowsRead} sheet row(s)
+        from tabs in range.
+      </p>
+      {runDebug.clinicCount === 0 ? (
+        <p className="text-sm text-muted-foreground">
+          Add an active clinic for this client in admin before running the report again.
+        </p>
+      ) : (
+        <div className="flex flex-col gap-3">
+          {runDebug.clinics.map((clinic) => (
+            <div key={clinic.googleSheetId} className="rounded-md border p-3 text-sm">
+              <p className="font-medium">{clinic.clinicName}</p>
+              {clinic.sheetError ? (
+                <p className="mt-1 text-destructive">{clinic.sheetError}</p>
+              ) : null}
+              <ul className="mt-2 flex flex-col gap-1 text-muted-foreground">
+                <li>Tabs in range: {formatTabList(clinic.tabsInRange)}</li>
+                <li>Date tabs outside range: {formatTabList(clinic.dateTabsOutsideRange)}</li>
+                {clinic.nonDateTabCount > 0 ? (
+                  <li>
+                    Other tab names ({clinic.nonDateTabCount}):{" "}
+                    {formatTabList(clinic.nonDateTabSamples, 4)}
+                  </li>
+                ) : null}
+              </ul>
+            </div>
+          ))}
+        </div>
+      )}
+      {runDebug.aggregateDropReasons.length > 0 ? (
+        <div className="flex flex-col gap-1">
+          <p className="text-sm font-medium">Rows filtered out across all tabs</p>
+          <ul className="flex flex-col gap-1 text-sm">
+            {runDebug.aggregateDropReasons.map((item) => (
+              <li key={item.reason} className="flex items-center gap-2">
+                <Badge variant="outline">{item.count}</Badge>
+                <span>{DEBUG_REASON_LABELS[item.reason] ?? item.reason}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function DebugPanel({ debug }: { debug: SheetDebug }) {
   const sorted = [...debug.droppedByReason].sort((a, b) => b.count - a.count);
   return (
@@ -203,10 +287,10 @@ function DebugPanel({ debug }: { debug: SheetDebug }) {
 }
 
 function PanelContent() {
-  const scopes = useQuery(api.googleSheets.listRunnableScopes, {});
+  const clients = useQuery(api.googleSheets.listRunnableClients, {});
   const runReport = useAction(api.reports.runSheetReport);
 
-  const [scopeId, setScopeId] = useState("");
+  const [clientId, setClientId] = useState("");
   const [operation, setOperation] = useState<OperationKey>("pending-audit");
   const [startDate, setStartDate] = useState(todayIso());
   const [endDate, setEndDate] = useState(todayIso());
@@ -216,8 +300,8 @@ function PanelContent() {
   const [result, setResult] = useState<ReportResult | null>(null);
 
   async function handleRun() {
-    if (!scopeId) {
-      setError("Choose a reporting scope first.");
+    if (!clientId) {
+      setError("Choose a client first.");
       return;
     }
     if (startDate > endDate) {
@@ -229,7 +313,7 @@ function PanelContent() {
     setResult(null);
     try {
       const data = await runReport({
-        reportingScopeId: scopeId as Id<"reportingScopes">,
+        clientId: clientId as Id<"clients">,
         operationKey: operation,
         startDate,
         endDate,
@@ -246,7 +330,10 @@ function PanelContent() {
     }
   }
 
-  if (scopes === undefined) return <Skeleton className="h-80 w-full" />;
+  if (clients === undefined) return <Skeleton className="h-80 w-full" />;
+
+  const selectedClient = clients.find((client) => client.clientId === clientId);
+  const selectedClientClinicCount = selectedClient?.clinicCount ?? 0;
 
   const totalRows =
     result?.sheets.reduce(
@@ -261,7 +348,7 @@ function PanelContent() {
         <CardHeader>
           <CardTitle>Run report</CardTitle>
           <CardDescription>
-            Pick dates and a scope. The backend reads each clinic sheet tab in that range and
+            Pick a client and date range. The backend reads each clinic sheet tab in that range and
             applies the same row rules as the desktop tool.
           </CardDescription>
         </CardHeader>
@@ -294,24 +381,24 @@ function PanelContent() {
               />
             </Field>
             <Field>
-              <FieldLabel>Reporting scope</FieldLabel>
+              <FieldLabel>Client</FieldLabel>
               <Select
-                items={scopes.map((scope) => ({
-                  value: scope.reportingScopeId,
-                  label: `${scope.name} (${scope.clinicCount})`,
+                items={clients.map((client) => ({
+                  value: client.clientId,
+                  label: `${client.name} (${client.clinicCount})`,
                 }))}
-                value={scopeId}
-                onValueChange={(value) => setScopeId(value ?? "")}
+                value={clientId}
+                onValueChange={(value) => setClientId(value ?? "")}
                 disabled={running}
               >
-                <SelectTrigger aria-label="Reporting scope" className="w-full">
-                  <SelectValue placeholder="Choose a scope" />
+                <SelectTrigger aria-label="Client" className="w-full">
+                  <SelectValue placeholder="Choose a client" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectGroup>
-                    {scopes.map((scope) => (
-                      <SelectItem key={scope.reportingScopeId} value={scope.reportingScopeId}>
-                        {scope.name} ({scope.clinicCount})
+                    {clients.map((client) => (
+                      <SelectItem key={client.clientId} value={client.clientId}>
+                        {client.name} ({client.clinicCount})
                       </SelectItem>
                     ))}
                   </SelectGroup>
@@ -369,14 +456,23 @@ function PanelContent() {
               </Field>
             ) : null}
           </div>
+          {selectedClient && selectedClientClinicCount === 0 ? (
+            <Alert>
+              <AlertTitle>No clinics for this client</AlertTitle>
+              <AlertDescription>
+                &quot;{selectedClient.name}&quot; has no active clinics. Add a clinic for this client
+                in admin first.
+              </AlertDescription>
+            </Alert>
+          ) : null}
           <div>
-            <Button onClick={() => void handleRun()} disabled={running || scopes.length === 0}>
+            <Button onClick={() => void handleRun()} disabled={running || clients.length === 0}>
               {running ? "Running..." : "Run report"}
             </Button>
           </div>
-          {scopes.length === 0 ? (
+          {clients.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              No active scopes yet. Ask an admin to create a scope and link clinics first.
+              No active clients yet. Ask an admin to create a client and add clinics first.
             </p>
           ) : null}
         </CardContent>
@@ -386,13 +482,19 @@ function PanelContent() {
         <Card>
           <CardHeader>
             <CardTitle>
-              {result.scopeName} <Badge variant="secondary">{totalRows} rows</Badge>
+              {result.clientName} <Badge variant="secondary">{totalRows} rows</Badge>
             </CardTitle>
             <CardDescription>
               {startDate} to {endDate}. Sheet row numbers match the Google Sheet.
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-6">
+            {result.runDebug ? <RunDebugPanel runDebug={result.runDebug} /> : null}
+            {result.sheets.length === 0 && !result.runDebug ? (
+              <p className="text-sm text-muted-foreground">
+                No sheets were processed. Enable debug or check the client and clinic configuration.
+              </p>
+            ) : null}
             {result.sheets.map((sheet) => (
               <div
                 key={`${sheet.clinicId}-${sheet.tabTitle}`}

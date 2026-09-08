@@ -52,21 +52,10 @@ export default defineSchema({
     .index("by_clientId_and_name", ["clientId", "name"])
     .index("by_googleSheetId", ["googleSheetId"]),
 
-  reportingScopes: defineTable({
-    clientId: v.id("clients"),
-    key: v.string(),
-    name: v.string(),
-    isActive: v.boolean(),
-    clinicIds: v.optional(v.array(v.id("clinics"))),
-    allowedUserIds: v.optional(v.array(v.id("users"))),
-  })
-    .index("by_key", ["key"])
-    .index("by_clientId_and_name", ["clientId", "name"]),
-
   reportRuns: defineTable({
     initiatedByUserId: v.id("users"),
     operationKey: reportOperationKey,
-    reportingScopeId: v.id("reportingScopes"),
+    clientId: v.id("clients"),
     status: reportRunStatus,
     startedAt: v.number(),
     completedAt: v.optional(v.number()),
@@ -76,6 +65,6 @@ export default defineSchema({
     errorMessage: v.optional(v.string()),
   })
     .index("by_initiatedByUserId_and_startedAt", ["initiatedByUserId", "startedAt"])
-    .index("by_reportingScopeId_and_startedAt", ["reportingScopeId", "startedAt"])
+    .index("by_clientId_and_startedAt", ["clientId", "startedAt"])
     .index("by_status_and_startedAt", ["status", "startedAt"]),
 });

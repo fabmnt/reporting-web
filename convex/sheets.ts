@@ -4,6 +4,9 @@ import { internalAction } from "./_generated/server";
 import { env } from "./_generated/server";
 import { tabsInDateRange } from "./model/reporting";
 
+const DATE_TAB_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+const MAX_NON_DATE_TAB_SAMPLES = 8;
+
 const GOOGLE_TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token";
 const GOOGLE_SHEETS_BASE = "https://sheets.googleapis.com/v4/spreadsheets";
 
@@ -51,24 +54,54 @@ async function sheetsFetch(path: string, token: string): Promise<unknown> {
 
 // Internal helpers only: the public runSheetReport action owns auth and calls
 // these, so Sheets access never bypasses requireOperator.
+const clinicTabCatalog = v.object({
+  inRange: v.array(v.string()),
+  dateTabsOutsideRange: v.array(v.string()),
+  nonDateTabSamples: v.array(v.string()),
+  nonDateTabCount: v.number(),
+});
+
 export const planSheetTabs = internalAction({
   args: {
     clinics: v.array(v.object({ clinicId: v.id("clinics"), googleSheetId: v.string() })),
     startDate: v.string(),
     endDate: v.string(),
   },
-  returns: v.object({ tabsForClinic: v.record(v.string(), v.array(v.string())) }),
+  returns: v.object({
+    tabsForClinic: v.record(v.string(), v.array(v.string())),
+    tabCatalogForClinic: v.record(v.string(), clinicTabCatalog),
+  }),
   handler: async (_ctx, args) => {
     const token = await refreshAccessToken();
     const tabsForClinic: Record<string, string[]> = {};
+    const tabCatalogForClinic: Record<
+      string,
+      {
+        inRange: string[];
+        dateTabsOutsideRange: string[];
+        nonDateTabSamples: string[];
+        nonDateTabCount: number;
+      }
+    > = {};
     for (const clinic of args.clinics) {
       const data = (await sheetsFetch(clinic.googleSheetId, token)) as SheetsTabListResponse;
       const titles = (data.sheets ?? [])
         .map((sheet) => sheet.properties?.title ?? "")
         .filter((title) => title !== "");
-      tabsForClinic[clinic.clinicId] = tabsInDateRange(titles, args.startDate, args.endDate);
+      const inRange = tabsInDateRange(titles, args.startDate, args.endDate);
+      const dateTabs = titles.filter((title) => DATE_TAB_PATTERN.test(title)).sort();
+      const inRangeSet = new Set(inRange);
+      const dateTabsOutsideRange = dateTabs.filter((title) => !inRangeSet.has(title));
+      const nonDateTabs = titles.filter((title) => !DATE_TAB_PATTERN.test(title));
+      tabsForClinic[clinic.clinicId] = inRange;
+      tabCatalogForClinic[clinic.clinicId] = {
+        inRange,
+        dateTabsOutsideRange,
+        nonDateTabSamples: nonDateTabs.slice(0, MAX_NON_DATE_TAB_SAMPLES),
+        nonDateTabCount: nonDateTabs.length,
+      };
     }
-    return { tabsForClinic };
+    return { tabsForClinic, tabCatalogForClinic };
   },
 });
 

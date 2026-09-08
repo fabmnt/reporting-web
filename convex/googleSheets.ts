@@ -3,7 +3,7 @@ import { v } from "convex/values";
 import { action, query } from "./_generated/server";
 import { internal } from "./_generated/api.js";
 import { env } from "./_generated/server";
-import { canAccessReportingScope } from "./model/reporting";
+import { countClientClinics } from "./model/reporting";
 import { requireOperator } from "./model/staff";
 
 type GoogleTokenResponse = {
@@ -86,27 +86,25 @@ export const listSheetTabs = action({
   },
 });
 
-// Scopes the caller may run, for the report form. Admins see every active
-// scope; operators only see scopes that list them in allowedUserIds.
-export const listRunnableScopes = query({
+// Active clients the caller may run reports for.
+export const listRunnableClients = query({
   args: {},
   returns: v.array(
     v.object({
-      reportingScopeId: v.id("reportingScopes"),
+      clientId: v.id("clients"),
       name: v.string(),
       clinicCount: v.number(),
     })
   ),
   handler: async (ctx) => {
-    const { userId, profile } = await requireOperator(ctx);
-    const scopes = await ctx.db.query("reportingScopes").withIndex("by_key").take(200);
+    await requireOperator(ctx);
+    const clients = await ctx.db.query("clients").withIndex("by_key").take(200);
     const rows = [];
-    for (const scope of scopes.filter((s) => s.isActive)) {
-      if (!canAccessReportingScope(scope, userId, profile.role)) continue;
+    for (const client of clients.filter((entry) => entry.isActive)) {
       rows.push({
-        reportingScopeId: scope._id,
-        name: scope.name,
-        clinicCount: (scope.clinicIds ?? []).length,
+        clientId: client._id,
+        name: client.name,
+        clinicCount: await countClientClinics(ctx, client._id),
       });
     }
     rows.sort((a, b) => a.name.localeCompare(b.name));
