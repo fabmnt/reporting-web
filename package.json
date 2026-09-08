@@ -8,7 +8,7 @@
     "pnpm": ">=9"
   },
   "scripts": {
-    "dev": "astro dev",
+    "dev": "convex dev --start \"astro dev\"",
     "build": "astro build",
     "preview": "astro preview",
     "astro": "astro",

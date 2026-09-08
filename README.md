@@ -15,7 +15,7 @@ New web app for the Reporting Tool migration. Fresh project, does not affect `..
 ## Scripts
 
 ```sh
-pnpm dev             # start Astro
+pnpm dev             # start Astro and Convex
 pnpm build           # production build
 pnpm lint            # eslint
 pnpm format          # prettier --write
