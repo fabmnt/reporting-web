@@ -1,19 +1,22 @@
 /**
- * Parse legacy Reporting-Tool Python clinic configs and import sheet column
- * mappings into Convex clinics.
+ * Parse legacy Reporting-Tool Python clinic configs and import clinics
+ * into Convex. Updates existing clinics by googleSheetId and creates
+ * missing ones under the given client.
  *
  * Step 1, export JSON from legacy configs (safe, no Convex writes):
  *   pnpm import:legacy-columns
  *
  * Step 2, preview what would change in Convex:
- *   pnpm import:legacy-columns --apply
+ *   pnpm import:legacy-columns --apply --clientId <convexClientId>
  *
  * Step 3, write to Convex (admin deployment only, after reviewing step 2):
- *   pnpm import:legacy-columns --apply --execute
+ *   pnpm import:legacy-columns --apply --execute --clientId <convexClientId>
  *
  * Options:
  *   --configs <dir>   Legacy configs directory (default: ../Reporting-Tool/configs)
  *   --output <file>   JSON output path (default: scripts/output/legacy-clinic-columns.json)
+ *   --clientId <id>   Convex client ID for created clinics. Without it,
+ *                     missing clinics are only reported, not created.
  */
 import { spawnSync } from "node:child_process";
 import { mkdir, writeFile } from "node:fs/promises";
@@ -178,17 +181,28 @@ async function writeImportFile(outputPath: string, payload: LegacyImportFile) {
 function buildApplyPayload(clinics: LegacyClinicEntry[]) {
   return clinics.map((clinic) => ({
     googleSheetId: clinic.googleSheetId,
+    name: clinic.name,
+    externalClinicId: clinic.externalClinicId ?? undefined,
+    isActive: clinic.isActive,
     sheetColumns: clinic.sheetColumns,
     qaGroupKeys: clinic.qaGroupKeys,
   }));
 }
 
-function runConvexApply(dryRun: boolean, entries: ReturnType<typeof buildApplyPayload>) {
+function runConvexApply(
+  dryRun: boolean,
+  entries: ReturnType<typeof buildApplyPayload>,
+  clientId: string | null
+) {
+  const payload: Record<string, unknown> = { dryRun, entries };
+  if (clientId) {
+    payload.clientId = clientId;
+  }
   const args = [
     "convex",
     "run",
     "migrations/importLegacySheetColumns:applyLegacySheetColumns",
-    JSON.stringify({ dryRun, entries }),
+    JSON.stringify(payload),
   ];
   const result = spawnSync("pnpm", args, {
     cwd: repoRoot,
@@ -200,24 +214,27 @@ function runConvexApply(dryRun: boolean, entries: ReturnType<typeof buildApplyPa
     fail(result.stderr || result.stdout || "Convex apply failed.");
   }
 
-  const lines = result.stdout.trim().split("\n");
-  const jsonLine = lines.find((line) => line.startsWith("{"));
-  if (!jsonLine) {
+  const output = result.stdout.trim();
+  const jsonStart = output.indexOf("{");
+  const jsonEnd = output.lastIndexOf("}");
+  if (jsonStart === -1 || jsonEnd === -1 || jsonEnd < jsonStart) {
     console.log(result.stdout);
     return;
   }
 
-  const summary = JSON.parse(jsonLine) as {
+  const summary = JSON.parse(output.slice(jsonStart, jsonEnd + 1)) as {
     matched: number;
     updated: number;
+    created: number;
     skipped: number;
     missing: string[];
+    nameConflicts: string[];
   };
 
   console.log(
     dryRun
-      ? `Dry run: ${summary.updated} clinic(s) would update, ${summary.skipped} unchanged, ${summary.matched} matched.`
-      : `Applied: ${summary.updated} clinic(s) updated, ${summary.skipped} unchanged, ${summary.matched} matched.`
+      ? `Dry run: ${summary.updated} clinic(s) would update, ${summary.created} would create, ${summary.skipped} unchanged, ${summary.matched} matched.`
+      : `Applied: ${summary.updated} clinic(s) updated, ${summary.created} created, ${summary.skipped} unchanged, ${summary.matched} matched.`
   );
   if (summary.missing.length > 0) {
     console.log(`Missing in Convex (${summary.missing.length}):`);
@@ -226,6 +243,18 @@ function runConvexApply(dryRun: boolean, entries: ReturnType<typeof buildApplyPa
     }
     if (summary.missing.length > 20) {
       console.log(`  ... and ${summary.missing.length - 20} more`);
+    }
+    if (!clientId) {
+      console.log("Re-run with --clientId <id> to create missing clinics.");
+    }
+  }
+  if (summary.nameConflicts.length > 0) {
+    console.log(`Name conflicts (${summary.nameConflicts.length}):`);
+    for (const sheetId of summary.nameConflicts.slice(0, 20)) {
+      console.log(`  - ${sheetId}`);
+    }
+    if (summary.nameConflicts.length > 20) {
+      console.log(`  ... and ${summary.nameConflicts.length - 20} more`);
     }
   }
 }
@@ -238,6 +267,7 @@ async function main() {
   );
   const shouldApply = hasFlag("--apply");
   const shouldExecute = hasFlag("--execute");
+  const clientId = readArg("--clientId");
 
   const parsed = parseLegacyConfigs(configsDir);
   const importFile: LegacyImportFile = {
@@ -262,9 +292,9 @@ async function main() {
   }
 
   const entries = buildApplyPayload(parsed.clinics);
-  runConvexApply(!shouldExecute, entries);
+  runConvexApply(!shouldExecute, entries, clientId);
   if (!shouldExecute) {
-    console.log("No data was written. Re-run with --apply --execute to patch clinics.");
+    console.log("No data was written. Re-run with --apply --execute to apply clinics.");
   }
 }
 
