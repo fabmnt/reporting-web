@@ -460,93 +460,24 @@ export const runSheetReport = action({
       const uploadStatus = columnLetterToIndex(clinic.uploadStatusColumn);
       const verificationType = columnLetterToIndex(clinic.verificationTypeColumn);
       let clinicFailed = false;
-      for (const tabTitle of tabs) {
-        try {
-          const { values, headers }: { values: string[][]; headers: string[] } =
-            await ctx.runAction(internal.sheets.readSheetTabValues, {
-              googleSheetId: clinic.googleSheetId,
-              tabTitle,
-            });
-          const readyRows: Array<{ rowNumber: number; values: string[] }> = [];
-          const reviewRows: Array<{ rowNumber: number; values: string[] }> = [];
-          const auditRows: Array<{ rowNumber: number; values: string[] }> = [];
-          // TEMPORARY while project is in development: count why each row is
-          // dropped so the UI can show it. Same checks as the real filter.
-          const dropCounts = new Map<string, number>();
-          const dropSamples: Array<{
-            rowNumber: number;
-            reason: string;
-            l: string;
-            m: string;
-            verification: string;
-            updateStatus: string;
-            uploadStatus: string;
-          }> = [];
-          function trackDrop(row: SheetRow, rowNumber: number, reason: string) {
-            dropCounts.set(reason, (dropCounts.get(reason) ?? 0) + 1);
-            if (dropSamples.length >= MAX_DEBUG_SAMPLES) return;
-            dropSamples.push({
-              rowNumber,
-              reason,
-              l: cell(row, 11),
-              m: cell(row, 12),
-              verification: cell(row, verificationType),
-              updateStatus: cell(row, updateStatus),
-              uploadStatus: cell(row, uploadStatus),
-            });
-          }
-          values.forEach((row, index) => {
-            const rowNumber = index + 2;
-            if (args.operationKey === "ready-to-upload") {
-              const { bucket, reason } = getUploadOutcome(row, updateStatus, uploadStatus);
-              if (bucket === "ready") readyRows.push({ rowNumber, values: row });
-              else if (bucket === "review") reviewRows.push({ rowNumber, values: row });
-              else if (wantDebug) trackDrop(row, rowNumber, reason);
-            } else {
-              const dropReason = getAuditDropReason(
-                row,
-                updateStatus,
-                uploadStatus,
-                verificationType,
-                verificationFilter
-              );
-              if (dropReason === null) {
-                auditRows.push({ rowNumber, values: row });
-              } else if (wantDebug) {
-                trackDrop(row, rowNumber, dropReason);
-              }
-            }
-          });
-          const keptRows = readyRows.length + reviewRows.length + auditRows.length;
-          sheets.push({
-            clinicId: clinic.clinicId,
-            clinicName: clinic.name,
-            googleSheetId: clinic.googleSheetId,
-            tabTitle,
-            headers,
-            readyRows,
-            reviewRows,
-            auditRows,
-            error: null,
-            debug: wantDebug
-              ? {
-                  totalRows: values.length,
-                  keptRows,
-                  operationKey: args.operationKey,
-                  verificationFilter,
-                  updateStatusColumn: clinic.updateStatusColumn,
-                  uploadStatusColumn: clinic.uploadStatusColumn,
-                  verificationTypeColumn: clinic.verificationTypeColumn,
-                  droppedByReason: [...dropCounts.entries()].map(([reason, count]) => ({
-                    reason,
-                    count,
-                  })),
-                  samples: dropSamples,
-                }
-              : null,
-          });
-        } catch (error) {
-          clinicFailed = true;
+      // One batched read per clinic instead of one call per tab.
+      let tabResults: Array<{
+        tabTitle: string;
+        headers: string[];
+        values: string[][];
+        error: string | null;
+      }> = [];
+      try {
+        tabResults = await ctx.runAction(internal.sheets.readSheetTabsValues, {
+          googleSheetId: clinic.googleSheetId,
+          tabTitles: tabs,
+        });
+      } catch (error) {
+        // The whole read failed (token, permissions, unknown spreadsheet).
+        // Report it on every planned tab and keep going with the next clinic.
+        clinicFailed = true;
+        const message = error instanceof Error ? error.message : String(error);
+        for (const tabTitle of tabs) {
           sheets.push({
             clinicId: clinic.clinicId,
             clinicName: clinic.name,
@@ -556,10 +487,107 @@ export const runSheetReport = action({
             readyRows: [],
             reviewRows: [],
             auditRows: [],
-            error: error instanceof Error ? error.message : String(error),
+            error: message,
             debug: null,
           });
         }
+      }
+      for (const tabResult of tabResults) {
+        if (tabResult.error !== null) {
+          clinicFailed = true;
+          sheets.push({
+            clinicId: clinic.clinicId,
+            clinicName: clinic.name,
+            googleSheetId: clinic.googleSheetId,
+            tabTitle: tabResult.tabTitle,
+            headers: [],
+            readyRows: [],
+            reviewRows: [],
+            auditRows: [],
+            error: tabResult.error,
+            debug: null,
+          });
+          continue;
+        }
+        const { tabTitle, headers, values } = tabResult;
+        const readyRows: Array<{ rowNumber: number; values: string[] }> = [];
+        const reviewRows: Array<{ rowNumber: number; values: string[] }> = [];
+        const auditRows: Array<{ rowNumber: number; values: string[] }> = [];
+        // TEMPORARY while project is in development: count why each row is
+        // dropped so the UI can show it. Same checks as the real filter.
+        const dropCounts = new Map<string, number>();
+        const dropSamples: Array<{
+          rowNumber: number;
+          reason: string;
+          l: string;
+          m: string;
+          verification: string;
+          updateStatus: string;
+          uploadStatus: string;
+        }> = [];
+        function trackDrop(row: SheetRow, rowNumber: number, reason: string) {
+          dropCounts.set(reason, (dropCounts.get(reason) ?? 0) + 1);
+          if (dropSamples.length >= MAX_DEBUG_SAMPLES) return;
+          dropSamples.push({
+            rowNumber,
+            reason,
+            l: cell(row, 11),
+            m: cell(row, 12),
+            verification: cell(row, verificationType),
+            updateStatus: cell(row, updateStatus),
+            uploadStatus: cell(row, uploadStatus),
+          });
+        }
+        values.forEach((row, index) => {
+          const rowNumber = index + 2;
+          if (args.operationKey === "ready-to-upload") {
+            const { bucket, reason } = getUploadOutcome(row, updateStatus, uploadStatus);
+            if (bucket === "ready") readyRows.push({ rowNumber, values: row });
+            else if (bucket === "review") reviewRows.push({ rowNumber, values: row });
+            else if (wantDebug) trackDrop(row, rowNumber, reason);
+          } else {
+            const dropReason = getAuditDropReason(
+              row,
+              updateStatus,
+              uploadStatus,
+              verificationType,
+              verificationFilter
+            );
+            if (dropReason === null) {
+              auditRows.push({ rowNumber, values: row });
+            } else if (wantDebug) {
+              trackDrop(row, rowNumber, dropReason);
+            }
+          }
+        });
+        const keptRows = readyRows.length + reviewRows.length + auditRows.length;
+        sheets.push({
+          clinicId: clinic.clinicId,
+          clinicName: clinic.name,
+          googleSheetId: clinic.googleSheetId,
+          tabTitle,
+          headers,
+          readyRows,
+          reviewRows,
+          auditRows,
+          error: null,
+          debug: wantDebug
+            ? {
+                totalRows: values.length,
+                keptRows,
+                operationKey: args.operationKey,
+                verificationFilter,
+                updateStatusColumn: clinic.updateStatusColumn,
+                uploadStatusColumn: clinic.uploadStatusColumn,
+                verificationTypeColumn: clinic.verificationTypeColumn,
+                droppedByReason: [...dropCounts.entries()].map(([reason, count]) => ({
+                  reason,
+                  count,
+                })),
+                samples: dropSamples,
+              }
+            : null,
+        });
       }
       if (clinicFailed) {
         failedClinics += 1;
