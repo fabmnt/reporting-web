@@ -92,6 +92,15 @@ describe("ReportRunner", () => {
     expect(runReport).toHaveBeenCalledTimes(1);
   });
 
+  it("shows form and results skeletons while clinics are loading", () => {
+    useQueryMock.mockReturnValue(undefined);
+    render(<ReportRunner />);
+
+    expect(screen.getByLabelText("Loading report page")).toBeInTheDocument();
+    expect(screen.getByLabelText("Loading report settings")).toBeInTheDocument();
+    expect(screen.getByLabelText("Loading results")).toBeInTheDocument();
+  });
+
   it("shows the placeholder until a run completes", async () => {
     render(<ReportRunner />);
 

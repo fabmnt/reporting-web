@@ -340,6 +340,57 @@ function DebugPanel({ debug }: { debug: SheetDebug }) {
   );
 }
 
+function ReportRunnerSkeleton() {
+  return (
+    <div className="flex flex-col gap-6" aria-busy="true" aria-label="Loading report page">
+      <PageHeader
+        title="Run report"
+        description="Reads your assigned clinic sheets for the selected dates and applies the same row rules as the desktop tool."
+      />
+      <div className="grid gap-6 lg:grid-cols-[360px_minmax(0,1fr)] lg:items-start">
+        <Card className="lg:sticky lg:top-20" aria-label="Loading report settings">
+          <CardHeader className="gap-3">
+            <Skeleton className="h-5 w-36" />
+            <Skeleton className="h-4 w-full max-w-xs" />
+          </CardHeader>
+          <CardContent className="flex flex-col gap-5">
+            <div className="flex flex-col gap-2">
+              <Skeleton className="h-4 w-24" />
+              <Skeleton className="h-10 w-full" />
+            </div>
+            <div className="flex flex-col gap-2">
+              <Skeleton className="h-4 w-24" />
+              <Skeleton className="h-10 w-full" />
+            </div>
+            <div className="flex flex-col gap-2">
+              <Skeleton className="h-4 w-28" />
+              <Skeleton className="h-10 w-full" />
+            </div>
+            <Separator />
+            <div className="flex flex-col gap-2">
+              <Skeleton className="h-4 w-32" />
+              <Skeleton className="h-20 w-full" />
+            </div>
+          </CardContent>
+          <CardFooter>
+            <Skeleton className="h-10 w-full" />
+          </CardFooter>
+        </Card>
+
+        <Card aria-label="Loading results">
+          <CardHeader className="gap-3">
+            <Skeleton className="h-5 w-24" />
+            <Skeleton className="h-4 w-full max-w-md" />
+          </CardHeader>
+          <CardContent>
+            <Skeleton className="h-48 w-full rounded-lg" />
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+}
+
 function ResultsPlaceholder({ running, clinicCount }: { running: boolean; clinicCount: number }) {
   if (running) {
     return (
@@ -511,7 +562,7 @@ export function ReportRunner() {
     }
   }
 
-  if (assignment === undefined) return <Skeleton className="h-80 w-full" />;
+  if (assignment === undefined) return <ReportRunnerSkeleton />;
 
   const assignedClinicCount = assignment.clinics.length;
 
