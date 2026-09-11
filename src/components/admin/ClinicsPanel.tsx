@@ -145,6 +145,7 @@ function ClientForm({
   isEditing,
   initialValues,
   pending,
+  error,
   onSubmit,
   onCancel,
 }: {
@@ -153,6 +154,7 @@ function ClientForm({
   isEditing: boolean;
   initialValues: ClientFormValues;
   pending: boolean;
+  error: string | null;
   onSubmit: (values: ClientFormValues) => Promise<void>;
   onCancel: () => void;
 }) {
@@ -206,6 +208,12 @@ function ClientForm({
             />
             <FieldLabel htmlFor="client-active">Active</FieldLabel>
           </Field>
+          {error ? (
+            <Alert variant="destructive">
+              <AlertTitle>Could not save client</AlertTitle>
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          ) : null}
           <FieldError>{validationError}</FieldError>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onCancel} disabled={pending}>
@@ -328,6 +336,7 @@ function ClinicForm({
   clients,
   initialValues,
   pending,
+  error,
   onSubmit,
   onCancel,
 }: {
@@ -337,6 +346,7 @@ function ClinicForm({
   clients: ClientView[];
   initialValues: ClinicFormValues;
   pending: boolean;
+  error: string | null;
   onSubmit: (values: ClinicFormValues) => Promise<void>;
   onCancel: () => void;
 }) {
@@ -450,6 +460,12 @@ function ClinicForm({
             onChange={(sheetColumns) => update("sheetColumns", sheetColumns)}
             disabled={pending}
           />
+          {error ? (
+            <Alert variant="destructive">
+              <AlertTitle>Could not save clinic</AlertTitle>
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          ) : null}
           <FieldError>{validationError}</FieldError>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onCancel} disabled={pending}>
@@ -478,8 +494,10 @@ export function AdminClinicsPanel() {
   const updateClient = useMutation(api.clinics.updateClient);
   const removeClient = useMutation(api.clinics.removeClient);
 
-  const [error, setError] = useState<string | null>(null);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [clinicFormError, setClinicFormError] = useState<string | null>(null);
+  const [clientFormError, setClientFormError] = useState<string | null>(null);
+  const [clinicDeleteError, setClinicDeleteError] = useState<string | null>(null);
+  const [clientDeleteError, setClientDeleteError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isSavingClient, setIsSavingClient] = useState(false);
   const [pendingClinicId, setPendingClinicId] = useState<Id<"clinics"> | null>(null);
@@ -495,24 +513,21 @@ export function AdminClinicsPanel() {
   const [clinicToDelete, setClinicToDelete] = useState<ClinicView | null>(null);
   const [clientToDelete, setClientToDelete] = useState<ClientView | null>(null);
 
-  function resetError() {
-    setError(null);
-  }
-
   function closeForm() {
     setFormMode("closed");
     setEditingClinic(null);
+    setClinicFormError(null);
   }
 
   function openCreate() {
-    resetError();
+    setClinicFormError(null);
     setEditingClinic(null);
     setClinicFormSession((session) => session + 1);
     setFormMode("creating");
   }
 
   function openEdit(clinic: ClinicView) {
-    resetError();
+    setClinicFormError(null);
     setEditingClinic(clinic);
     setClinicFormSession((session) => session + 1);
     setFormMode("editing");
@@ -520,7 +535,7 @@ export function AdminClinicsPanel() {
 
   async function submitClinic(values: ClinicFormValues) {
     setIsSaving(true);
-    resetError();
+    setClinicFormError(null);
     try {
       const clientId = values.clientId as Id<"clients">;
       const sheetColumns = buildSheetColumnsInput(values.sheetColumns) ?? {};
@@ -546,21 +561,21 @@ export function AdminClinicsPanel() {
       }
       closeForm();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Saving the clinic failed.");
+      setClinicFormError(cause instanceof Error ? cause.message : "Saving the clinic failed.");
     } finally {
       setIsSaving(false);
     }
   }
 
   function openCreateClient() {
-    resetError();
+    setClientFormError(null);
     setEditingClient(null);
     setClientFormSession((session) => session + 1);
     setClientFormMode("creating");
   }
 
   function openEditClient(client: ClientView) {
-    resetError();
+    setClientFormError(null);
     setEditingClient(client);
     setClientFormSession((session) => session + 1);
     setClientFormMode("editing");
@@ -569,11 +584,12 @@ export function AdminClinicsPanel() {
   function closeClientForm() {
     setClientFormMode("closed");
     setEditingClient(null);
+    setClientFormError(null);
   }
 
   async function submitClient(values: ClientFormValues) {
     setIsSavingClient(true);
-    resetError();
+    setClientFormError(null);
     try {
       if (clientFormMode === "editing" && editingClient !== null) {
         await updateClient({
@@ -586,7 +602,7 @@ export function AdminClinicsPanel() {
       }
       closeClientForm();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Saving the client failed.");
+      setClientFormError(cause instanceof Error ? cause.message : "Saving the client failed.");
     } finally {
       setIsSavingClient(false);
     }
@@ -596,12 +612,12 @@ export function AdminClinicsPanel() {
     if (clinicToDelete === null) return;
 
     setPendingClinicId(clinicToDelete.clinicId);
-    setDeleteError(null);
+    setClinicDeleteError(null);
     try {
       await removeClinic({ clinicId: clinicToDelete.clinicId });
       setClinicToDelete(null);
     } catch (cause) {
-      setDeleteError(cause instanceof Error ? cause.message : "Deleting the clinic failed.");
+      setClinicDeleteError(cause instanceof Error ? cause.message : "Deleting the clinic failed.");
     } finally {
       setPendingClinicId(null);
     }
@@ -611,12 +627,12 @@ export function AdminClinicsPanel() {
     if (clientToDelete === null) return;
 
     setPendingClientId(clientToDelete.clientId);
-    setDeleteError(null);
+    setClientDeleteError(null);
     try {
       await removeClient({ clientId: clientToDelete.clientId });
       setClientToDelete(null);
     } catch (cause) {
-      setDeleteError(cause instanceof Error ? cause.message : "Deleting the client failed.");
+      setClientDeleteError(cause instanceof Error ? cause.message : "Deleting the client failed.");
     } finally {
       setPendingClientId(null);
     }
@@ -668,13 +684,6 @@ export function AdminClinicsPanel() {
     <div className="flex flex-col gap-6">
       {header}
       <AdminTabs />
-
-      {error ? (
-        <Alert variant="destructive">
-          <AlertTitle>Something went wrong</AlertTitle>
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
-      ) : null}
 
       <section className="flex flex-col gap-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
@@ -738,7 +747,7 @@ export function AdminClinicsPanel() {
                             className="text-destructive hover:bg-destructive/10 hover:text-destructive"
                             disabled={isPending}
                             onClick={() => {
-                              setDeleteError(null);
+                              setClientDeleteError(null);
                               setClientToDelete(client);
                             }}
                           >
@@ -829,7 +838,7 @@ export function AdminClinicsPanel() {
                             className="text-destructive hover:bg-destructive/10 hover:text-destructive"
                             disabled={isPending}
                             onClick={() => {
-                              setDeleteError(null);
+                              setClinicDeleteError(null);
                               setClinicToDelete(clinic);
                             }}
                           >
@@ -862,6 +871,7 @@ export function AdminClinicsPanel() {
         clients={clients}
         initialValues={formInitialValues}
         pending={isSaving}
+        error={clinicFormError}
         onSubmit={submitClinic}
         onCancel={closeForm}
       />
@@ -879,6 +889,7 @@ export function AdminClinicsPanel() {
             : EMPTY_CLIENT_FORM
         }
         pending={isSavingClient}
+        error={clientFormError}
         onSubmit={submitClient}
         onCancel={closeClientForm}
       />
@@ -888,7 +899,7 @@ export function AdminClinicsPanel() {
         onOpenChange={(open) => {
           if (!open) {
             setClinicToDelete(null);
-            setDeleteError(null);
+            setClinicDeleteError(null);
           }
         }}
         title="Delete clinic"
@@ -899,7 +910,7 @@ export function AdminClinicsPanel() {
         }
         confirmLabel="Delete clinic"
         pending={pendingClinicId !== null}
-        error={deleteError}
+        error={clinicDeleteError}
         onConfirm={() => void confirmClinicDelete()}
       />
 
@@ -908,7 +919,7 @@ export function AdminClinicsPanel() {
         onOpenChange={(open) => {
           if (!open) {
             setClientToDelete(null);
-            setDeleteError(null);
+            setClientDeleteError(null);
           }
         }}
         title="Delete client"
@@ -919,7 +930,7 @@ export function AdminClinicsPanel() {
         }
         confirmLabel="Delete client"
         pending={pendingClientId !== null}
-        error={deleteError}
+        error={clientDeleteError}
         onConfirm={() => void confirmClientDelete()}
       />
     </div>

@@ -50,6 +50,8 @@ export function AdminAccountsPanel() {
   const [editingProfileId, setEditingProfileId] = useState<Id<"staffProfiles"> | null>(null);
   const [draftClinicIds, setDraftClinicIds] = useState<Id<"clinics">[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [assignmentError, setAssignmentError] = useState<string | null>(null);
+  const [isSavingAssignment, setIsSavingAssignment] = useState(false);
 
   async function updateRole(profileId: Id<"staffProfiles">, role: StaffRole) {
     setError(null);
@@ -80,6 +82,7 @@ export function AdminAccountsPanel() {
     assignedClinicIds: Id<"clinics">[]
   ) {
     setError(null);
+    setAssignmentError(null);
     setEditingProfileId(profileId);
     setDraftClinicIds(assignedClinicIds);
   }
@@ -90,22 +93,30 @@ export function AdminAccountsPanel() {
     );
   }
 
-  function cancelClinicAssignment() {
+  function resetClinicAssignment() {
     setEditingProfileId(null);
     setDraftClinicIds([]);
+    setAssignmentError(null);
+  }
+
+  function cancelClinicAssignment() {
+    if (isSavingAssignment) return;
+    resetClinicAssignment();
   }
 
   async function saveClinicAssignment() {
-    if (!editingProfileId) return;
+    if (editingProfileId === null || isSavingAssignment) return;
+
     setError(null);
-    setPendingProfileId(editingProfileId);
+    setAssignmentError(null);
+    setIsSavingAssignment(true);
     try {
       await setAssignedClinics({ profileId: editingProfileId, clinicIds: draftClinicIds });
-      cancelClinicAssignment();
+      resetClinicAssignment();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Clinic assignment failed.");
+      setAssignmentError(cause instanceof Error ? cause.message : "Clinic assignment failed.");
     } finally {
-      setPendingProfileId(null);
+      setIsSavingAssignment(false);
     }
   }
 
@@ -218,7 +229,7 @@ export function AdminAccountsPanel() {
                             <Button
                               variant="outline"
                               size="sm"
-                              disabled={isPending}
+                              disabled={isPending || isSavingAssignment}
                               onClick={() =>
                                 startClinicAssignment(account.profileId, account.assignedClinicIds)
                               }
@@ -257,11 +268,18 @@ export function AdminAccountsPanel() {
 
       <Dialog
         open={editingProfileId !== null}
-        onOpenChange={(open) => {
-          if (!open) cancelClinicAssignment();
+        onOpenChange={(open, eventDetails) => {
+          if (open) return;
+          // The dialog owns an in-flight mutation. Dismissing it now would drop
+          // the draft and could apply the result to a different profile's dialog.
+          if (isSavingAssignment) {
+            eventDetails.cancel();
+            return;
+          }
+          cancelClinicAssignment();
         }}
       >
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className="sm:max-w-lg" showCloseButton={!isSavingAssignment}>
           <DialogHeader>
             <DialogTitle>Assign clinics</DialogTitle>
             <DialogDescription>
@@ -282,12 +300,13 @@ export function AdminAccountsPanel() {
               clinicDirectory.clinics.map((clinic) => (
                 <label
                   key={clinic.clinicId}
-                  className="flex cursor-pointer items-center gap-2 text-sm"
+                  className="flex cursor-pointer items-center gap-2 text-sm has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-50"
                 >
                   <input
                     type="checkbox"
                     checked={draftClinicIds.includes(clinic.clinicId)}
                     onChange={() => toggleDraftClinic(clinic.clinicId)}
+                    disabled={isSavingAssignment}
                     className="size-4 accent-primary"
                   />
                   <span>
@@ -297,14 +316,21 @@ export function AdminAccountsPanel() {
               ))
             )}
           </div>
+          {assignmentError ? (
+            <Alert variant="destructive">
+              <AlertTitle>Could not assign clinics</AlertTitle>
+              <AlertDescription>{assignmentError}</AlertDescription>
+            </Alert>
+          ) : null}
           <DialogFooter>
-            <Button variant="outline" onClick={cancelClinicAssignment}>
+            <Button
+              variant="outline"
+              onClick={cancelClinicAssignment}
+              disabled={isSavingAssignment}
+            >
               Cancel
             </Button>
-            <Button
-              onClick={() => void saveClinicAssignment()}
-              disabled={pendingProfileId === editingProfileId}
-            >
+            <Button onClick={() => void saveClinicAssignment()} disabled={isSavingAssignment}>
               Save clinics
             </Button>
           </DialogFooter>

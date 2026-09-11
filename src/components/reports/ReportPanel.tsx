@@ -75,6 +75,14 @@ type ReportResult = {
   sheets: SheetResult[];
   runDebug: RunDebug | null;
 };
+// A finished run plus the parameters it actually used. The results view reads
+// only from here, so editing the controls never rewrites what a run returned.
+type CompletedRun = {
+  data: ReportResult;
+  operation: OperationKey;
+  startDate: string;
+  endDate: string;
+};
 type RunDebug = {
   clinicCount: number;
   startDate: string;
@@ -360,6 +368,99 @@ function ResultsPlaceholder({ running, clinicCount }: { running: boolean; clinic
   );
 }
 
+function countRows(run: CompletedRun): number {
+  return run.data.sheets.reduce((sum, sheet) => {
+    if (run.operation === "pending-audit") return sum + sheet.auditRows.length;
+    return sum + sheet.readyRows.length + sheet.reviewRows.length;
+  }, 0);
+}
+
+/**
+ * Renders one finished run. Every value comes from the run itself, so editing
+ * the report controls afterward never rewrites what the run returned.
+ */
+function ResultsCard({ run }: { run: CompletedRun }) {
+  const { data } = run;
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex flex-wrap items-center gap-2">
+          <h2 className="font-heading text-base leading-snug font-medium">Results</h2>
+          <Badge variant="secondary" className="tabular-nums">
+            {countRows(run)} rows
+          </Badge>
+        </div>
+        <CardDescription>
+          {data.assignedClinicCount} clinic(s), {run.startDate} to {run.endDate}. Sheet row numbers
+          match the Google Sheet.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-6">
+        {data.runDebug ? <RunDebugPanel runDebug={data.runDebug} /> : null}
+        {data.sheets.length === 0 && !data.runDebug ? (
+          <p className="text-sm text-muted-foreground">
+            No sheets were processed. Check your assigned clinics and the selected dates.
+          </p>
+        ) : null}
+        {data.sheets.map((sheet) => (
+          <div
+            key={`${sheet.clinicId}-${sheet.tabTitle}`}
+            className="flex flex-col gap-4 rounded-lg border p-4"
+          >
+            <h3 className="text-sm font-medium">
+              {sheet.clinicName} {sheet.tabTitle ? `· ${sheet.tabTitle}` : ""}
+            </h3>
+            {sheet.error ? (
+              <Alert variant="destructive">
+                <AlertTitle>Sheet error</AlertTitle>
+                <AlertDescription>{sheet.error}</AlertDescription>
+              </Alert>
+            ) : (
+              <>
+                {run.operation === "ready-to-upload" ? (
+                  <>
+                    <ResultTable
+                      title="Ready to upload"
+                      tone="success"
+                      count={sheet.readyRows.length}
+                      headers={sheet.headers}
+                      rows={sheet.readyRows}
+                    />
+                    <ResultTable
+                      title="Needs review"
+                      tone="warning"
+                      count={sheet.reviewRows.length}
+                      headers={sheet.headers}
+                      rows={sheet.reviewRows}
+                    />
+                  </>
+                ) : (
+                  <ResultTable
+                    title="Pending audit"
+                    tone="neutral"
+                    count={sheet.auditRows.length}
+                    headers={sheet.headers}
+                    rows={sheet.auditRows}
+                  />
+                )}
+                {run.operation === "ready-to-upload" &&
+                sheet.readyRows.length === 0 &&
+                sheet.reviewRows.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No matching rows.</p>
+                ) : null}
+                {run.operation === "pending-audit" && sheet.auditRows.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No matching rows.</p>
+                ) : null}
+                {sheet.debug ? <DebugPanel debug={sheet.debug} /> : null}
+              </>
+            )}
+          </div>
+        ))}
+      </CardContent>
+    </Card>
+  );
+}
+
 export function ReportRunner() {
   const assignment = useQuery(api.googleSheets.listAssignedReportClinics, {});
   const runReport = useAction(api.reports.runSheetReport);
@@ -369,7 +470,7 @@ export function ReportRunner() {
   const [verification, setVerification] = useState<"all" | "fbd" | "elg">("all");
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<ReportResult | null>(null);
+  const [result, setResult] = useState<CompletedRun | null>(null);
 
   async function handleRun() {
     if ((assignment?.clinics.length ?? 0) === 0) {
@@ -397,7 +498,12 @@ export function ReportRunner() {
         // reasons so testers can see why rows were dropped.
         debug: true,
       });
-      setResult(data);
+      setResult({
+        data,
+        operation,
+        startDate: dateRange.startDate,
+        endDate: dateRange.endDate,
+      });
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "The report failed.");
     } finally {
@@ -408,12 +514,6 @@ export function ReportRunner() {
   if (assignment === undefined) return <Skeleton className="h-80 w-full" />;
 
   const assignedClinicCount = assignment.clinics.length;
-
-  const totalRows =
-    result?.sheets.reduce((sum, sheet) => {
-      if (operation === "pending-audit") return sum + sheet.auditRows.length;
-      return sum + sheet.readyRows.length + sheet.reviewRows.length;
-    }, 0) ?? 0;
 
   const selectedOperation = OPERATIONS.find((item) => item.key === operation);
 
@@ -555,82 +655,7 @@ export function ReportRunner() {
           {result === null ? (
             <ResultsPlaceholder running={running} clinicCount={assignedClinicCount} />
           ) : (
-            <Card>
-              <CardHeader>
-                <div className="flex flex-wrap items-center gap-2">
-                  <h2 className="font-heading text-base leading-snug font-medium">Results</h2>
-                  <Badge variant="secondary" className="tabular-nums">
-                    {totalRows} rows
-                  </Badge>
-                </div>
-                <CardDescription>
-                  {result.assignedClinicCount} clinic(s), {dateRange.startDate} to{" "}
-                  {dateRange.endDate}. Sheet row numbers match the Google Sheet.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="flex flex-col gap-6">
-                {result.runDebug ? <RunDebugPanel runDebug={result.runDebug} /> : null}
-                {result.sheets.length === 0 && !result.runDebug ? (
-                  <p className="text-sm text-muted-foreground">
-                    No sheets were processed. Check your assigned clinics and the selected dates.
-                  </p>
-                ) : null}
-                {result.sheets.map((sheet) => (
-                  <div
-                    key={`${sheet.clinicId}-${sheet.tabTitle}`}
-                    className="flex flex-col gap-4 rounded-lg border p-4"
-                  >
-                    <h3 className="text-sm font-medium">
-                      {sheet.clinicName} {sheet.tabTitle ? `· ${sheet.tabTitle}` : ""}
-                    </h3>
-                    {sheet.error ? (
-                      <Alert variant="destructive">
-                        <AlertTitle>Sheet error</AlertTitle>
-                        <AlertDescription>{sheet.error}</AlertDescription>
-                      </Alert>
-                    ) : (
-                      <>
-                        {operation === "ready-to-upload" ? (
-                          <>
-                            <ResultTable
-                              title="Ready to upload"
-                              tone="success"
-                              count={sheet.readyRows.length}
-                              headers={sheet.headers}
-                              rows={sheet.readyRows}
-                            />
-                            <ResultTable
-                              title="Needs review"
-                              tone="warning"
-                              count={sheet.reviewRows.length}
-                              headers={sheet.headers}
-                              rows={sheet.reviewRows}
-                            />
-                          </>
-                        ) : (
-                          <ResultTable
-                            title="Pending audit"
-                            tone="neutral"
-                            count={sheet.auditRows.length}
-                            headers={sheet.headers}
-                            rows={sheet.auditRows}
-                          />
-                        )}
-                        {operation === "ready-to-upload" &&
-                        sheet.readyRows.length === 0 &&
-                        sheet.reviewRows.length === 0 ? (
-                          <p className="text-sm text-muted-foreground">No matching rows.</p>
-                        ) : null}
-                        {operation === "pending-audit" && sheet.auditRows.length === 0 ? (
-                          <p className="text-sm text-muted-foreground">No matching rows.</p>
-                        ) : null}
-                        {sheet.debug ? <DebugPanel debug={sheet.debug} /> : null}
-                      </>
-                    )}
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
+            <ResultsCard run={result} />
           )}
         </div>
       </div>
