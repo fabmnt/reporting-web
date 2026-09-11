@@ -1,12 +1,16 @@
 ---
-import { ReportPanel } from "../components/reports/ReportPanel";
 import Layout from "../layouts/Layout.astro";
 ---
 
 <Layout title="Run report | Reporting Web">
-  <main class="mx-auto flex min-h-screen w-full max-w-5xl items-start p-6">
-    <div class="w-full">
-      <ReportPanel convexUrl={import.meta.env.CONVEX_URL} client:load />
-    </div>
+  <Fragment slot="head">
+    <meta http-equiv="refresh" content="0;url=/" />
+    <link rel="canonical" href="/" />
+  </Fragment>
+  <main class="flex min-h-dvh items-center justify-center p-6">
+    <p class="text-sm text-muted-foreground">
+      Reports now live on the home page.
+      <a class="text-primary underline underline-offset-4" href="/">Go to reports</a>
+    </p>
   </main>
 </Layout>

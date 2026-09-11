@@ -1,10 +1,16 @@
 ---
 import { AuthPage } from "../components/auth/AuthPage";
+import { ThemeToggle } from "../components/theme/ThemeToggle";
 import Layout from "../layouts/Layout.astro";
 ---
 
 <Layout title="Create account | Reporting Web">
-  <main class="flex min-h-screen items-center justify-center p-6">
+  <div
+    class="fixed top-[max(1rem,env(safe-area-inset-top))] right-[max(1rem,env(safe-area-inset-right))] z-50"
+  >
+    <ThemeToggle client:load />
+  </div>
+  <main class="flex min-h-dvh items-center justify-center p-6">
     <AuthPage convexUrl={import.meta.env.CONVEX_URL} mode="signUp" client:load />
   </main>
 </Layout>

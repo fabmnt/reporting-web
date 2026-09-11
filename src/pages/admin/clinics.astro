@@ -1,12 +1,8 @@
 ---
-import { ClinicsPanel } from "../../components/admin/ClinicsPanel";
+import { AppRoot } from "../../components/app/AppRoot";
 import Layout from "../../layouts/Layout.astro";
 ---
 
-<Layout title="Clinic administration | Reporting Web">
-  <main class="mx-auto flex min-h-screen w-full max-w-5xl items-center p-6">
-    <div class="w-full">
-      <ClinicsPanel convexUrl={import.meta.env.CONVEX_URL} client:load />
-    </div>
-  </main>
+<Layout title="Clinics | Reporting Web">
+  <AppRoot convexUrl={import.meta.env.CONVEX_URL} initialPath={Astro.url.pathname} client:load />
 </Layout>

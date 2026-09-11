@@ -17,6 +17,7 @@ pnpm-debug.log*
 .env
 .env.production
 .env.local
+.env.e2e
 convex/_generated/
 
 # macOS-specific files

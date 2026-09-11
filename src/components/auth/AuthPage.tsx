@@ -48,7 +48,16 @@ function AuthForm({ mode }: { mode: AuthMode }) {
   return (
     <Card className="w-full max-w-md">
       <CardHeader>
-        <CardTitle>{isSignIn ? "Sign in" : "Create your account"}</CardTitle>
+        <div className="mb-2 flex items-center gap-2">
+          <span
+            aria-hidden="true"
+            className="grid size-6 shrink-0 place-items-center rounded-md bg-primary text-xs font-semibold text-primary-foreground"
+          >
+            R
+          </span>
+          <span className="text-sm font-semibold tracking-tight">Reporting Web</span>
+        </div>
+        <CardTitle className="text-lg">{isSignIn ? "Sign in" : "Create your account"}</CardTitle>
         <CardDescription>
           {isSignIn
             ? "Use your Reporting Web account."
@@ -85,8 +94,8 @@ function AuthForm({ mode }: { mode: AuthMode }) {
           </FieldGroup>
         </form>
       </CardContent>
-      <CardFooter className="flex justify-between gap-3">
-        <Button form="auth-form" type="submit" disabled={isSubmitting || isLoading}>
+      <CardFooter className="flex flex-wrap justify-between gap-3">
+        <Button form="auth-form" type="submit" size="lg" disabled={isSubmitting || isLoading}>
           {isSubmitting || isLoading ? <Spinner data-icon="inline-start" /> : null}
           {isSignIn ? "Sign in" : "Create account"}
         </Button>
