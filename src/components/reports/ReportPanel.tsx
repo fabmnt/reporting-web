@@ -36,27 +36,6 @@ import { cn } from "@/lib/utils";
 type OperationKey = "pending-audit" | "ready-to-upload";
 
 type ReportRow = { rowNumber: number; values: string[] };
-// TEMPORARY while project is in development: mirrors the backend debug shape
-// so testers can see why rows were filtered. Remove with the debug flag.
-type SheetDebug = {
-  totalRows: number;
-  keptRows: number;
-  operationKey: string;
-  verificationFilter: string;
-  updateStatusColumn: string;
-  uploadStatusColumn: string;
-  verificationTypeColumn: string;
-  droppedByReason: Array<{ reason: string; count: number }>;
-  samples: Array<{
-    rowNumber: number;
-    reason: string;
-    l: string;
-    m: string;
-    verification: string;
-    updateStatus: string;
-    uploadStatus: string;
-  }>;
-};
 type SheetResult = {
   clinicId: Id<"clinics">;
   clinicName: string;
@@ -67,13 +46,11 @@ type SheetResult = {
   reviewRows: ReportRow[];
   auditRows: ReportRow[];
   error: string | null;
-  debug: SheetDebug | null;
 };
 type ReportResult = {
   reportRunId: Id<"reportRuns"> | null;
   assignedClinicCount: number;
   sheets: SheetResult[];
-  runDebug: RunDebug | null;
 };
 // A finished run plus the parameters it actually used. The results view reads
 // only from here, so editing the controls never rewrites what a run returned.
@@ -83,27 +60,6 @@ type CompletedRun = {
   startDate: string;
   endDate: string;
 };
-type RunDebug = {
-  clinicCount: number;
-  startDate: string;
-  endDate: string;
-  operationKey: string;
-  verificationFilter: string;
-  summary: string;
-  totalSheetRowsRead: number;
-  totalRowsKept: number;
-  clinics: Array<{
-    clinicName: string;
-    googleSheetId: string;
-    tabsInRange: string[];
-    dateTabsOutsideRange: string[];
-    nonDateTabCount: number;
-    nonDateTabSamples: string[];
-    sheetError: string | null;
-  }>;
-  aggregateDropReasons: Array<{ reason: string; count: number }>;
-};
-
 type RowTone = "neutral" | "success" | "warning";
 
 const TONES: Record<
@@ -191,151 +147,6 @@ function ResultTable({
           </TableBody>
         </Table>
       </div>
-    </div>
-  );
-}
-
-// TEMPORARY while project is in development: shows why rows were filtered so
-// the report form can be tested without reading backend code. Delete this
-// component and the debug flag once row rules are stable.
-const DEBUG_REASON_LABELS: Record<string, string> = {
-  too_short: "Row too short, missing columns",
-  verification_mismatch: "Verification type did not match the filter",
-  l_m_condition_failed: "Columns L/M failed, needs DONE or CHECK plus NOT FOUND",
-  update_status_excluded: "Update status is in the exclude list",
-  upload_status_not_empty_or_unchecked: "Upload status is not EMPTY or UNCHECKED",
-  col_l_not_done: "Column L is not DONE",
-  update_status_not_done: "Update status is not DONE",
-  upload_terminal: "Upload already done, UPLOADED or DONE BY",
-  upload_no_match: "Upload status matched neither ready nor review",
-};
-
-function formatTabList(tabs: string[], max = 6): string {
-  if (tabs.length === 0) return "none";
-  const shown = tabs.slice(0, max).join(", ");
-  if (tabs.length <= max) return shown;
-  return `${shown}, and ${tabs.length - max} more`;
-}
-
-function RunDebugPanel({ runDebug }: { runDebug: RunDebug }) {
-  return (
-    <div className="flex flex-col gap-3 rounded-md border border-dashed p-3">
-      <div className="flex flex-wrap items-center gap-2">
-        <h4 className="text-sm font-medium">Why this run returned {runDebug.totalRowsKept} rows</h4>
-        <Badge variant="secondary">{runDebug.clinicCount} clinics</Badge>
-      </div>
-      <p className="text-sm">{runDebug.summary}</p>
-      <p className="text-xs text-muted-foreground">
-        Date range {runDebug.startDate} to {runDebug.endDate}. Operation {runDebug.operationKey},
-        verification {runDebug.verificationFilter}. Read {runDebug.totalSheetRowsRead} sheet row(s)
-        from tabs in range.
-      </p>
-      {runDebug.clinicCount === 0 ? (
-        <p className="text-sm text-muted-foreground">
-          Ask an admin to assign clinics to your account before running the report again.
-        </p>
-      ) : (
-        <div className="flex flex-col gap-3">
-          {runDebug.clinics.map((clinic) => (
-            <div key={clinic.googleSheetId} className="rounded-md border p-3 text-sm">
-              <p className="font-medium">{clinic.clinicName}</p>
-              {clinic.sheetError ? (
-                <p className="mt-1 text-destructive">{clinic.sheetError}</p>
-              ) : null}
-              <ul className="mt-2 flex flex-col gap-1 text-muted-foreground">
-                <li>Tabs in range: {formatTabList(clinic.tabsInRange)}</li>
-                <li>Date tabs outside range: {formatTabList(clinic.dateTabsOutsideRange)}</li>
-                {clinic.nonDateTabCount > 0 ? (
-                  <li>
-                    Other tab names ({clinic.nonDateTabCount}):{" "}
-                    {formatTabList(clinic.nonDateTabSamples, 4)}
-                  </li>
-                ) : null}
-              </ul>
-            </div>
-          ))}
-        </div>
-      )}
-      {runDebug.aggregateDropReasons.length > 0 ? (
-        <div className="flex flex-col gap-1">
-          <p className="text-sm font-medium">Rows filtered out across all tabs</p>
-          <ul className="flex flex-col gap-1 text-sm">
-            {runDebug.aggregateDropReasons.map((item) => (
-              <li key={item.reason} className="flex items-center gap-2">
-                <Badge variant="outline" className="tabular-nums">
-                  {item.count}
-                </Badge>
-                <span>{DEBUG_REASON_LABELS[item.reason] ?? item.reason}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-function DebugPanel({ debug }: { debug: SheetDebug }) {
-  const sorted = [...debug.droppedByReason].sort((a, b) => b.count - a.count);
-  return (
-    <div className="flex flex-col gap-2 rounded-md border border-dashed p-3">
-      <div className="flex items-center gap-2">
-        <h4 className="text-sm font-medium">Why rows were filtered, temporary debug</h4>
-        <Badge variant="secondary" className="tabular-nums">
-          {debug.keptRows} of {debug.totalRows} kept
-        </Badge>
-      </div>
-      <p className="text-xs text-muted-foreground">
-        Operation {debug.operationKey}, verification {debug.verificationFilter}. Columns: update{" "}
-        {debug.updateStatusColumn}, upload {debug.uploadStatusColumn}, verification{" "}
-        {debug.verificationTypeColumn}. Values below are uppercased, as the filter sees them.
-      </p>
-      {sorted.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No rows were dropped.</p>
-      ) : (
-        <ul className="flex flex-col gap-1 text-sm">
-          {sorted.map((item) => (
-            <li key={item.reason} className="flex items-center gap-2">
-              <Badge variant="outline" className="tabular-nums">
-                {item.count}
-              </Badge>
-              <span>{DEBUG_REASON_LABELS[item.reason] ?? item.reason}</span>
-            </li>
-          ))}
-        </ul>
-      )}
-      {debug.samples.length > 0 ? (
-        <div className="overflow-hidden rounded-lg border">
-          <Table>
-            <TableHeader className="bg-muted/40">
-              <TableRow>
-                <TableHead>Row</TableHead>
-                <TableHead>Reason</TableHead>
-                <TableHead>L</TableHead>
-                <TableHead>M</TableHead>
-                <TableHead>{debug.verificationTypeColumn}</TableHead>
-                <TableHead>{debug.updateStatusColumn}</TableHead>
-                <TableHead>{debug.uploadStatusColumn}</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {debug.samples.map((sample) => (
-                <TableRow key={sample.rowNumber}>
-                  <TableCell className="font-mono tabular-nums">{sample.rowNumber}</TableCell>
-                  <TableCell className="max-w-48 truncate text-xs">
-                    {DEBUG_REASON_LABELS[sample.reason] ?? sample.reason}
-                  </TableCell>
-                  <TableCell className="max-w-32 truncate text-xs">{sample.l}</TableCell>
-                  <TableCell className="max-w-32 truncate text-xs">{sample.m}</TableCell>
-                  <TableCell className="max-w-32 truncate text-xs">{sample.verification}</TableCell>
-                  <TableCell className="max-w-32 truncate text-xs">{sample.updateStatus}</TableCell>
-                  <TableCell className="max-w-32 truncate text-xs">{sample.uploadStatus}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-      ) : null}
     </div>
   );
 }
@@ -447,8 +258,7 @@ function ResultsCard({ run }: { run: CompletedRun }) {
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-6">
-        {data.runDebug ? <RunDebugPanel runDebug={data.runDebug} /> : null}
-        {data.sheets.length === 0 && !data.runDebug ? (
+        {data.sheets.length === 0 ? (
           <p className="text-sm text-muted-foreground">
             No sheets were processed. Check your assigned clinics and the selected dates.
           </p>
@@ -502,7 +312,6 @@ function ResultsCard({ run }: { run: CompletedRun }) {
                 {run.operation === "pending-audit" && sheet.auditRows.length === 0 ? (
                   <p className="text-sm text-muted-foreground">No matching rows.</p>
                 ) : null}
-                {sheet.debug ? <DebugPanel debug={sheet.debug} /> : null}
               </>
             )}
           </div>
@@ -545,9 +354,6 @@ export function ReportRunner() {
         startDate: dateRange.startDate,
         endDate: dateRange.endDate,
         verificationFilter: verification,
-        // TEMPORARY while project is in development: always ask for filter
-        // reasons so testers can see why rows were dropped.
-        debug: true,
       });
       setResult({
         data,

@@ -50,10 +50,8 @@ const PENDING_AUDIT_RUN = {
         { rowNumber: 3, values: ["b"] },
       ],
       error: null,
-      debug: null,
     },
   ],
-  runDebug: null,
 };
 
 const runReport = vi.fn();
