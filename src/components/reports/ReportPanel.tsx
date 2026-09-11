@@ -1,12 +1,14 @@
 import { useAction, useQuery } from "convex/react";
+import { CircleCheck, ClipboardList, FileText, TriangleAlert } from "lucide-react";
 import { useState } from "react";
 
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
+import { PageHeader } from "@/components/app/PageHeader";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader } from "@/components/ui/card";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { Field, FieldLabel } from "@/components/ui/field";
 import {
@@ -17,7 +19,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Spinner } from "@/components/ui/spinner";
 import {
   Table,
   TableBody,
@@ -26,9 +30,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-
-import { ProtectedRoute } from "../auth/ProtectedRoute";
 import { todayIso } from "@/lib/dates";
+import { cn } from "@/lib/utils";
 
 type OperationKey = "pending-audit" | "ready-to-upload";
 
@@ -93,6 +96,29 @@ type RunDebug = {
   aggregateDropReasons: Array<{ reason: string; count: number }>;
 };
 
+type RowTone = "neutral" | "success" | "warning";
+
+const TONES: Record<
+  RowTone,
+  { Icon: typeof ClipboardList; iconClass: string; badgeClass: string }
+> = {
+  neutral: {
+    Icon: ClipboardList,
+    iconClass: "text-muted-foreground",
+    badgeClass: "border-transparent bg-muted text-foreground",
+  },
+  success: {
+    Icon: CircleCheck,
+    iconClass: "text-success",
+    badgeClass: "border-transparent bg-success/10 text-success",
+  },
+  warning: {
+    Icon: TriangleAlert,
+    iconClass: "text-warning",
+    badgeClass: "border-transparent bg-warning/10 text-warning",
+  },
+};
+
 const OPERATIONS: Array<{ key: OperationKey; label: string; description: string }> = [
   {
     key: "pending-audit",
@@ -109,11 +135,13 @@ const OPERATIONS: Array<{ key: OperationKey; label: string; description: string 
 
 function ResultTable({
   title,
+  tone,
   count,
   headers,
   rows,
 }: {
   title: string;
+  tone: RowTone;
   count: number;
   headers: string[];
   rows: ReportRow[];
@@ -121,40 +149,46 @@ function ResultTable({
   if (rows.length === 0) return null;
   // Show first 8 data columns plus row number; full rows copy from the sheet.
   const visibleHeaders = headers.slice(0, 8);
+  const { Icon, iconClass, badgeClass } = TONES[tone];
   return (
     <div className="flex flex-col gap-2">
       <div className="flex items-center gap-2">
+        <Icon className={cn("size-4", iconClass)} aria-hidden="true" />
         <h4 className="text-sm font-medium">{title}</h4>
-        <Badge variant="secondary">{count}</Badge>
+        <Badge variant="outline" className={cn("tabular-nums", badgeClass)}>
+          {count}
+        </Badge>
       </div>
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Row</TableHead>
-            {visibleHeaders.map((header, index) => (
-              <TableHead key={`${header}-${index}`}>{header || `Col ${index + 1}`}</TableHead>
-            ))}
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {rows.map((row) => (
-            <TableRow key={row.rowNumber}>
-              <TableCell className="font-mono">{row.rowNumber}</TableCell>
-              {visibleHeaders.map((_, index) => (
-                <TableCell key={index} className="max-w-40 truncate">
-                  {row.values[index] ?? ""}
-                </TableCell>
+      <div className="overflow-hidden rounded-lg border">
+        <Table>
+          <TableHeader className="bg-muted/40">
+            <TableRow>
+              <TableHead>Row</TableHead>
+              {visibleHeaders.map((header, index) => (
+                <TableHead key={`${header}-${index}`}>{header || `Col ${index + 1}`}</TableHead>
               ))}
             </TableRow>
-          ))}
-        </TableBody>
-      </Table>
+          </TableHeader>
+          <TableBody>
+            {rows.map((row) => (
+              <TableRow key={row.rowNumber}>
+                <TableCell className="font-mono tabular-nums">{row.rowNumber}</TableCell>
+                {visibleHeaders.map((_, index) => (
+                  <TableCell key={index} className="max-w-40 truncate">
+                    {row.values[index] ?? ""}
+                  </TableCell>
+                ))}
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
     </div>
   );
 }
 
 // TEMPORARY while project is in development: shows why rows were filtered so
-// the /reports form can be tested without reading backend code. Delete this
+// the report form can be tested without reading backend code. Delete this
 // component and the debug flag once row rules are stable.
 const DEBUG_REASON_LABELS: Record<string, string> = {
   too_short: "Row too short, missing columns",
@@ -220,7 +254,9 @@ function RunDebugPanel({ runDebug }: { runDebug: RunDebug }) {
           <ul className="flex flex-col gap-1 text-sm">
             {runDebug.aggregateDropReasons.map((item) => (
               <li key={item.reason} className="flex items-center gap-2">
-                <Badge variant="outline">{item.count}</Badge>
+                <Badge variant="outline" className="tabular-nums">
+                  {item.count}
+                </Badge>
                 <span>{DEBUG_REASON_LABELS[item.reason] ?? item.reason}</span>
               </li>
             ))}
@@ -237,7 +273,7 @@ function DebugPanel({ debug }: { debug: SheetDebug }) {
     <div className="flex flex-col gap-2 rounded-md border border-dashed p-3">
       <div className="flex items-center gap-2">
         <h4 className="text-sm font-medium">Why rows were filtered, temporary debug</h4>
-        <Badge variant="secondary">
+        <Badge variant="secondary" className="tabular-nums">
           {debug.keptRows} of {debug.totalRows} kept
         </Badge>
       </div>
@@ -252,47 +288,79 @@ function DebugPanel({ debug }: { debug: SheetDebug }) {
         <ul className="flex flex-col gap-1 text-sm">
           {sorted.map((item) => (
             <li key={item.reason} className="flex items-center gap-2">
-              <Badge variant="outline">{item.count}</Badge>
+              <Badge variant="outline" className="tabular-nums">
+                {item.count}
+              </Badge>
               <span>{DEBUG_REASON_LABELS[item.reason] ?? item.reason}</span>
             </li>
           ))}
         </ul>
       )}
       {debug.samples.length > 0 ? (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Row</TableHead>
-              <TableHead>Reason</TableHead>
-              <TableHead>L</TableHead>
-              <TableHead>M</TableHead>
-              <TableHead>{debug.verificationTypeColumn}</TableHead>
-              <TableHead>{debug.updateStatusColumn}</TableHead>
-              <TableHead>{debug.uploadStatusColumn}</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {debug.samples.map((sample) => (
-              <TableRow key={sample.rowNumber}>
-                <TableCell className="font-mono">{sample.rowNumber}</TableCell>
-                <TableCell className="max-w-48 truncate text-xs">
-                  {DEBUG_REASON_LABELS[sample.reason] ?? sample.reason}
-                </TableCell>
-                <TableCell className="max-w-32 truncate text-xs">{sample.l}</TableCell>
-                <TableCell className="max-w-32 truncate text-xs">{sample.m}</TableCell>
-                <TableCell className="max-w-32 truncate text-xs">{sample.verification}</TableCell>
-                <TableCell className="max-w-32 truncate text-xs">{sample.updateStatus}</TableCell>
-                <TableCell className="max-w-32 truncate text-xs">{sample.uploadStatus}</TableCell>
+        <div className="overflow-hidden rounded-lg border">
+          <Table>
+            <TableHeader className="bg-muted/40">
+              <TableRow>
+                <TableHead>Row</TableHead>
+                <TableHead>Reason</TableHead>
+                <TableHead>L</TableHead>
+                <TableHead>M</TableHead>
+                <TableHead>{debug.verificationTypeColumn}</TableHead>
+                <TableHead>{debug.updateStatusColumn}</TableHead>
+                <TableHead>{debug.uploadStatusColumn}</TableHead>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+            </TableHeader>
+            <TableBody>
+              {debug.samples.map((sample) => (
+                <TableRow key={sample.rowNumber}>
+                  <TableCell className="font-mono tabular-nums">{sample.rowNumber}</TableCell>
+                  <TableCell className="max-w-48 truncate text-xs">
+                    {DEBUG_REASON_LABELS[sample.reason] ?? sample.reason}
+                  </TableCell>
+                  <TableCell className="max-w-32 truncate text-xs">{sample.l}</TableCell>
+                  <TableCell className="max-w-32 truncate text-xs">{sample.m}</TableCell>
+                  <TableCell className="max-w-32 truncate text-xs">{sample.verification}</TableCell>
+                  <TableCell className="max-w-32 truncate text-xs">{sample.updateStatus}</TableCell>
+                  <TableCell className="max-w-32 truncate text-xs">{sample.uploadStatus}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
       ) : null}
     </div>
   );
 }
 
-function PanelContent() {
+function ResultsPlaceholder({ running, clinicCount }: { running: boolean; clinicCount: number }) {
+  if (running) {
+    return (
+      <div className="flex flex-col gap-4 rounded-xl bg-card p-4 ring-1 ring-foreground/10">
+        <div className="flex items-center gap-2">
+          <Spinner className="size-4 text-muted-foreground" />
+          <h2 className="font-heading text-base font-medium leading-snug">Reading sheets</h2>
+        </div>
+        <p className="text-sm text-muted-foreground">
+          Reading {clinicCount} clinic sheet{clinicCount === 1 ? "" : "s"}. This can take a moment.
+        </p>
+        <Skeleton className="h-8 w-40" />
+        <Skeleton className="h-32 w-full" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed px-4 py-12 text-center">
+      <FileText className="size-6 text-muted-foreground" aria-hidden="true" />
+      <p className="text-sm font-medium">No results yet</p>
+      <p className="max-w-sm text-sm text-muted-foreground">
+        Choose a date range and run a report. Rows appear here, grouped by clinic and sheet tab.
+      </p>
+    </div>
+  );
+}
+
+export function ReportRunner() {
   const assignment = useQuery(api.googleSheets.listAssignedReportClinics, {});
   const runReport = useAction(api.reports.runSheetReport);
 
@@ -351,23 +419,26 @@ function PanelContent() {
 
   return (
     <div className="flex flex-col gap-6">
-      <Card>
-        <CardHeader>
-          <CardTitle>Run report</CardTitle>
-          <CardDescription>
-            Pick a date range. The backend reads your assigned clinic sheets in that range and
-            applies the same row rules as the desktop tool.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-4">
-          {error ? (
-            <Alert variant="destructive">
-              <AlertTitle>Report failed</AlertTitle>
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
-          ) : null}
-          <div className="grid gap-4 md:grid-cols-2">
-            <Field className="md:col-span-2">
+      <PageHeader
+        title="Run report"
+        description="Reads your assigned clinic sheets for the selected dates and applies the same row rules as the desktop tool."
+      />
+
+      {error ? (
+        <Alert variant="destructive">
+          <AlertTitle>Report failed</AlertTitle>
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      ) : null}
+
+      <div className="grid gap-6 lg:grid-cols-[360px_minmax(0,1fr)] lg:items-start">
+        <Card className="lg:sticky lg:top-20">
+          <CardHeader>
+            <h2 className="font-heading text-base leading-snug font-medium">Report settings</h2>
+            <CardDescription>Choose what to read and which dates to cover.</CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-5">
+            <Field>
               <FieldLabel htmlFor="report-date-range">Date range</FieldLabel>
               <DateRangePicker
                 id="report-date-range"
@@ -376,6 +447,7 @@ function PanelContent() {
                 disabled={running}
               />
             </Field>
+
             <Field>
               <FieldLabel>Report type</FieldLabel>
               <Select
@@ -401,6 +473,7 @@ function PanelContent() {
                 <p className="text-xs text-muted-foreground">{selectedOperation.description}</p>
               ) : null}
             </Field>
+
             {operation === "pending-audit" ? (
               <Field>
                 <FieldLabel>Verification type</FieldLabel>
@@ -429,122 +502,138 @@ function PanelContent() {
                 </Select>
               </Field>
             ) : null}
-          </div>
-          <div className="flex flex-col gap-2 rounded-md border p-3">
-            <div className="flex flex-wrap items-center gap-2">
-              <h4 className="text-sm font-medium">Your clinics</h4>
-              <Badge variant="secondary">{assignedClinicCount}</Badge>
+
+            <Separator />
+
+            <section className="flex flex-col gap-2">
+              <div className="flex items-center justify-between gap-2">
+                <h3 className="text-sm font-medium">Included clinics</h3>
+                <Badge variant="secondary" className="tabular-nums">
+                  {assignedClinicCount}
+                </Badge>
+              </div>
               {assignment.usesAllClinics ? (
-                <Badge variant="outline">All clinics (admin)</Badge>
+                <Badge variant="outline" className="w-fit">
+                  All clinics (admin)
+                </Badge>
               ) : null}
-            </div>
-            {assignedClinicCount === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                No clinics assigned yet. Ask an admin to assign clinics to your account.
-              </p>
-            ) : (
-              <ul className="flex flex-col gap-1 text-sm text-muted-foreground">
-                {assignment.clinics.map((clinic) => (
-                  <li key={clinic.clinicId}>
-                    {clinic.name} · {clinic.clientName}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-          <div>
+              {assignedClinicCount === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  No clinics assigned yet. Ask an admin to assign clinics to your account.
+                </p>
+              ) : (
+                <ul className="flex max-h-56 flex-col gap-1 overflow-y-auto text-sm text-muted-foreground">
+                  {assignment.clinics.map((clinic) => (
+                    <li key={clinic.clinicId}>
+                      {clinic.name} <span aria-hidden="true">·</span> {clinic.clientName}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          </CardContent>
+          <CardFooter>
             <Button
+              size="lg"
+              className="w-full"
               onClick={() => void handleRun()}
               disabled={running || assignedClinicCount === 0}
             >
-              {running ? "Running..." : "Run report"}
+              {running ? (
+                <>
+                  <Spinner data-icon="inline-start" />
+                  Running report
+                </>
+              ) : (
+                "Run report"
+              )}
             </Button>
-          </div>
-        </CardContent>
-      </Card>
-
-      {result ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>
-              Report results <Badge variant="secondary">{totalRows} rows</Badge>
-            </CardTitle>
-            <CardDescription>
-              {result.assignedClinicCount} clinic(s), {dateRange.startDate} to {dateRange.endDate}.
-              Sheet row numbers match the Google Sheet.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-6">
-            {result.runDebug ? <RunDebugPanel runDebug={result.runDebug} /> : null}
-            {result.sheets.length === 0 && !result.runDebug ? (
-              <p className="text-sm text-muted-foreground">
-                No sheets were processed. Enable debug or check your assigned clinics.
-              </p>
-            ) : null}
-            {result.sheets.map((sheet) => (
-              <div
-                key={`${sheet.clinicId}-${sheet.tabTitle}`}
-                className="flex flex-col gap-4 rounded-lg border p-4"
-              >
-                <div className="flex items-center gap-2">
-                  <h3 className="text-sm font-medium">
-                    {sheet.clinicName} {sheet.tabTitle ? `· ${sheet.tabTitle}` : ""}
-                  </h3>
-                </div>
-                {sheet.error ? (
-                  <Alert variant="destructive">
-                    <AlertTitle>Sheet error</AlertTitle>
-                    <AlertDescription>{sheet.error}</AlertDescription>
-                  </Alert>
-                ) : (
-                  <>
-                    {operation === "ready-to-upload" ? (
-                      <>
-                        <ResultTable
-                          title="Ready to upload"
-                          count={sheet.readyRows.length}
-                          headers={sheet.headers}
-                          rows={sheet.readyRows}
-                        />
-                        <ResultTable
-                          title="Needs review"
-                          count={sheet.reviewRows.length}
-                          headers={sheet.headers}
-                          rows={sheet.reviewRows}
-                        />
-                      </>
-                    ) : (
-                      <ResultTable
-                        title="Pending audit"
-                        count={sheet.auditRows.length}
-                        headers={sheet.headers}
-                        rows={sheet.auditRows}
-                      />
-                    )}
-                    {operation === "ready-to-upload" &&
-                    sheet.readyRows.length === 0 &&
-                    sheet.reviewRows.length === 0 ? (
-                      <p className="text-sm text-muted-foreground">No matching rows.</p>
-                    ) : null}
-                    {operation === "pending-audit" && sheet.auditRows.length === 0 ? (
-                      <p className="text-sm text-muted-foreground">No matching rows.</p>
-                    ) : null}
-                    {sheet.debug ? <DebugPanel debug={sheet.debug} /> : null}
-                  </>
-                )}
-              </div>
-            ))}
-          </CardContent>
+          </CardFooter>
         </Card>
-      ) : null}
-    </div>
-  );
-}
 
-export function ReportPanel({ convexUrl }: { convexUrl?: string }) {
-  return (
-    <ProtectedRoute convexUrl={convexUrl}>
-      <PanelContent />
-    </ProtectedRoute>
+        <div className="flex min-w-0 flex-col gap-6">
+          {result === null ? (
+            <ResultsPlaceholder running={running} clinicCount={assignedClinicCount} />
+          ) : (
+            <Card>
+              <CardHeader>
+                <div className="flex flex-wrap items-center gap-2">
+                  <h2 className="font-heading text-base leading-snug font-medium">Results</h2>
+                  <Badge variant="secondary" className="tabular-nums">
+                    {totalRows} rows
+                  </Badge>
+                </div>
+                <CardDescription>
+                  {result.assignedClinicCount} clinic(s), {dateRange.startDate} to{" "}
+                  {dateRange.endDate}. Sheet row numbers match the Google Sheet.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="flex flex-col gap-6">
+                {result.runDebug ? <RunDebugPanel runDebug={result.runDebug} /> : null}
+                {result.sheets.length === 0 && !result.runDebug ? (
+                  <p className="text-sm text-muted-foreground">
+                    No sheets were processed. Check your assigned clinics and the selected dates.
+                  </p>
+                ) : null}
+                {result.sheets.map((sheet) => (
+                  <div
+                    key={`${sheet.clinicId}-${sheet.tabTitle}`}
+                    className="flex flex-col gap-4 rounded-lg border p-4"
+                  >
+                    <h3 className="text-sm font-medium">
+                      {sheet.clinicName} {sheet.tabTitle ? `· ${sheet.tabTitle}` : ""}
+                    </h3>
+                    {sheet.error ? (
+                      <Alert variant="destructive">
+                        <AlertTitle>Sheet error</AlertTitle>
+                        <AlertDescription>{sheet.error}</AlertDescription>
+                      </Alert>
+                    ) : (
+                      <>
+                        {operation === "ready-to-upload" ? (
+                          <>
+                            <ResultTable
+                              title="Ready to upload"
+                              tone="success"
+                              count={sheet.readyRows.length}
+                              headers={sheet.headers}
+                              rows={sheet.readyRows}
+                            />
+                            <ResultTable
+                              title="Needs review"
+                              tone="warning"
+                              count={sheet.reviewRows.length}
+                              headers={sheet.headers}
+                              rows={sheet.reviewRows}
+                            />
+                          </>
+                        ) : (
+                          <ResultTable
+                            title="Pending audit"
+                            tone="neutral"
+                            count={sheet.auditRows.length}
+                            headers={sheet.headers}
+                            rows={sheet.auditRows}
+                          />
+                        )}
+                        {operation === "ready-to-upload" &&
+                        sheet.readyRows.length === 0 &&
+                        sheet.reviewRows.length === 0 ? (
+                          <p className="text-sm text-muted-foreground">No matching rows.</p>
+                        ) : null}
+                        {operation === "pending-audit" && sheet.auditRows.length === 0 ? (
+                          <p className="text-sm text-muted-foreground">No matching rows.</p>
+                        ) : null}
+                        {sheet.debug ? <DebugPanel debug={sheet.debug} /> : null}
+                      </>
+                    )}
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }

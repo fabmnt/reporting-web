@@ -101,8 +101,44 @@ async function assertClinicNameAvailable(
   }
 }
 
+/**
+ * Validates a client name and derives its key. Returns the key.
+ * Pass `ignoreClientId` when renaming so a client does not collide with itself.
+ */
+async function assertClientNameAvailable(
+  ctx: MutationCtx,
+  name: string,
+  ignoreClientId?: Id<"clients">
+): Promise<string> {
+  const key = clientKeyFromName(name);
+  if (key === "") {
+    throw new Error("Client name must contain letters or numbers.");
+  }
+
+  const existingByKey = await ctx.db
+    .query("clients")
+    .withIndex("by_key", (query) => query.eq("key", key))
+    .first();
+  if (existingByKey !== null && existingByKey._id !== ignoreClientId) {
+    throw new Error("A client with this name already exists.");
+  }
+
+  const scannedClients = await ctx.db.query("clients").withIndex("by_key").take(MAX_CLIENTS);
+  const existingByName = scannedClients.find(
+    (client) => client.name.toLowerCase() === name.toLowerCase() && client._id !== ignoreClientId
+  );
+  if (existingByName !== undefined) {
+    throw new Error("A client with this name already exists.");
+  }
+
+  return key;
+}
+
 async function removeClinicFromStaffProfiles(ctx: MutationCtx, clinicId: Id<"clinics">) {
-  const profiles = await ctx.db.query("staffProfiles").withIndex("by_userId").take(MAX_STAFF_PROFILES);
+  const profiles = await ctx.db
+    .query("staffProfiles")
+    .withIndex("by_userId")
+    .take(MAX_STAFF_PROFILES);
   for (const profile of profiles) {
     const assignedClinicIds = profile.assignedClinicIds ?? [];
     if (!assignedClinicIds.includes(clinicId)) continue;
@@ -145,26 +181,67 @@ export const createClient = mutation({
     await requireAdmin(ctx);
 
     const name = cleanRequiredText(args.name, "Client name");
-    const key = clientKeyFromName(name);
-    if (key === "") {
-      throw new Error("Client name must contain letters or numbers.");
-    }
-
-    const existingByKey = await ctx.db
-      .query("clients")
-      .withIndex("by_key", (query) => query.eq("key", key))
-      .first();
-    const scannedClients = await ctx.db.query("clients").withIndex("by_key").take(MAX_CLIENTS);
-    const existingByName = scannedClients.find(
-      (client) => client.name.toLowerCase() === name.toLowerCase()
-    );
-
-    if (existingByKey !== null || existingByName !== undefined) {
-      throw new Error("A client with this name already exists.");
-    }
+    const key = await assertClientNameAvailable(ctx, name);
 
     const clientId = await ctx.db.insert("clients", { key, name, isActive: true });
     return { clientId, key, name, isActive: true };
+  },
+});
+
+export const updateClient = mutation({
+  args: {
+    clientId: v.id("clients"),
+    name: v.string(),
+    isActive: v.boolean(),
+  },
+  returns: clientView,
+  handler: async (ctx, args) => {
+    await requireAdmin(ctx);
+
+    const client = await ctx.db.get("clients", args.clientId);
+    if (client === null) {
+      throw new Error("Client was not found.");
+    }
+
+    const name = cleanRequiredText(args.name, "Client name");
+    const key = await assertClientNameAvailable(ctx, name, args.clientId);
+
+    await ctx.db.patch(args.clientId, { key, name, isActive: args.isActive });
+
+    return { clientId: args.clientId, key, name, isActive: args.isActive };
+  },
+});
+
+/**
+ * Deletes a client only when it owns no clinics. Clinics require a client, so
+ * deleting one that still has clinics would leave those rows pointing at a
+ * missing client. Callers must move or delete the clinics first.
+ */
+export const removeClient = mutation({
+  args: { clientId: v.id("clients") },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await requireAdmin(ctx);
+
+    const client = await ctx.db.get("clients", args.clientId);
+    if (client === null) {
+      throw new Error("Client was not found.");
+    }
+
+    const ownedClinics = await ctx.db
+      .query("clinics")
+      .withIndex("by_clientId_and_name", (query) => query.eq("clientId", args.clientId))
+      .take(MAX_CLINICS);
+
+    if (ownedClinics.length > 0) {
+      const label = ownedClinics.length === 1 ? "clinic" : "clinics";
+      throw new Error(
+        `${client.name} still owns ${ownedClinics.length} ${label}. Move or delete them first.`
+      );
+    }
+
+    await ctx.db.delete("clients", args.clientId);
+    return null;
   },
 });
 

@@ -1,12 +1,8 @@
 ---
-import { AccountHome } from "../components/auth/AccountHome";
+import { AppRoot } from "../components/app/AppRoot";
 import Layout from "../layouts/Layout.astro";
 ---
 
-<Layout>
-  <main class="mx-auto flex min-h-screen w-full max-w-3xl items-center p-6">
-    <div class="w-full">
-      <AccountHome convexUrl={import.meta.env.CONVEX_URL} client:load />
-    </div>
-  </main>
+<Layout title="Run report | Reporting Web">
+  <AppRoot convexUrl={import.meta.env.CONVEX_URL} initialPath={Astro.url.pathname} client:load />
 </Layout>
