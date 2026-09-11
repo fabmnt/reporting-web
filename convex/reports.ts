@@ -419,20 +419,20 @@ export const runSheetReport = action({
       endDate: args.endDate,
     });
 
-    const { tabsForClinic, tabCatalogForClinic }: {
+    const {
+      tabsForClinic,
+      tabCatalogForClinic,
+    }: {
       tabsForClinic: Record<string, string[]>;
       tabCatalogForClinic: Record<string, TabCatalogEntry>;
-    } = await ctx.runAction(
-      internal.sheets.planSheetTabs,
-      {
-        clinics: config.clinics.map((c) => ({
-          clinicId: c.clinicId,
-          googleSheetId: c.googleSheetId,
-        })),
-        startDate: args.startDate,
-        endDate: args.endDate,
-      }
-    );
+    } = await ctx.runAction(internal.sheets.planSheetTabs, {
+      clinics: config.clinics.map((c) => ({
+        clinicId: c.clinicId,
+        googleSheetId: c.googleSheetId,
+      })),
+      startDate: args.startDate,
+      endDate: args.endDate,
+    });
 
     const sheets: SheetResultEntry[] = [];
 
