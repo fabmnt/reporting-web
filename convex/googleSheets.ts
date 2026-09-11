@@ -21,7 +21,7 @@ const GOOGLE_SHEETS_BASE = "https://sheets.googleapis.com/v4/spreadsheets";
 
 // Runs as the operator who called it: the action asks the currentOperator
 // internal query to check staffProfiles with the caller's auth. Throws
-// FORBIDDEN for viewers and disabled accounts.
+// FORBIDDEN for disabled accounts and roles without operator access.
 export const googleAuthStatus = action({
   args: {},
   returns: v.object({

@@ -52,12 +52,12 @@ import {
 import { parseSpreadsheetId } from "@/lib/googleSheets";
 import {
   buildSheetColumnsInput,
-  CLINIC_SHEET_COLUMN_DEFAULTS,
   EMPTY_SHEET_COLUMN_FORM,
   formatSheetColumnSummary,
   sheetColumnsToFormValues,
   type SheetColumnFormValues,
 } from "@/lib/clinicSheetColumns";
+import { SheetColumnFields } from "@/components/clinics/SheetColumnFields";
 
 type ClinicList = FunctionReturnType<typeof api.clinics.list>;
 type ClinicView = ClinicList["clinics"][number];
@@ -229,106 +229,6 @@ function ClientForm({
   );
 }
 
-function SheetColumnFields({
-  values,
-  onChange,
-  disabled,
-}: {
-  values: SheetColumnFormValues;
-  onChange: (values: SheetColumnFormValues) => void;
-  disabled: boolean;
-}) {
-  function update<K extends keyof SheetColumnFormValues>(key: K, value: SheetColumnFormValues[K]) {
-    onChange({ ...values, [key]: value });
-  }
-
-  return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-col gap-1">
-        <h3 className="text-sm font-medium">Sheet columns</h3>
-        <p className="text-xs text-muted-foreground">
-          Leave a field empty to use the global default shown in the placeholder.
-        </p>
-      </div>
-      <div className="grid gap-4 md:grid-cols-3">
-        <Field>
-          <FieldLabel htmlFor="column-update-status">Update status</FieldLabel>
-          <Input
-            id="column-update-status"
-            value={values.updateStatus}
-            onChange={(event) => update("updateStatus", event.target.value.toUpperCase())}
-            placeholder={CLINIC_SHEET_COLUMN_DEFAULTS.updateStatus}
-            disabled={disabled}
-            className="font-mono uppercase"
-          />
-        </Field>
-        <Field>
-          <FieldLabel htmlFor="column-upload-status">Upload status</FieldLabel>
-          <Input
-            id="column-upload-status"
-            value={values.uploadStatus}
-            onChange={(event) => update("uploadStatus", event.target.value.toUpperCase())}
-            placeholder={CLINIC_SHEET_COLUMN_DEFAULTS.uploadStatus}
-            disabled={disabled}
-            className="font-mono uppercase"
-          />
-        </Field>
-        <Field>
-          <FieldLabel htmlFor="column-verification-type">Verification type</FieldLabel>
-          <Input
-            id="column-verification-type"
-            value={values.verificationType}
-            onChange={(event) => update("verificationType", event.target.value.toUpperCase())}
-            placeholder={CLINIC_SHEET_COLUMN_DEFAULTS.verificationType}
-            disabled={disabled}
-            className="font-mono uppercase"
-          />
-        </Field>
-      </div>
-      <details className="rounded-md border px-3 py-2">
-        <summary className="cursor-pointer text-sm font-medium">Advanced columns</summary>
-        <div className="mt-4 grid gap-4 md:grid-cols-3">
-          <Field>
-            <FieldLabel htmlFor="column-file-url">File URL</FieldLabel>
-            <Input
-              id="column-file-url"
-              value={values.fileUrl}
-              onChange={(event) => update("fileUrl", event.target.value.toUpperCase())}
-              placeholder={CLINIC_SHEET_COLUMN_DEFAULTS.fileUrl}
-              disabled={disabled}
-              className="font-mono uppercase"
-            />
-          </Field>
-          <Field>
-            <FieldLabel htmlFor="column-url">URL</FieldLabel>
-            <Input
-              id="column-url"
-              value={values.url}
-              onChange={(event) => update("url", event.target.value.toUpperCase())}
-              placeholder={CLINIC_SHEET_COLUMN_DEFAULTS.url}
-              disabled={disabled}
-              className="font-mono uppercase"
-            />
-          </Field>
-          <Field>
-            <FieldLabel htmlFor="column-conditional-formatting">Conditional formatting</FieldLabel>
-            <Input
-              id="column-conditional-formatting"
-              value={values.conditionalFormatting}
-              onChange={(event) =>
-                update("conditionalFormatting", event.target.value.toUpperCase())
-              }
-              placeholder={CLINIC_SHEET_COLUMN_DEFAULTS.conditionalFormatting}
-              disabled={disabled}
-              className="font-mono uppercase"
-            />
-          </Field>
-        </div>
-      </details>
-    </div>
-  );
-}
-
 function ClinicForm({
   open,
   onOpenChange,
@@ -402,25 +302,6 @@ function ClinicForm({
               />
             </Field>
             <Field>
-              <FieldLabel htmlFor="clinic-external-id">External clinic ID (optional)</FieldLabel>
-              <Input
-                id="clinic-external-id"
-                value={values.externalClinicId}
-                onChange={(event) => update("externalClinicId", event.target.value)}
-                disabled={pending}
-              />
-            </Field>
-            <Field className="md:col-span-2">
-              <FieldLabel htmlFor="clinic-sheet">Google Sheet URL or ID</FieldLabel>
-              <Input
-                id="clinic-sheet"
-                value={values.sheetInput}
-                onChange={(event) => update("sheetInput", event.target.value)}
-                placeholder="https://docs.google.com/spreadsheets/d/..."
-                disabled={pending}
-              />
-            </Field>
-            <Field>
               <FieldLabel>Client</FieldLabel>
               <Select
                 items={clients.map((client) => ({
@@ -444,6 +325,25 @@ function ClinicForm({
                   </SelectGroup>
                 </SelectContent>
               </Select>
+            </Field>
+            <Field className="md:col-span-2">
+              <FieldLabel htmlFor="clinic-sheet">Google Sheet URL or ID</FieldLabel>
+              <Input
+                id="clinic-sheet"
+                value={values.sheetInput}
+                onChange={(event) => update("sheetInput", event.target.value)}
+                placeholder="https://docs.google.com/spreadsheets/d/..."
+                disabled={pending}
+              />
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="clinic-external-id">External clinic ID (optional)</FieldLabel>
+              <Input
+                id="clinic-external-id"
+                value={values.externalClinicId}
+                onChange={(event) => update("externalClinicId", event.target.value)}
+                disabled={pending}
+              />
             </Field>
             <Field orientation="horizontal">
               <Switch

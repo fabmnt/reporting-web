@@ -36,7 +36,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 
-type StaffRole = "admin" | "operator" | "viewer";
+type StaffRole = "admin" | "operator";
 
 export function AdminAccountsPanel() {
   const setRole = useMutation(api.staffAccounts.setRole);
@@ -201,7 +201,6 @@ export function AdminAccountsPanel() {
                             items={[
                               { value: "admin", label: "Admin" },
                               { value: "operator", label: "Operator" },
-                              { value: "viewer", label: "Viewer" },
                             ]}
                             value={account.role}
                             onValueChange={(role) => {
@@ -216,7 +215,6 @@ export function AdminAccountsPanel() {
                               <SelectGroup>
                                 <SelectItem value="admin">Admin</SelectItem>
                                 <SelectItem value="operator">Operator</SelectItem>
-                                <SelectItem value="viewer">Viewer</SelectItem>
                               </SelectGroup>
                             </SelectContent>
                           </Select>

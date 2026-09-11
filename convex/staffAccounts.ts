@@ -64,7 +64,7 @@ export const ensureCurrentProfile = mutation({
       .order("asc")
       .first();
     const isFirstAccount = firstUser?._id === userId;
-    const role: "admin" | "viewer" = isFirstAccount ? "admin" : "viewer";
+    const role: "admin" | "operator" = isFirstAccount ? "admin" : "operator";
     const status: "active" | "disabled" = isFirstAccount ? "active" : "disabled";
     const displayName = user.name ?? user.email ?? "New account";
     const profileId = await ctx.db.insert("staffProfiles", {

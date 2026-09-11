@@ -14,6 +14,7 @@ import { AppLink, useNavigation } from "./navigation";
 export type CurrentAccount = NonNullable<FunctionReturnType<typeof api.staffAccounts.current>>;
 
 const REPORT_PATH = "/";
+const CLINICS_PATH = "/clinics";
 const ADMIN_PATH = "/admin";
 
 function initialsFor(account: CurrentAccount): string {
@@ -28,12 +29,13 @@ export function AppHeader({ account }: { account: CurrentAccount }) {
   const { signOut } = useAuthActions();
   const { path } = useNavigation();
   const canAdmin = account.role === "admin" && account.status === "active";
-  const navItems = canAdmin
-    ? [
-        { href: REPORT_PATH, label: "Reports" },
-        { href: ADMIN_PATH, label: "Admin" },
-      ]
-    : [{ href: REPORT_PATH, label: "Reports" }];
+  const canConfigureClinics =
+    account.status === "active" && (account.role === "admin" || account.role === "operator");
+  const navItems = [
+    { href: REPORT_PATH, label: "Reports" },
+    ...(canConfigureClinics ? [{ href: CLINICS_PATH, label: "Clinics" }] : []),
+    ...(canAdmin ? [{ href: ADMIN_PATH, label: "Admin" }] : []),
+  ];
 
   async function handleSignOut() {
     await signOut();

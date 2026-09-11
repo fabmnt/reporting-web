@@ -4,7 +4,7 @@ import { v } from "convex/values";
 
 import { clinicSheetColumns } from "./model/clinicSheetColumns";
 
-export const staffRole = v.union(v.literal("admin"), v.literal("operator"), v.literal("viewer"));
+export const staffRole = v.union(v.literal("admin"), v.literal("operator"));
 export const staffStatus = v.union(v.literal("active"), v.literal("disabled"));
 export const reportOperationKey = v.union(
   v.literal("pending-audit"),

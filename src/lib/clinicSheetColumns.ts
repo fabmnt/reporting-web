@@ -10,8 +10,6 @@ export type SheetColumnFormValues = {
   uploadStatus: string;
   verificationType: string;
   fileUrl: string;
-  url: string;
-  conditionalFormatting: string;
 };
 
 export const EMPTY_SHEET_COLUMN_FORM: SheetColumnFormValues = {
@@ -19,8 +17,6 @@ export const EMPTY_SHEET_COLUMN_FORM: SheetColumnFormValues = {
   uploadStatus: "",
   verificationType: "",
   fileUrl: "",
-  url: "",
-  conditionalFormatting: "",
 };
 
 export function sheetColumnsToFormValues(
@@ -31,8 +27,6 @@ export function sheetColumnsToFormValues(
     uploadStatus: sheetColumns?.uploadStatus ?? "",
     verificationType: sheetColumns?.verificationType ?? "",
     fileUrl: sheetColumns?.fileUrl ?? "",
-    url: sheetColumns?.url ?? "",
-    conditionalFormatting: sheetColumns?.conditionalFormatting ?? "",
   };
 }
 
@@ -45,9 +39,6 @@ export function buildSheetColumnsInput(
   if (values.verificationType.trim() !== "")
     sheetColumns.verificationType = values.verificationType.trim();
   if (values.fileUrl.trim() !== "") sheetColumns.fileUrl = values.fileUrl.trim();
-  if (values.url.trim() !== "") sheetColumns.url = values.url.trim();
-  if (values.conditionalFormatting.trim() !== "")
-    sheetColumns.conditionalFormatting = values.conditionalFormatting.trim();
   return Object.keys(sheetColumns).length > 0 ? sheetColumns : undefined;
 }
 
@@ -60,5 +51,6 @@ export function formatSheetColumnSummary(
     sheetColumns?.uploadStatus?.trim() || CLINIC_SHEET_COLUMN_DEFAULTS.uploadStatus;
   const verificationType =
     sheetColumns?.verificationType?.trim() || CLINIC_SHEET_COLUMN_DEFAULTS.verificationType;
-  return `${updateStatus}/${uploadStatus}/${verificationType}`;
+  const fileUrl = sheetColumns?.fileUrl?.trim() || CLINIC_SHEET_COLUMN_DEFAULTS.fileUrl;
+  return `${updateStatus}/${uploadStatus}/${verificationType}/${fileUrl}`;
 }

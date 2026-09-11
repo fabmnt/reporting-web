@@ -94,8 +94,6 @@ def map_sheet_columns(entry):
     upload_status = pick(entry, "UPLOAD_STATUS_COLUMN")
     verification_type = pick(entry, "TYPE_VERIFICATION_COLUMN")
     file_url = pick(entry, "FILE_URL_COLUMN")
-    url = pick(entry, "URL_COLUMN")
-    conditional = pick(entry, "COLUMNS")
 
     if update_status:
         columns["updateStatus"] = update_status
@@ -105,10 +103,6 @@ def map_sheet_columns(entry):
         columns["verificationType"] = verification_type
     if file_url:
         columns["fileUrl"] = file_url
-    if url:
-        columns["url"] = url
-    if conditional:
-        columns["conditionalFormatting"] = conditional
     return columns
 
 for file_path in sorted(configs_dir.glob("*.py")):

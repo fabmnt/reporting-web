@@ -1,10 +1,13 @@
 import { v } from "convex/values";
 
+import { ConvexError } from "convex/values";
+
 import type { Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
 import { mutation, query } from "./_generated/server";
 import { clinicSheetColumns } from "./model/clinicSheetColumns";
-import { requireAdmin } from "./model/staff";
+import { listProfileClinics, profileUsesAllClinics } from "./model/reporting";
+import { requireAdmin, requireOperator } from "./model/staff";
 
 const MAX_CLINICS = 500;
 const MAX_CLIENTS = 200;
@@ -27,6 +30,15 @@ const clinicView = v.object({
   clientName: v.string(),
   sheetColumns: clinicSheetColumns,
   qaGroupKeys: v.array(v.string()),
+});
+
+const assignedClinicView = v.object({
+  clinicId: v.id("clinics"),
+  name: v.string(),
+  googleSheetId: v.string(),
+  externalClinicId: v.union(v.string(), v.null()),
+  clientName: v.string(),
+  sheetColumns: clinicSheetColumns,
 });
 
 const clinicInputFields = {
@@ -146,6 +158,23 @@ async function removeClinicFromStaffProfiles(ctx: MutationCtx, clinicId: Id<"cli
       assignedClinicIds: assignedClinicIds.filter((id) => id !== clinicId),
     });
   }
+}
+
+async function requireAssignedClinic(
+  ctx: MutationCtx,
+  profile: { role: "admin" | "operator"; assignedClinicIds?: Id<"clinics">[] },
+  clinicId: Id<"clinics">
+) {
+  const accessible = await listProfileClinics(ctx, profile);
+  if (!accessible.some((clinic) => clinic._id === clinicId)) {
+    throw new ConvexError({ code: "FORBIDDEN", message: "This clinic is not assigned to you." });
+  }
+
+  const clinic = await ctx.db.get("clinics", clinicId);
+  if (clinic === null) {
+    throw new Error("Clinic was not found.");
+  }
+  return clinic;
 }
 
 export const listClients = query({
@@ -286,6 +315,67 @@ export const list = query({
     );
 
     return { clinics, limit: MAX_CLINICS, hasMore: rows.length > MAX_CLINICS };
+  },
+});
+
+export const listAssigned = query({
+  args: {},
+  returns: v.object({
+    usesAllClinics: v.boolean(),
+    clinics: v.array(assignedClinicView),
+  }),
+  handler: async (ctx) => {
+    const { profile } = await requireOperator(ctx);
+    const assigned = await listProfileClinics(ctx, profile);
+    const clientNameById = new Map<string, string>();
+    const clinics = [];
+
+    for (const clinic of assigned) {
+      let clientName = clientNameById.get(clinic.clientId);
+      if (clientName === undefined) {
+        const client = await ctx.db.get("clients", clinic.clientId);
+        clientName = client?.name ?? "Unknown client";
+        clientNameById.set(clinic.clientId, clientName);
+      }
+
+      const row = await ctx.db.get("clinics", clinic._id);
+      clinics.push({
+        clinicId: clinic._id,
+        name: clinic.name,
+        googleSheetId: clinic.googleSheetId,
+        externalClinicId: row?.externalClinicId ?? null,
+        clientName,
+        sheetColumns: row?.sheetColumns ?? {},
+      });
+    }
+
+    return {
+      usesAllClinics: profileUsesAllClinics(profile),
+      clinics,
+    };
+  },
+});
+
+export const updateAssigned = mutation({
+  args: {
+    clinicId: v.id("clinics"),
+    googleSheetId: v.string(),
+    sheetColumns: v.optional(clinicSheetColumns),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const { profile } = await requireOperator(ctx);
+    const clinic = await requireAssignedClinic(ctx, profile, args.clinicId);
+
+    const googleSheetId = cleanRequiredText(args.googleSheetId, "Google Sheet ID");
+    await assertGoogleSheetIdAvailable(ctx, googleSheetId, args.clinicId);
+
+    await ctx.db.patch(args.clinicId, {
+      googleSheetId,
+      sheetColumns: args.sheetColumns ?? clinic.sheetColumns ?? {},
+    });
+
+    return null;
   },
 });
 

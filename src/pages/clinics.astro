@@ -1,0 +1,8 @@
+---
+import { AppRoot } from "../components/app/AppRoot";
+import Layout from "../layouts/Layout.astro";
+---
+
+<Layout title="Clinics | Reporting Web">
+  <AppRoot convexUrl={import.meta.env.CONVEX_URL} initialPath={Astro.url.pathname} client:load />
+</Layout>
