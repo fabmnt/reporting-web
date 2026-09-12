@@ -3,11 +3,13 @@
 import { Plus, Trash2 } from "lucide-react";
 import { useRef } from "react";
 
-import type {
-  ConditionBucket,
-  ConditionClause,
-  ConditionExpression,
-  ConditionGroup,
+import {
+  MAX_CLAUSES_PER_SECTION,
+  MAX_GROUPS_PER_EXPRESSION,
+  type ConditionBucket,
+  type ConditionClause,
+  type ConditionExpression,
+  type ConditionGroup,
 } from "../../../convex/model/reportConditions";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -35,20 +37,32 @@ function newClause(): ConditionClause {
   return { column: "L", operator: "contains", values: [] };
 }
 
-// Keys have to follow the item, not its position: removing a middle clause or
-// group would otherwise hand the editor state of the removed one to the next.
-// Ids live in a WeakMap so they never reach the persisted condition shape.
+// Keys follow the item, not its position: removing a middle clause or group
+// must not hand the editor state of the removed one to the next. An edit
+// replaces the object at the same position, so that position keeps its key and
+// the editor is not remounted while it is being used. Ids live in a WeakMap so
+// they never reach the persisted condition shape.
 function useStableItemKeys<T extends object>(items: readonly T[]): string[] {
   const idsRef = useRef(new WeakMap<T, string>());
   const counterRef = useRef(0);
-  return items.map((item) => {
+  const previousRef = useRef<{ items: readonly T[]; keys: string[] }>({ items: [], keys: [] });
+
+  const keys = items.map((item, index) => {
     const existing = idsRef.current.get(item);
     if (existing !== undefined) return existing;
-    counterRef.current += 1;
-    const id = `item-${counterRef.current}`;
+
+    const previous = previousRef.current;
+    let id = previous.items.length === items.length ? previous.keys[index] : undefined;
+    if (id === undefined) {
+      counterRef.current += 1;
+      id = `item-${counterRef.current}`;
+    }
     idsRef.current.set(item, id);
     return id;
   });
+
+  previousRef.current = { items, keys };
+  return keys;
 }
 
 function ClauseList({
@@ -67,6 +81,7 @@ function ClauseList({
   addLabel: string;
 }) {
   const keys = useStableItemKeys(clauses);
+  const atLimit = clauses.length >= MAX_CLAUSES_PER_SECTION;
   return (
     <>
       {clauses.map((clause, index) => (
@@ -78,10 +93,22 @@ function ClauseList({
           disabled={disabled}
         />
       ))}
-      <Button type="button" variant="outline" className="w-fit" onClick={onAdd} disabled={disabled}>
+      <Button
+        type="button"
+        variant="outline"
+        className="w-fit"
+        onClick={onAdd}
+        disabled={disabled || atLimit}
+      >
         <Plus data-icon="inline-start" aria-hidden="true" />
         {addLabel}
       </Button>
+      {atLimit ? (
+        <p className="text-xs text-muted-foreground">
+          This list already has the maximum of {MAX_CLAUSES_PER_SECTION} conditions. Remove one to
+          add another.
+        </p>
+      ) : null}
     </>
   );
 }
@@ -204,6 +231,7 @@ export function BucketEditor({
 
   const noCriteria = !bucket.catchAll && expressionHasNoClauses(expression);
   const groupKeys = useStableItemKeys(expression.groups);
+  const groupsAtLimit = expression.groups.length >= MAX_GROUPS_PER_EXPRESSION;
 
   return (
     <div className="flex flex-col gap-6">
@@ -248,11 +276,17 @@ export function BucketEditor({
           variant="outline"
           className="w-fit"
           onClick={addGroup}
-          disabled={disabled}
+          disabled={disabled || groupsAtLimit}
         >
           <Plus data-icon="inline-start" aria-hidden="true" />
           Add group
         </Button>
+        {groupsAtLimit ? (
+          <p className="text-xs text-muted-foreground">
+            This group list already has the maximum of {MAX_GROUPS_PER_EXPRESSION} entries. Remove
+            one to add another.
+          </p>
+        ) : null}
       </section>
 
       {canCatchAll ? (

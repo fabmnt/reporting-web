@@ -163,7 +163,9 @@ export const saveMine = mutation({
     buckets: v.array(reportTypeBucket),
     conditions: reportConditionSet,
   },
-  returns: v.null(),
+  // Returns the stored value so the panel can show exactly what was saved
+  // instead of keeping a draft that may differ from it.
+  returns: reportTypeView,
   handler: async (ctx, args) => {
     const { userId } = await requireOperator(ctx);
     const existing = await loadOwnedReportType(ctx, userId, args.reportTypeId);
@@ -174,15 +176,16 @@ export const saveMine = mutation({
     // before they are stored.
     const buckets = cleanTypeBuckets(args.buckets);
     const conditions = cleanConditionSet(conditionsForBuckets(buckets, args.conditions));
+    const description = cleanTypeDescription(args.description);
     await ctx.db.patch("reportTypes", existing._id, {
       name,
-      description: cleanTypeDescription(args.description),
+      description,
       buckets,
       conditions,
       updatedAt: Date.now(),
     });
 
-    return null;
+    return { reportTypeId: existing._id, name, description, buckets, conditions };
   },
 });
 

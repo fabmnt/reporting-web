@@ -29,10 +29,9 @@ const reportBucket = v.object({
 
 // The scope columns are not a uniqueness constraint, and the first version of
 // this lookup scanned a capped window, so an existing deployment can hold more
-// than one row for the same scope. Deleting the extras keeps save and reset
-// working on that data instead of failing on `.unique()`.
-const MAX_ROWS_PER_CONDITION_SCOPE = 10;
-
+// than one row for the same scope. Loading every row of the scope and deleting
+// the extras keeps save and reset working on that data instead of failing on
+// `.unique()`. A scope is bounded by the old cap, so collecting stays small.
 async function findConditionRow(
   ctx: MutationCtx,
   userId: Id<"users">,
@@ -45,7 +44,7 @@ async function findConditionRow(
       query.eq("userId", userId).eq("operationKey", operationKey).eq("clinicId", clinicId)
     )
     .order("desc")
-    .take(MAX_ROWS_PER_CONDITION_SCOPE);
+    .collect();
   const [newest, ...duplicates] = rows;
   for (const duplicate of duplicates) {
     await ctx.db.delete(duplicate._id);
@@ -139,7 +138,9 @@ export const saveMine = mutation({
     clinicId: conditionScope,
     conditions: reportConditionSet,
   },
-  returns: v.null(),
+  // Returns the stored value so the panel can show exactly what was saved
+  // instead of keeping a draft that may differ from it.
+  returns: reportConditionSet,
   handler: async (ctx, args) => {
     const { userId, profile } = await requireOperator(ctx);
 
@@ -167,7 +168,7 @@ export const saveMine = mutation({
       await ctx.db.patch(existing._id, { conditions, updatedAt });
     }
 
-    return null;
+    return conditions;
   },
 });
 

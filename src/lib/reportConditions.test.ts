@@ -652,6 +652,19 @@ describe("cleanConditionSet", () => {
     expect(cleaned.buckets[0]?.expression.groups).toHaveLength(MAX_GROUPS_PER_EXPRESSION);
     expect(cleaned.buckets[0]?.expression.groups[0]?.clauses).toHaveLength(MAX_CLAUSES_PER_SECTION);
   });
+
+  it("keeps catch all only on the last bucket of a multi-bucket set", () => {
+    const cleaned = cleanConditionSet({
+      buckets: [
+        { bucketKey: "ready", catchAll: true, expression: { filters: [], groups: [] } },
+        { bucketKey: "review", catchAll: true, expression: { filters: [], groups: [] } },
+      ],
+    });
+    expect(cleaned.buckets.map((bucket) => bucket.catchAll)).toEqual([false, true]);
+
+    const single = cleanConditionSet(singleBucket({ filters: [], groups: [] }, true));
+    expect(single.buckets[0]?.catchAll).toBe(false);
+  });
 });
 
 describe("assertBucketKeys", () => {

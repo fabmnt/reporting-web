@@ -30,6 +30,12 @@ import { NewReportTypeDialog, type CreatedReportType } from "./NewReportTypeDial
 
 const DEFAULT_SCOPE = "default";
 
+// Both sides come from the same stored shape, so a small JSON comparison is
+// enough to know when a query result has caught up with a saved draft.
+function sameValue(a: unknown, b: unknown): boolean {
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+
 export function ConditionsPanel() {
   const current = useQuery(api.staffAccounts.current, {});
   const canConfigure =
@@ -93,16 +99,29 @@ export function ConditionsPanel() {
   const operations = data.operations;
   const customTypes = customTypesData.types;
   const storedCustom = customTypes.find((item) => item.reportTypeId === typeValue);
-  const customDraft: CustomReportTypeDraft | undefined =
-    customDrafts[typeValue] ??
-    (storedCustom === undefined
+  const storedCustomDraft: CustomReportTypeDraft | undefined =
+    storedCustom === undefined
       ? undefined
       : {
           name: storedCustom.name,
           description: storedCustom.description,
           buckets: storedCustom.buckets,
           conditions: storedCustom.conditions,
-        });
+        };
+  // A draft only covers the gap between a save and the query catching up. Once
+  // the stored value matches it, the draft is dropped so later server updates
+  // stay visible and the next save cannot write stale data back.
+  const storedCustomDraftEntry = customDrafts[typeValue];
+  if (
+    storedCustomDraftEntry !== undefined &&
+    storedCustomDraft !== undefined &&
+    sameValue(storedCustomDraftEntry, storedCustomDraft)
+  ) {
+    const next = { ...customDrafts };
+    delete next[typeValue];
+    setCustomDrafts(next);
+  }
+  const customDraft = customDrafts[typeValue] ?? storedCustomDraft;
   const isCustom = customDraft !== undefined;
 
   const operation = isCustom
@@ -127,7 +146,18 @@ export function ConditionsPanel() {
     operation !== undefined &&
     (isDefaultScope ? operation.default.isCustom : override !== undefined);
   const editorKey = operation === undefined ? "" : `${operation.operationKey}:${scope}`;
-  const conditions = drafts[editorKey] ?? override?.conditions ?? operation?.default.conditions;
+  const storedConditions = override?.conditions ?? operation?.default.conditions;
+  const draftConditions = drafts[editorKey];
+  if (
+    draftConditions !== undefined &&
+    storedConditions !== undefined &&
+    sameValue(draftConditions, storedConditions)
+  ) {
+    const next = { ...drafts };
+    delete next[editorKey];
+    setDrafts(next);
+  }
+  const conditions = drafts[editorKey] ?? storedConditions;
 
   const scopeItems: Array<{ value: string; label: string }> = [
     { value: DEFAULT_SCOPE, label: "My default" },
@@ -149,14 +179,14 @@ export function ConditionsPanel() {
     setError(null);
     setNotice(null);
     try {
-      await saveMine({
+      const saved = await saveMine({
         operationKey: operation.operationKey,
         clinicId: isDefaultScope ? null : (scope as Id<"clinics">),
         conditions,
       });
-      // Keep the draft on screen until the query catches up, so the form does
-      // not flash back to the previously stored value.
-      setDrafts((previous) => ({ ...previous, [editorKey]: conditions }));
+      // Keep the cleaned value on screen until the query catches up, so the
+      // form does not flash back to the previously stored value.
+      setDrafts((previous) => ({ ...previous, [editorKey]: saved }));
       setNotice(isDefaultScope ? "Default conditions saved." : "Clinic conditions saved.");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Saving the conditions failed.");
@@ -171,14 +201,22 @@ export function ConditionsPanel() {
     setError(null);
     setNotice(null);
     try {
-      await saveTypeMine({
+      const saved = await saveTypeMine({
         reportTypeId: typeValue as Id<"reportTypes">,
         name: customDraft.name,
         description: customDraft.description,
         buckets: customDraft.buckets,
         conditions: customDraft.conditions,
       });
-      setCustomDrafts((previous) => ({ ...previous, [typeValue]: customDraft }));
+      setCustomDrafts((previous) => ({
+        ...previous,
+        [typeValue]: {
+          name: saved.name,
+          description: saved.description,
+          buckets: saved.buckets,
+          conditions: saved.conditions,
+        },
+      }));
       setNotice("Report type saved.");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Saving the report type failed.");

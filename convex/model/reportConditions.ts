@@ -312,9 +312,14 @@ function cleanExpression(expression: ConditionExpression): ConditionExpression {
 
 export function cleanConditionSet(conditions: ReportConditionSet): ReportConditionSet {
   return {
-    buckets: conditions.buckets.map((bucket) => ({
+    buckets: conditions.buckets.map((bucket, index) => ({
       bucketKey: bucket.bucketKey.trim(),
-      catchAll: bucket.catchAll,
+      // Only the last bucket of a multi-bucket set can catch the rows no
+      // earlier one took, so an earlier flag is dropped instead of trusted.
+      catchAll:
+        conditions.buckets.length > 1 && index === conditions.buckets.length - 1
+          ? bucket.catchAll
+          : false,
       expression: cleanExpression(bucket.expression),
     })),
   };
