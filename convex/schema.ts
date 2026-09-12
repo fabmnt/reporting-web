@@ -3,6 +3,8 @@ import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 
 import { clinicSheetColumns } from "./model/clinicSheetColumns";
+import { reportConditionSet } from "./model/reportConditions";
+import { reportTypeBucket } from "./model/reportTypes";
 
 export const staffRole = v.union(v.literal("admin"), v.literal("operator"));
 export const staffStatus = v.union(v.literal("active"), v.literal("disabled"));
@@ -53,9 +55,27 @@ export default defineSchema({
     .index("by_clientId_and_name", ["clientId", "name"])
     .index("by_googleSheetId", ["googleSheetId"]),
 
+  // Report types the user builds on top of the row-report pipeline. A row
+  // lands in the first bucket whose expression matches it, in bucket order.
+  reportTypes: defineTable({
+    userId: v.id("users"),
+    name: v.string(),
+    description: v.string(),
+    // Keys stay stable across renames and reorders, so stored conditions keep
+    // pointing at the right group.
+    buckets: v.array(reportTypeBucket),
+    conditions: reportConditionSet,
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  }).index("by_userId", ["userId"]),
+
   reportRuns: defineTable({
     initiatedByUserId: v.id("users"),
-    operationKey: reportOperationKey,
+    // Built-in runs store operationKey, custom runs store reportTypeId plus a
+    // name snapshot so history survives deleting the type.
+    operationKey: v.optional(reportOperationKey),
+    reportTypeId: v.optional(v.id("reportTypes")),
+    reportTypeName: v.optional(v.string()),
     clientId: v.optional(v.id("clients")),
     status: reportRunStatus,
     startedAt: v.number(),
@@ -68,4 +88,18 @@ export default defineSchema({
     .index("by_initiatedByUserId_and_startedAt", ["initiatedByUserId", "startedAt"])
     .index("by_clientId_and_startedAt", ["clientId", "startedAt"])
     .index("by_status_and_startedAt", ["status", "startedAt"]),
+
+  // Row conditions per user and report operation. `clinicId: null` is the
+  // user's general default; a clinic id is a full override for that clinic.
+  // A missing row means "use the code default".
+  reportConditions: defineTable({
+    userId: v.id("users"),
+    operationKey: reportOperationKey,
+    clinicId: v.union(v.id("clinics"), v.null()),
+    conditions: reportConditionSet,
+    updatedAt: v.number(),
+  })
+    .index("by_userId_and_operationKey", ["userId", "operationKey"])
+    .index("by_userId_and_operationKey_and_clinicId", ["userId", "operationKey", "clinicId"])
+    .index("by_clinicId", ["clinicId"]),
 });
