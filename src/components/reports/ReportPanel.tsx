@@ -6,6 +6,7 @@ import { useState } from "react";
 
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
+import type { ReportSheetError } from "../../../convex/model/appErrors";
 import { PageHeader } from "@/components/app/PageHeader";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -34,6 +35,10 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { todayIso } from "@/lib/dates";
+import { useDocumentTitle, useI18n } from "@/lib/i18n/context";
+import { errorText, sheetErrorText } from "@/lib/i18n/errors";
+import type { Messages } from "@/lib/i18n/messages";
+import { bucketLabel, operationDescription, operationLabel } from "@/lib/i18n/reportLabels";
 import { cn } from "@/lib/utils";
 
 type BuiltinOperationKey = "pending-audit" | "ready-to-upload";
@@ -55,7 +60,7 @@ type SheetResult = {
   tabTitle: string;
   headers: string[];
   bucketRows: Array<{ bucketKey: string; label: string; rows: ReportRow[] }>;
-  error: string | null;
+  error: ReportSheetError | null;
 };
 type ReportResult = {
   reportRunId: Id<"reportRuns"> | null;
@@ -67,6 +72,9 @@ type ReportResult = {
 type CompletedRun = {
   data: ReportResult;
   source: ReportTypeSource;
+  // Built-in runs carry the operation key, which is what the translated bucket
+  // labels are looked up by.
+  operationKey: string | null;
   startDate: string;
   endDate: string;
 };
@@ -106,6 +114,23 @@ function bucketTone(source: ReportTypeSource, bucketKey: string): RowTone {
   return BUCKET_TONES[bucketKey] ?? "neutral";
 }
 
+// Built-in report types travel from the backend with their English labels, so
+// the list is translated once here and everything downstream reads it.
+function translatedTypes(types: RunnableType[], t: Messages): RunnableType[] {
+  return types.map((item) => {
+    if (item.source !== "builtin") return item;
+    return {
+      ...item,
+      label: operationLabel(t, item.key, item.label),
+      description: operationDescription(t, item.key, item.description),
+      buckets: item.buckets.map((bucket) => ({
+        ...bucket,
+        label: bucketLabel(t, item.key, bucket.key, bucket.label),
+      })),
+    };
+  });
+}
+
 function ResultTable({
   title,
   tone,
@@ -119,6 +144,8 @@ function ResultTable({
   headers: string[];
   rows: ReportRow[];
 }) {
+  const { t } = useI18n();
+
   if (rows.length === 0) return null;
   // Show first 8 data columns plus row number; full rows copy from the sheet.
   const visibleHeaders = headers.slice(0, 8);
@@ -136,9 +163,11 @@ function ResultTable({
         <Table>
           <TableHeader className="bg-muted/40">
             <TableRow>
-              <TableHead>Row</TableHead>
+              <TableHead>{t.common.row}</TableHead>
               {visibleHeaders.map((header, index) => (
-                <TableHead key={`${header}-${index}`}>{header || `Col ${index + 1}`}</TableHead>
+                <TableHead key={`${header}-${index}`}>
+                  {header || t.common.columnFallback(index)}
+                </TableHead>
               ))}
             </TableRow>
           </TableHeader>
@@ -161,14 +190,13 @@ function ResultTable({
 }
 
 function ReportRunnerSkeleton() {
+  const { t } = useI18n();
+
   return (
-    <div className="flex flex-col gap-6" aria-busy="true" aria-label="Loading report page">
-      <PageHeader
-        title="Run report"
-        description="Reads your assigned clinic sheets for the selected dates and applies the same row rules as the desktop tool."
-      />
+    <div className="flex flex-col gap-6" aria-busy="true" aria-label={t.reports.loading.page}>
+      <PageHeader title={t.reports.pageTitle} description={t.reports.pageDescription} />
       <div className="grid gap-6 lg:grid-cols-[360px_minmax(0,1fr)] lg:items-start">
-        <Card className="lg:sticky lg:top-20" aria-label="Loading report settings">
+        <Card className="lg:sticky lg:top-20" aria-label={t.reports.loading.settings}>
           <CardHeader className="gap-3">
             <Skeleton className="h-5 w-36" />
             <Skeleton className="h-4 w-full max-w-xs" />
@@ -197,7 +225,7 @@ function ReportRunnerSkeleton() {
           </CardFooter>
         </Card>
 
-        <Card aria-label="Loading results">
+        <Card aria-label={t.reports.loading.results}>
           <CardHeader className="gap-3">
             <Skeleton className="h-5 w-24" />
             <Skeleton className="h-4 w-full max-w-md" />
@@ -212,16 +240,18 @@ function ReportRunnerSkeleton() {
 }
 
 function ResultsPlaceholder({ running, clinicCount }: { running: boolean; clinicCount: number }) {
+  const { t } = useI18n();
+
   if (running) {
     return (
       <div className="flex flex-col gap-4 rounded-xl bg-card p-4 ring-1 ring-foreground/10">
         <div className="flex items-center gap-2">
           <Spinner className="size-4 text-muted-foreground" />
-          <h2 className="font-heading text-base font-medium leading-snug">Reading sheets</h2>
+          <h2 className="font-heading text-base font-medium leading-snug">
+            {t.reports.reading.title}
+          </h2>
         </div>
-        <p className="text-sm text-muted-foreground">
-          Reading {clinicCount} clinic sheet{clinicCount === 1 ? "" : "s"}. This can take a moment.
-        </p>
+        <p className="text-sm text-muted-foreground">{t.reports.reading.body(clinicCount)}</p>
         <Skeleton className="h-8 w-40" />
         <Skeleton className="h-32 w-full" />
       </div>
@@ -231,10 +261,8 @@ function ResultsPlaceholder({ running, clinicCount }: { running: boolean; clinic
   return (
     <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed px-4 py-12 text-center">
       <FileText className="size-6 text-muted-foreground" aria-hidden="true" />
-      <p className="text-sm font-medium">No results yet</p>
-      <p className="max-w-sm text-sm text-muted-foreground">
-        Choose a date range and run a report. Rows appear here, grouped by clinic and sheet tab.
-      </p>
+      <p className="text-sm font-medium">{t.reports.empty.title}</p>
+      <p className="max-w-sm text-sm text-muted-foreground">{t.reports.empty.body}</p>
     </div>
   );
 }
@@ -252,26 +280,31 @@ function countRows(run: CompletedRun): number {
  * the report controls afterward never rewrites what the run returned.
  */
 function ResultsCard({ run }: { run: CompletedRun }) {
+  const { t } = useI18n();
   const { data } = run;
+
   return (
     <Card>
       <CardHeader>
         <div className="flex flex-wrap items-center gap-2">
-          <h2 className="font-heading text-base leading-snug font-medium">Results</h2>
+          <h2 className="font-heading text-base leading-snug font-medium">
+            {t.reports.results.title}
+          </h2>
           <Badge variant="secondary" className="tabular-nums">
-            {countRows(run)} rows
+            {t.reports.results.rows(countRows(run))}
           </Badge>
         </div>
         <CardDescription>
-          {data.assignedClinicCount} clinic(s), {run.startDate} to {run.endDate}. Sheet row numbers
-          match the Google Sheet.
+          {t.reports.results.summary(
+            t.reports.results.clinics(data.assignedClinicCount),
+            run.startDate,
+            run.endDate
+          )}
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-6">
         {data.sheets.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            No sheets were processed. Check your assigned clinics and the selected dates.
-          </p>
+          <p className="text-sm text-muted-foreground">{t.reports.results.noneProcessed}</p>
         ) : null}
         {data.sheets.map((sheet) => (
           <div
@@ -283,15 +316,19 @@ function ResultsCard({ run }: { run: CompletedRun }) {
             </h3>
             {sheet.error ? (
               <Alert variant="destructive">
-                <AlertTitle>Sheet error</AlertTitle>
-                <AlertDescription>{sheet.error}</AlertDescription>
+                <AlertTitle>{t.reports.results.sheetError}</AlertTitle>
+                <AlertDescription>{sheetErrorText(sheet.error, t)}</AlertDescription>
               </Alert>
             ) : (
               <>
                 {sheet.bucketRows.map((bucket) => (
                   <ResultTable
                     key={bucket.bucketKey}
-                    title={bucket.label}
+                    title={
+                      run.operationKey === null
+                        ? bucket.label
+                        : bucketLabel(t, run.operationKey, bucket.bucketKey, bucket.label)
+                    }
                     tone={bucketTone(run.source, bucket.bucketKey)}
                     count={bucket.rows.length}
                     headers={sheet.headers}
@@ -299,7 +336,9 @@ function ResultsCard({ run }: { run: CompletedRun }) {
                   />
                 ))}
                 {sheet.bucketRows.every((bucket) => bucket.rows.length === 0) ? (
-                  <p className="text-sm text-muted-foreground">No matching rows.</p>
+                  <p className="text-sm text-muted-foreground">
+                    {t.reports.results.noMatchingRows}
+                  </p>
                 ) : null}
               </>
             )}
@@ -311,6 +350,7 @@ function ResultsCard({ run }: { run: CompletedRun }) {
 }
 
 export function ReportRunner() {
+  const { t } = useI18n();
   const assignment = useQuery(api.googleSheets.listAssignedReportClinics, {});
   const typeData = useQuery(api.reportTypes.listRunnable, {});
   const runReport = useAction(api.reports.runSheetReport);
@@ -322,26 +362,28 @@ export function ReportRunner() {
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<CompletedRun | null>(null);
 
-  const types: RunnableType[] = typeData?.types ?? [];
+  useDocumentTitle(t.app.titles.report);
+
+  const types: RunnableType[] = translatedTypes(typeData?.types ?? [], t);
   const selectedType = types.find((item) => item.key === typeKey) ?? types[0];
   const builtinTypes = types.filter((item) => item.source === "builtin");
   const customTypes = types.filter((item) => item.source === "custom");
 
   async function handleRun() {
     if ((assignment?.clinics.length ?? 0) === 0) {
-      setError("No assigned clinics to run.");
+      setError(t.reports.outcomes.noAssignedClinics);
       return;
     }
     if (selectedType === undefined) {
-      setError("No report type to run.");
+      setError(t.reports.outcomes.noReportType);
       return;
     }
     if (!dateRange.startDate || !dateRange.endDate) {
-      setError("Pick a start and end date.");
+      setError(t.reports.outcomes.pickDates);
       return;
     }
     if (dateRange.startDate > dateRange.endDate) {
-      setError("The start date must be on or before the end date.");
+      setError(t.reports.outcomes.invalidRange);
       return;
     }
     setRunning(true);
@@ -360,11 +402,12 @@ export function ReportRunner() {
       setResult({
         data,
         source: selectedType.source,
+        operationKey: selectedType.source === "builtin" ? selectedType.key : null,
         startDate: dateRange.startDate,
         endDate: dateRange.endDate,
       });
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "The report failed.");
+      setError(errorText(cause, t));
     } finally {
       setRunning(false);
     }
@@ -376,14 +419,11 @@ export function ReportRunner() {
 
   return (
     <div className="flex flex-col gap-6">
-      <PageHeader
-        title="Run report"
-        description="Reads your assigned clinic sheets for the selected dates and applies the same row rules as the desktop tool."
-      />
+      <PageHeader title={t.reports.pageTitle} description={t.reports.pageDescription} />
 
       {error ? (
         <Alert variant="destructive">
-          <AlertTitle>Report failed</AlertTitle>
+          <AlertTitle>{t.reports.failedTitle}</AlertTitle>
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       ) : null}
@@ -391,12 +431,14 @@ export function ReportRunner() {
       <div className="grid gap-6 lg:grid-cols-[360px_minmax(0,1fr)] lg:items-start">
         <Card className="lg:sticky lg:top-20">
           <CardHeader>
-            <h2 className="font-heading text-base leading-snug font-medium">Report settings</h2>
-            <CardDescription>Choose what to read and which dates to cover.</CardDescription>
+            <h2 className="font-heading text-base leading-snug font-medium">
+              {t.reports.settingsTitle}
+            </h2>
+            <CardDescription>{t.reports.settingsDescription}</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-5">
             <Field>
-              <FieldLabel htmlFor="report-date-range">Date range</FieldLabel>
+              <FieldLabel htmlFor="report-date-range">{t.reports.dateRange}</FieldLabel>
               <DateRangePicker
                 id="report-date-range"
                 value={dateRange}
@@ -406,19 +448,19 @@ export function ReportRunner() {
             </Field>
 
             <Field>
-              <FieldLabel>Report type</FieldLabel>
+              <FieldLabel>{t.reports.reportType}</FieldLabel>
               <Select
                 items={types.map((item) => ({ value: item.key, label: item.label }))}
                 value={selectedType?.key ?? ""}
                 onValueChange={(value) => setTypeKey((value as string) ?? null)}
                 disabled={running}
               >
-                <SelectTrigger aria-label="Report type" className="w-full">
+                <SelectTrigger aria-label={t.reports.reportType} className="w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectGroup>
-                    <SelectLabel>Built-in</SelectLabel>
+                    <SelectLabel>{t.reports.builtIn}</SelectLabel>
                     {builtinTypes.map((item) => (
                       <SelectItem key={item.key} value={item.key}>
                         {item.label}
@@ -427,7 +469,7 @@ export function ReportRunner() {
                   </SelectGroup>
                   {customTypes.length > 0 ? (
                     <SelectGroup>
-                      <SelectLabel>My report types</SelectLabel>
+                      <SelectLabel>{t.reports.myReportTypes}</SelectLabel>
                       {customTypes.map((item) => (
                         <SelectItem key={item.key} value={item.key}>
                           {item.label}
@@ -444,10 +486,10 @@ export function ReportRunner() {
 
             {selectedType?.source === "builtin" && selectedType.key === "pending-audit" ? (
               <Field>
-                <FieldLabel>Verification type</FieldLabel>
+                <FieldLabel>{t.reports.verificationType}</FieldLabel>
                 <Select
                   items={[
-                    { value: "all", label: "All" },
+                    { value: "all", label: t.reports.verificationAll },
                     { value: "fbd", label: "FBD" },
                     { value: "elg", label: "ELG" },
                   ]}
@@ -457,12 +499,12 @@ export function ReportRunner() {
                   }
                   disabled={running}
                 >
-                  <SelectTrigger aria-label="Verification type" className="w-full">
+                  <SelectTrigger aria-label={t.reports.verificationType} className="w-full">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectGroup>
-                      <SelectItem value="all">All</SelectItem>
+                      <SelectItem value="all">{t.reports.verificationAll}</SelectItem>
                       <SelectItem value="fbd">FBD</SelectItem>
                       <SelectItem value="elg">ELG</SelectItem>
                     </SelectGroup>
@@ -475,20 +517,18 @@ export function ReportRunner() {
 
             <section className="flex flex-col gap-2">
               <div className="flex items-center justify-between gap-2">
-                <h3 className="text-sm font-medium">Included clinics</h3>
+                <h3 className="text-sm font-medium">{t.reports.includedClinics}</h3>
                 <Badge variant="secondary" className="tabular-nums">
                   {assignedClinicCount}
                 </Badge>
               </div>
               {assignment.usesAllClinics ? (
                 <Badge variant="outline" className="w-fit">
-                  All clinics (admin)
+                  {t.reports.allClinicsAdmin}
                 </Badge>
               ) : null}
               {assignedClinicCount === 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  No clinics assigned yet. Ask an admin to assign clinics to your account.
-                </p>
+                <p className="text-sm text-muted-foreground">{t.reports.noAssignedClinics}</p>
               ) : (
                 <ul className="flex max-h-56 flex-col gap-1 overflow-y-auto text-sm text-muted-foreground">
                   {assignment.clinics.map((clinic) => (
@@ -510,10 +550,10 @@ export function ReportRunner() {
               {running ? (
                 <>
                   <Spinner data-icon="inline-start" />
-                  Running report
+                  {t.reports.running}
                 </>
               ) : (
-                "Run report"
+                t.reports.run
               )}
             </Button>
           </CardFooter>

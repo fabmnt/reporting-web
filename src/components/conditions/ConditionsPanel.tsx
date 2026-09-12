@@ -23,6 +23,9 @@ import {
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useDocumentTitle, useI18n } from "@/lib/i18n/context";
+import { errorText } from "@/lib/i18n/errors";
+import { bucketLabel, operationLabel } from "@/lib/i18n/reportLabels";
 
 import { ConditionSetEditor } from "./ConditionSetEditor";
 import { CustomReportTypeEditor, type CustomReportTypeDraft } from "./CustomReportTypeEditor";
@@ -37,6 +40,7 @@ function sameValue(a: unknown, b: unknown): boolean {
 }
 
 export function ConditionsPanel() {
+  const { t } = useI18n();
   const current = useQuery(api.staffAccounts.current, {});
   const canConfigure =
     current?.status === "active" && (current.role === "admin" || current.role === "operator");
@@ -78,11 +82,10 @@ export function ConditionsPanel() {
     canConfigure && isCustomSelection ? { reportTypeId: typeValue as Id<"reportTypes"> } : "skip"
   );
 
+  useDocumentTitle(t.app.titles.configuration);
+
   const header = (
-    <PageHeader
-      title="Configuration"
-      description="Choose which sheet rows each report returns. Report types and conditions apply to your account only."
-    />
+    <PageHeader title={t.conditions.pageTitle} description={t.conditions.pageDescription} />
   );
 
   if (current === undefined) {
@@ -99,8 +102,8 @@ export function ConditionsPanel() {
       <div className="flex flex-col gap-6">
         {header}
         <Alert variant="destructive">
-          <AlertTitle>Active staff access required</AlertTitle>
-          <AlertDescription>Your account cannot edit report conditions.</AlertDescription>
+          <AlertTitle>{t.conditions.accessDeniedTitle}</AlertTitle>
+          <AlertDescription>{t.conditions.accessDeniedBody}</AlertDescription>
         </Alert>
       </div>
     );
@@ -115,7 +118,16 @@ export function ConditionsPanel() {
     );
   }
 
-  const operations = data.operations;
+  // Built-in labels travel from the backend in English, so they are translated
+  // once here and everything below reads the translated list.
+  const operations = data.operations.map((item) => ({
+    ...item,
+    label: operationLabel(t, item.operationKey, item.label),
+    buckets: item.buckets.map((bucket) => ({
+      ...bucket,
+      label: bucketLabel(t, item.operationKey, bucket.key, bucket.label),
+    })),
+  }));
   const customTypes = customTypesData.types;
   const storedCustomDraft: CustomReportTypeDraft | undefined =
     customDefinition === undefined || customDefinition === null
@@ -152,7 +164,7 @@ export function ConditionsPanel() {
     return (
       <div className="flex flex-col gap-6">
         {header}
-        <p className="text-sm text-muted-foreground">No report conditions are available.</p>
+        <p className="text-sm text-muted-foreground">{t.conditions.noneAvailable}</p>
       </div>
     );
   }
@@ -179,7 +191,7 @@ export function ConditionsPanel() {
   const conditions = draftConditions ?? storedConditions;
 
   const scopeItems: Array<{ value: string; label: string }> = [
-    { value: DEFAULT_SCOPE, label: "My default" },
+    { value: DEFAULT_SCOPE, label: t.conditions.myDefault },
     ...data.clinics.map((clinic) => ({
       value: clinic.clinicId,
       label: `${clinic.name} (${clinic.clientName})`,
@@ -187,10 +199,10 @@ export function ConditionsPanel() {
   ];
 
   const inheritanceNote = isDefaultScope
-    ? "Clinics use these values unless they have their own override."
+    ? t.conditions.inheritanceDefault
     : hasOverride
-      ? "This clinic uses its own conditions."
-      : "This clinic inherits your default conditions.";
+      ? t.conditions.inheritanceClinicOwn
+      : t.conditions.inheritanceClinicInherits;
 
   async function handleSaveBuiltin() {
     if (operation === undefined || conditions === undefined || overrideLoading) return;
@@ -206,9 +218,11 @@ export function ConditionsPanel() {
       // Keep the cleaned value on screen until the query catches up, so the
       // form does not flash back to the previously stored value.
       setDrafts((previous) => ({ ...previous, [editorKey]: saved }));
-      setNotice(isDefaultScope ? "Default conditions saved." : "Clinic conditions saved.");
+      setNotice(
+        isDefaultScope ? t.conditions.notices.defaultSaved : t.conditions.notices.clinicSaved
+      );
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Saving the conditions failed.");
+      setError(errorText(cause, t));
     } finally {
       setSaving(false);
     }
@@ -236,9 +250,9 @@ export function ConditionsPanel() {
           conditions: saved.conditions,
         },
       }));
-      setNotice("Report type saved.");
+      setNotice(t.conditions.notices.typeSaved);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Saving the report type failed.");
+      setError(errorText(cause, t));
     } finally {
       setSaving(false);
     }
@@ -263,12 +277,10 @@ export function ConditionsPanel() {
         return next;
       });
       setNotice(
-        isDefaultScope
-          ? "Default conditions reset."
-          : "This clinic now inherits your default conditions."
+        isDefaultScope ? t.conditions.notices.defaultReset : t.conditions.notices.clinicInherits
       );
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Resetting the conditions failed.");
+      setError(errorText(cause, t));
     } finally {
       setSaving(false);
     }
@@ -287,9 +299,9 @@ export function ConditionsPanel() {
       });
       setConfirmingDelete(false);
       setTypeValue(operations[0]?.operationKey ?? "pending-audit");
-      setNotice("Report type deleted.");
+      setNotice(t.conditions.notices.typeDeleted);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Deleting the report type failed.");
+      setError(errorText(cause, t));
     } finally {
       setSaving(false);
     }
@@ -307,7 +319,7 @@ export function ConditionsPanel() {
     }));
     setTypeValue(created.reportTypeId);
     setConfirmingDelete(false);
-    setNotice("Report type created.");
+    setNotice(t.conditions.notices.typeCreated);
   }
 
   return (
@@ -316,14 +328,14 @@ export function ConditionsPanel() {
 
       {error ? (
         <Alert variant="destructive">
-          <AlertTitle>Could not update the report type</AlertTitle>
+          <AlertTitle>{t.conditions.updateFailedTitle}</AlertTitle>
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       ) : null}
 
       {notice ? (
         <Alert>
-          <AlertTitle>Updated</AlertTitle>
+          <AlertTitle>{t.conditions.updatedTitle}</AlertTitle>
           <AlertDescription>{notice}</AlertDescription>
         </Alert>
       ) : null}
@@ -338,12 +350,14 @@ export function ConditionsPanel() {
       <div className="grid gap-6 lg:grid-cols-[360px_minmax(0,1fr)] lg:items-start">
         <Card className="lg:sticky lg:top-20">
           <CardHeader>
-            <h2 className="font-heading text-base leading-snug font-medium">Scope</h2>
-            <CardDescription>Pick the report type and who the conditions apply to.</CardDescription>
+            <h2 className="font-heading text-base leading-snug font-medium">
+              {t.conditions.scopeTitle}
+            </h2>
+            <CardDescription>{t.conditions.scopeDescription}</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-5">
             <Field>
-              <FieldLabel>Report type</FieldLabel>
+              <FieldLabel>{t.conditions.reportType}</FieldLabel>
               <Select
                 items={[
                   ...operations.map((item) => ({
@@ -362,12 +376,12 @@ export function ConditionsPanel() {
                 }}
                 disabled={saving}
               >
-                <SelectTrigger aria-label="Report type" className="w-full">
+                <SelectTrigger aria-label={t.conditions.reportType} className="w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectGroup>
-                    <SelectLabel>Built-in</SelectLabel>
+                    <SelectLabel>{t.conditions.builtIn}</SelectLabel>
                     {operations.map((item) => (
                       <SelectItem key={item.operationKey} value={item.operationKey}>
                         {item.label}
@@ -376,7 +390,7 @@ export function ConditionsPanel() {
                   </SelectGroup>
                   {customTypes.length > 0 ? (
                     <SelectGroup>
-                      <SelectLabel>My report types</SelectLabel>
+                      <SelectLabel>{t.conditions.myReportTypes}</SelectLabel>
                       {customTypes.map((item) => (
                         <SelectItem key={item.reportTypeId} value={item.reportTypeId}>
                           {item.name}
@@ -395,24 +409,22 @@ export function ConditionsPanel() {
                 disabled={saving}
               >
                 <Plus data-icon="inline-start" aria-hidden="true" />
-                New report type
+                {t.conditions.newReportType}
               </Button>
             </Field>
 
             {isCustom ? (
-              <p className="text-xs text-muted-foreground">
-                This type applies to all your assigned clinics.
-              </p>
+              <p className="text-xs text-muted-foreground">{t.conditions.customAppliesNote}</p>
             ) : (
               <Field>
-                <FieldLabel>Applies to</FieldLabel>
+                <FieldLabel>{t.conditions.appliesTo}</FieldLabel>
                 <Select
                   items={scopeItems}
                   value={scope}
                   onValueChange={(value) => setScope(value ?? DEFAULT_SCOPE)}
                   disabled={saving}
                 >
-                  <SelectTrigger aria-label="Applies to" className="w-full">
+                  <SelectTrigger aria-label={t.conditions.appliesTo} className="w-full">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -431,9 +443,7 @@ export function ConditionsPanel() {
 
             <Separator />
 
-            <p className="text-xs text-muted-foreground">
-              Changes only affect the reports you run.
-            </p>
+            <p className="text-xs text-muted-foreground">{t.conditions.changesNote}</p>
           </CardContent>
         </Card>
 
@@ -443,11 +453,9 @@ export function ConditionsPanel() {
               {isCustom ? (customDraft?.name ?? "") : operation?.label}
             </h2>
             <CardDescription>
-              {isCustom
-                ? "A row lands in the first group that matches it."
-                : operation !== undefined && operation.buckets.length > 1
-                  ? "A row lands in the first group that matches it."
-                  : "Rows that do not match are left out of the report."}
+              {isCustom || (operation !== undefined && operation.buckets.length > 1)
+                ? t.conditions.firstMatchDescription
+                : t.conditions.dropDescription}
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-6">
@@ -484,14 +492,14 @@ export function ConditionsPanel() {
                       onClick={() => setConfirmingDelete(false)}
                       disabled={saving}
                     >
-                      Cancel
+                      {t.common.cancel}
                     </Button>
                     <Button
                       variant="destructive"
                       onClick={() => void handleDeleteCustom()}
                       disabled={saving}
                     >
-                      Confirm delete
+                      {t.conditions.confirmDelete}
                     </Button>
                   </>
                 ) : (
@@ -500,19 +508,19 @@ export function ConditionsPanel() {
                     onClick={() => setConfirmingDelete(true)}
                     disabled={saving}
                   >
-                    Delete report type
+                    {t.conditions.deleteType}
                   </Button>
                 )
               ) : canReset ? (
                 <Button variant="outline" onClick={() => void handleReset()} disabled={saving}>
-                  Reset to default
+                  {t.conditions.resetToDefault}
                 </Button>
               ) : null}
               <Button
                 onClick={() => void (isCustom ? handleSaveCustom() : handleSaveBuiltin())}
                 disabled={saving || overrideLoading || (isCustom && customDraft === undefined)}
               >
-                Save conditions
+                {t.conditions.saveConditions}
               </Button>
             </div>
           </CardContent>

@@ -33,6 +33,8 @@ import {
   type SheetColumnFormValues,
 } from "@/lib/clinicSheetColumns";
 import { parseSpreadsheetId } from "@/lib/googleSheets";
+import { useDocumentTitle, useI18n } from "@/lib/i18n/context";
+import { errorText } from "@/lib/i18n/errors";
 
 type AssignedClinicList = FunctionReturnType<typeof api.clinics.listAssigned>;
 type AssignedClinicView = AssignedClinicList["clinics"][number];
@@ -59,6 +61,7 @@ function ClinicConfigForm({
   onSubmit: (values: ClinicConfigFormValues) => Promise<void>;
   onCancel: () => void;
 }) {
+  const { t } = useI18n();
   const [values, setValues] = useState<ClinicConfigFormValues>(() => ({
     sheetInput: clinic.googleSheetId,
     sheetColumns: sheetColumnsToFormValues(clinic.sheetColumns),
@@ -71,7 +74,7 @@ function ClinicConfigForm({
 
     const googleSheetId = parseSpreadsheetId(values.sheetInput);
     if (googleSheetId === "") {
-      setValidationError("Paste a Google Sheet URL or ID.");
+      setValidationError(t.clinics.dialog.invalidSheet);
       return;
     }
 
@@ -83,13 +86,11 @@ function ClinicConfigForm({
       <DialogContent className="sm:max-w-2xl">
         <form onSubmit={(event) => void handleSubmit(event)} className="flex flex-col gap-6">
           <DialogHeader>
-            <DialogTitle>Configure {clinic.name}</DialogTitle>
-            <DialogDescription>
-              Update the Google Sheet link and column letters for this clinic.
-            </DialogDescription>
+            <DialogTitle>{t.clinics.dialog.configureTitle(clinic.name)}</DialogTitle>
+            <DialogDescription>{t.clinics.dialog.configureDescription}</DialogDescription>
           </DialogHeader>
           <Field>
-            <FieldLabel htmlFor="assigned-clinic-sheet">Google Sheet URL or ID</FieldLabel>
+            <FieldLabel htmlFor="assigned-clinic-sheet">{t.clinics.dialog.sheetLabel}</FieldLabel>
             <Input
               id="assigned-clinic-sheet"
               value={values.sheetInput}
@@ -107,17 +108,17 @@ function ClinicConfigForm({
           />
           {error ? (
             <Alert variant="destructive">
-              <AlertTitle>Could not save clinic</AlertTitle>
+              <AlertTitle>{t.clinics.dialog.saveFailedTitle}</AlertTitle>
               <AlertDescription>{error}</AlertDescription>
             </Alert>
           ) : null}
           <FieldError>{validationError}</FieldError>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onCancel} disabled={pending}>
-              Cancel
+              {t.common.cancel}
             </Button>
             <Button type="submit" disabled={pending}>
-              Save changes
+              {t.common.saveChanges}
             </Button>
           </DialogFooter>
         </form>
@@ -127,6 +128,7 @@ function ClinicConfigForm({
 }
 
 export function AssignedClinicsPanel() {
+  const { t } = useI18n();
   const current = useQuery(api.staffAccounts.current, {});
   const canConfigure =
     current?.status === "active" && (current.role === "admin" || current.role === "operator");
@@ -162,18 +164,15 @@ export function AssignedClinicsPanel() {
       });
       closeForm();
     } catch (cause) {
-      setFormError(cause instanceof Error ? cause.message : "Saving the clinic failed.");
+      setFormError(errorText(cause, t));
     } finally {
       setIsSaving(false);
     }
   }
 
-  const header = (
-    <PageHeader
-      title="Clinics"
-      description="Configure the Google Sheet link and column letters for clinics assigned to you."
-    />
-  );
+  useDocumentTitle(t.app.titles.clinics);
+
+  const header = <PageHeader title={t.clinics.pageTitle} description={t.clinics.pageDescription} />;
 
   if (current === undefined) return <Skeleton className="h-80 w-full" />;
 
@@ -182,8 +181,8 @@ export function AssignedClinicsPanel() {
       <div className="flex flex-col gap-6">
         {header}
         <Alert variant="destructive">
-          <AlertTitle>Active staff access required</AlertTitle>
-          <AlertDescription>Your account cannot configure clinics.</AlertDescription>
+          <AlertTitle>{t.clinics.accessDeniedTitle}</AlertTitle>
+          <AlertDescription>{t.clinics.accessDeniedBody}</AlertDescription>
         </Alert>
       </div>
     );
@@ -195,30 +194,25 @@ export function AssignedClinicsPanel() {
 
       {assignedData?.usesAllClinics ? (
         <Alert>
-          <AlertTitle>All active clinics</AlertTitle>
-          <AlertDescription>
-            You are an admin with no clinic assignments, so every active clinic is listed here.
-          </AlertDescription>
+          <AlertTitle>{t.clinics.allClinicsTitle}</AlertTitle>
+          <AlertDescription>{t.clinics.allClinicsBody}</AlertDescription>
         </Alert>
       ) : null}
 
       {assignedData === undefined ? (
         <Skeleton className="h-64 w-full" />
       ) : assignedData.clinics.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
-          No clinics are assigned to you yet. Ask an admin to assign clinics before you can
-          configure them.
-        </p>
+        <p className="text-sm text-muted-foreground">{t.clinics.noneAssigned}</p>
       ) : (
         <div className="overflow-hidden rounded-lg border">
           <Table>
             <TableHeader className="bg-muted/40">
               <TableRow>
-                <TableHead>Clinic</TableHead>
-                <TableHead>Client</TableHead>
-                <TableHead>Google Sheet</TableHead>
-                <TableHead>Columns</TableHead>
-                <TableHead>Actions</TableHead>
+                <TableHead>{t.clinics.table.clinic}</TableHead>
+                <TableHead>{t.clinics.table.client}</TableHead>
+                <TableHead>{t.clinics.table.googleSheet}</TableHead>
+                <TableHead>{t.clinics.table.columns}</TableHead>
+                <TableHead>{t.clinics.table.actions}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -229,7 +223,7 @@ export function AssignedClinicsPanel() {
                       <span>{clinic.name}</span>
                       {clinic.externalClinicId ? (
                         <span className="text-xs text-muted-foreground">
-                          External ID {clinic.externalClinicId}
+                          {t.clinics.externalId(clinic.externalClinicId)}
                         </span>
                       ) : null}
                     </div>
@@ -241,7 +235,7 @@ export function AssignedClinicsPanel() {
                   </TableCell>
                   <TableCell>
                     <Button variant="outline" size="sm" onClick={() => openEdit(clinic)}>
-                      Configure
+                      {t.clinics.table.configure}
                     </Button>
                   </TableCell>
                 </TableRow>

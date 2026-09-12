@@ -16,6 +16,8 @@ import { ConvexAuthRoot } from "@/components/auth/ConvexAuthRoot";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
+import { I18nProvider, useI18n } from "@/lib/i18n/context";
+import { errorText } from "@/lib/i18n/errors";
 import { normalizePath } from "@/lib/paths";
 
 import { AppHeader, type CurrentAccount } from "./AppHeader";
@@ -58,15 +60,22 @@ class AuthErrorBoundary extends Component<{ children: ReactNode }, AuthErrorBoun
     if (error === null) return this.props.children;
     if (isUnauthenticatedError(error)) return <LoadingScreen />;
 
-    return (
-      <Centered>
-        <Alert variant="destructive" className="w-full max-w-md">
-          <AlertTitle>Something went wrong</AlertTitle>
-          <AlertDescription>{error.message}</AlertDescription>
-        </Alert>
-      </Centered>
-    );
+    return <ErrorScreen error={error} />;
   }
+}
+
+// Inside the provider, so a backend error still reads in the user's language.
+function ErrorScreen({ error }: { error: Error }) {
+  const { t } = useI18n();
+
+  return (
+    <Centered>
+      <Alert variant="destructive" className="w-full max-w-md">
+        <AlertTitle>{t.app.states.somethingWentWrong}</AlertTitle>
+        <AlertDescription>{errorText(error, t)}</AlertDescription>
+      </Alert>
+    </Centered>
+  );
 }
 
 function Centered({ children }: { children: ReactNode }) {
@@ -82,16 +91,18 @@ function LoadingScreen() {
 }
 
 function AwaitingApproval({ email, onSignOut }: { email: string | null; onSignOut: () => void }) {
+  const { t } = useI18n();
+
   return (
     <Centered>
       <div className="w-full max-w-md rounded-xl bg-card p-6 ring-1 ring-foreground/10">
-        <h1 className="font-heading text-lg font-medium">Account awaiting approval</h1>
+        <h1 className="font-heading text-lg font-medium">{t.app.states.awaitingApprovalTitle}</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          An administrator must enable {email ?? "your account"} before you can use Reporting Web.
+          {t.app.states.awaitingApprovalBody(email ?? t.app.states.yourAccount)}
         </p>
         <div className="mt-4">
           <Button variant="outline" onClick={onSignOut}>
-            Sign out
+            {t.app.signOut}
           </Button>
         </div>
       </div>
@@ -110,13 +121,15 @@ function AppFrame({
   navigation: { path: string; navigate: (path: string) => void };
   children: ReactNode;
 }) {
+  const { t } = useI18n();
+
   return (
     <NavigationContext.Provider value={navigation}>
       <a
         href="#content"
         className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-50 focus:rounded-md focus:border focus:bg-card focus:px-3 focus:py-2 focus:text-sm focus:font-medium focus:text-foreground"
       >
-        Skip to content
+        {t.app.skipToContent}
       </a>
       <AppHeader account={account} />
       <main id="content" className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 sm:py-8" key={path}>
@@ -133,6 +146,7 @@ function AuthGate({
   initialPath: string;
   renderContent: (path: string) => ReactNode;
 }) {
+  const { t, syncProfileLanguage } = useI18n();
   const { isAuthenticated, isLoading } = useConvexAuth();
   const { signOut } = useAuthActions();
   const ensureProfile = useMutation(api.staffAccounts.ensureCurrentProfile);
@@ -163,9 +177,15 @@ function AuthGate({
 
     requestedProfile.current = true;
     void ensureProfile({}).catch((cause: unknown) => {
-      setSetupError(cause instanceof Error ? cause.message : "Account setup failed.");
+      setSetupError(errorText(cause, t));
     });
-  }, [account, ensureProfile, isAuthenticated]);
+  }, [account, ensureProfile, isAuthenticated, t]);
+
+  // The language stored on the profile wins over the device preference, unless
+  // the user already picked one in this session.
+  useEffect(() => {
+    syncProfileLanguage(account?.language);
+  }, [account?.language, syncProfileLanguage]);
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -184,7 +204,7 @@ function AuthGate({
     return (
       <Centered>
         <Alert variant="destructive" className="w-full max-w-md">
-          <AlertTitle>Account setup failed</AlertTitle>
+          <AlertTitle>{t.app.states.accountSetupFailed}</AlertTitle>
           <AlertDescription>{setupError}</AlertDescription>
         </Alert>
       </Centered>
@@ -220,10 +240,12 @@ export function AppShell({
   renderContent: (path: string) => ReactNode;
 }) {
   return (
-    <ConvexAuthRoot convexUrl={convexUrl}>
-      <AuthErrorBoundary>
-        <AuthGate initialPath={initialPath} renderContent={renderContent} />
-      </AuthErrorBoundary>
-    </ConvexAuthRoot>
+    <I18nProvider>
+      <ConvexAuthRoot convexUrl={convexUrl}>
+        <AuthErrorBoundary>
+          <AuthGate initialPath={initialPath} renderContent={renderContent} />
+        </AuthErrorBoundary>
+      </ConvexAuthRoot>
+    </I18nProvider>
   );
 }

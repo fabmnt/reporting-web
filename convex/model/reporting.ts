@@ -3,6 +3,7 @@ import type { Infer } from "convex/values";
 
 import type { Id } from "../_generated/dataModel";
 import type { QueryCtx } from "../_generated/server";
+import { appError } from "./appErrors";
 import { resolveClinicSheetColumns, type ResolvedClinicSheetColumns } from "./clinicSheetColumns";
 import type { staffRole } from "../schema";
 
@@ -123,10 +124,10 @@ export async function requireRunnableClient(
 ): Promise<ReportingClientDoc> {
   const client = await ctx.db.get("clients", clientId);
   if (client === null) {
-    throw new ConvexError({ code: "NOT_FOUND", message: "Client was not found." });
+    throw appError({ code: "CLIENT_NOT_FOUND" });
   }
   if (!client.isActive) {
-    throw new ConvexError({ code: "FORBIDDEN", message: "This client is disabled." });
+    throw appError({ code: "CLIENT_DISABLED" });
   }
   return {
     _id: client._id,
@@ -141,10 +142,7 @@ export async function requireRunnableClient(
 export function columnLetterToIndex(column: string): number {
   const letters = column.trim().toUpperCase();
   if (!/^[A-Z]+$/.test(letters)) {
-    throw new ConvexError({
-      code: "INVALID_CONFIG",
-      message: `Invalid sheet column "${column}". Use letters like A, T, or AB.`,
-    });
+    throw appError({ code: "INVALID_SHEET_COLUMN", column });
   }
   let index = 0;
   for (const char of letters) {
@@ -164,10 +162,7 @@ export function tabsInDateRange(tabTitles: string[], startDate: string, endDate:
     });
   }
   if (startDate > endDate) {
-    throw new ConvexError({
-      code: "INVALID_ARGUMENT",
-      message: "The start date must be on or before the end date.",
-    });
+    throw appError({ code: "INVALID_DATE_RANGE" });
   }
   return tabTitles
     .filter((title) => datePattern.test(title) && title >= startDate && title <= endDate)

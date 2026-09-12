@@ -3,6 +3,7 @@ import { ConvexReactClient } from "convex/react";
 import { useMemo, type ReactNode } from "react";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { useI18n } from "@/lib/i18n/context";
 
 export function ConvexAuthRoot({
   convexUrl,
@@ -11,6 +12,7 @@ export function ConvexAuthRoot({
   convexUrl?: string;
   children: ReactNode;
 }) {
+  const { t } = useI18n();
   const convexClient = useMemo(
     () =>
       convexUrl
@@ -29,9 +31,10 @@ export function ConvexAuthRoot({
   if (!convexClient) {
     return (
       <Alert variant="destructive">
-        <AlertTitle>Convex is not connected</AlertTitle>
+        <AlertTitle>{t.app.convex.notConnectedTitle}</AlertTitle>
         <AlertDescription>
-          Run <code>pnpm convex dev</code> before using authentication.
+          {t.app.convex.notConnectedBefore} <code>pnpm convex dev</code>{" "}
+          {t.app.convex.notConnectedAfter}
         </AlertDescription>
       </Alert>
     );

@@ -24,14 +24,12 @@ import {
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
+import { useI18n } from "@/lib/i18n/context";
 import { expressionHasNoClauses } from "@/lib/reportConditions";
 
 import { ClauseEditor } from "./ClauseEditor";
 
-const GROUP_MATCH_ITEMS = [
-  { value: "all", label: "All conditions" },
-  { value: "any", label: "Any condition" },
-];
+const GROUP_MATCH_VALUES = ["all", "any"] as const;
 
 function newClause(): ConditionClause {
   return { column: "L", operator: "contains", values: [] };
@@ -95,6 +93,7 @@ function ClauseList({
   disabled: boolean;
   addLabel: string;
 }) {
+  const { t } = useI18n();
   const keys = useItemKeys(clauses);
   const atLimit = clauses.length >= MAX_CLAUSES_PER_SECTION;
   return (
@@ -120,8 +119,7 @@ function ClauseList({
       </Button>
       {atLimit ? (
         <p className="text-xs text-muted-foreground">
-          This list already has the maximum of {MAX_CLAUSES_PER_SECTION} conditions. Remove one to
-          add another.
+          {t.conditions.bucket.clauseLimit(MAX_CLAUSES_PER_SECTION)}
         </p>
       ) : null}
     </>
@@ -141,6 +139,11 @@ function GroupEditor({
   onRemove: () => void;
   disabled: boolean;
 }) {
+  const { t } = useI18n();
+  const groupMatchItems = GROUP_MATCH_VALUES.map((value) => ({
+    value,
+    label: value === "all" ? t.conditions.bucket.allConditions : t.conditions.bucket.anyCondition,
+  }));
   const updateClause = (clauseIndex: number, clause: ConditionClause) =>
     onChange({
       ...group,
@@ -157,21 +160,21 @@ function GroupEditor({
     <div className="flex flex-col gap-3 rounded-lg bg-muted/40 p-3">
       <div className="flex items-end justify-between gap-2">
         <Field className="w-44">
-          <FieldLabel>Group {index + 1}</FieldLabel>
+          <FieldLabel>{t.conditions.editor.group(index)}</FieldLabel>
           <Select
-            items={GROUP_MATCH_ITEMS}
+            items={groupMatchItems}
             value={group.match}
             onValueChange={(value) =>
               onChange({ ...group, match: value as ConditionGroup["match"] })
             }
             disabled={disabled}
           >
-            <SelectTrigger aria-label={`Group ${index + 1} match`} className="w-full">
+            <SelectTrigger aria-label={t.conditions.bucket.groupMatch(index)} className="w-full">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
               <SelectGroup>
-                {GROUP_MATCH_ITEMS.map((item) => (
+                {groupMatchItems.map((item) => (
                   <SelectItem key={item.value} value={item.value}>
                     {item.label}
                   </SelectItem>
@@ -187,8 +190,8 @@ function GroupEditor({
           className="text-muted-foreground"
           onClick={onRemove}
           disabled={disabled}
-          aria-label={`Remove group ${index + 1}`}
-          title={`Remove group ${index + 1}`}
+          aria-label={t.conditions.editor.removeGroup(index)}
+          title={t.conditions.editor.removeGroup(index)}
         >
           <Trash2 aria-hidden="true" />
         </Button>
@@ -200,7 +203,7 @@ function GroupEditor({
         onRemove={removeClause}
         onAdd={addClause}
         disabled={disabled}
-        addLabel="Add condition"
+        addLabel={t.conditions.bucket.addCondition}
       />
     </div>
   );
@@ -222,6 +225,7 @@ export function BucketEditor({
   onChange: (bucket: ConditionBucket) => void;
   disabled: boolean;
 }) {
+  const { t } = useI18n();
   const { expression } = bucket;
 
   const updateExpression = (patch: Partial<ConditionExpression>) =>
@@ -252,10 +256,8 @@ export function BucketEditor({
     <div className="flex flex-col gap-6">
       <section className="flex flex-col gap-3">
         <div className="flex flex-col gap-1">
-          <h3 className="text-sm font-medium">Always apply</h3>
-          <p className="text-xs text-muted-foreground">
-            Every condition here must match before a row can land in this group.
-          </p>
+          <h3 className="text-sm font-medium">{t.conditions.bucket.alwaysApply}</h3>
+          <p className="text-xs text-muted-foreground">{t.conditions.bucket.alwaysApplyNote}</p>
         </div>
         <ClauseList
           clauses={expression.filters}
@@ -263,7 +265,7 @@ export function BucketEditor({
           onRemove={removeFilter}
           onAdd={addFilter}
           disabled={disabled}
-          addLabel="Add condition"
+          addLabel={t.conditions.bucket.addCondition}
         />
       </section>
 
@@ -271,10 +273,8 @@ export function BucketEditor({
 
       <section className="flex flex-col gap-3">
         <div className="flex flex-col gap-1">
-          <h3 className="text-sm font-medium">Match any of these groups</h3>
-          <p className="text-xs text-muted-foreground">
-            At least one group must match. Leave the list empty to ignore groups.
-          </p>
+          <h3 className="text-sm font-medium">{t.conditions.bucket.matchAny}</h3>
+          <p className="text-xs text-muted-foreground">{t.conditions.bucket.matchAnyNote}</p>
         </div>
         {expression.groups.map((group, index) => (
           <GroupEditor
@@ -294,12 +294,11 @@ export function BucketEditor({
           disabled={disabled || groupsAtLimit}
         >
           <Plus data-icon="inline-start" aria-hidden="true" />
-          Add group
+          {t.conditions.bucket.addGroup}
         </Button>
         {groupsAtLimit ? (
           <p className="text-xs text-muted-foreground">
-            This group list already has the maximum of {MAX_GROUPS_PER_EXPRESSION} entries. Remove
-            one to add another.
+            {t.conditions.bucket.groupLimit(MAX_GROUPS_PER_EXPRESSION)}
           </p>
         ) : null}
       </section>
@@ -309,16 +308,14 @@ export function BucketEditor({
           <Separator />
           <div className="flex items-start justify-between gap-4 rounded-lg border p-4">
             <div className="flex flex-col gap-1">
-              <h3 className="text-sm font-medium">Catch all remaining rows</h3>
-              <p className="text-xs text-muted-foreground">
-                Every row that no earlier group took lands here. The conditions above are ignored.
-              </p>
+              <h3 className="text-sm font-medium">{t.conditions.bucket.catchAllTitle}</h3>
+              <p className="text-xs text-muted-foreground">{t.conditions.bucket.catchAllNote}</p>
             </div>
             <Switch
               checked={bucket.catchAll}
               onCheckedChange={(catchAll) => onChange({ ...bucket, catchAll })}
               disabled={disabled}
-              aria-label="Catch all remaining rows"
+              aria-label={t.conditions.bucket.catchAllTitle}
             />
           </div>
         </>
@@ -326,10 +323,8 @@ export function BucketEditor({
 
       {noCriteria ? (
         <Alert>
-          <AlertTitle>This group has no conditions</AlertTitle>
-          <AlertDescription>
-            Every row that reaches this group lands here. Add a condition if it should be narrower.
-          </AlertDescription>
+          <AlertTitle>{t.conditions.bucket.noConditionsTitle}</AlertTitle>
+          <AlertDescription>{t.conditions.bucket.noConditionsNote}</AlertDescription>
         </Alert>
       ) : null}
     </div>

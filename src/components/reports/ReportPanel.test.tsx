@@ -5,6 +5,8 @@ import { useAction, useQuery } from "convex/react";
 import { beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 
 import { api } from "../../../convex/_generated/api";
+import { I18nProvider } from "@/lib/i18n/context";
+
 import { ReportRunner } from "./ReportPanel";
 
 vi.mock("convex/react", () => ({
@@ -83,6 +85,14 @@ const PENDING_AUDIT_RUN = {
 
 const runReport = vi.fn();
 
+function renderRunner() {
+  return render(
+    <I18nProvider>
+      <ReportRunner />
+    </I18nProvider>
+  );
+}
+
 beforeEach(() => {
   vi.resetAllMocks();
   useQueryMock.mockImplementation((reference: AnyFunctionReference) => {
@@ -100,7 +110,7 @@ describe("ReportRunner", () => {
   it("keeps a finished run's own parameters when the controls change afterward", async () => {
     const user = userEvent.setup();
     runReport.mockResolvedValue(PENDING_AUDIT_RUN);
-    render(<ReportRunner />);
+    renderRunner();
 
     await user.click(screen.getByRole("button", { name: "Run report" }));
 
@@ -122,7 +132,7 @@ describe("ReportRunner", () => {
 
   it("shows form and results skeletons while clinics are loading", () => {
     useQueryMock.mockReturnValue(undefined);
-    render(<ReportRunner />);
+    renderRunner();
 
     expect(screen.getByLabelText("Loading report page")).toBeInTheDocument();
     expect(screen.getByLabelText("Loading report settings")).toBeInTheDocument();
@@ -130,7 +140,7 @@ describe("ReportRunner", () => {
   });
 
   it("shows the placeholder until a run completes", async () => {
-    render(<ReportRunner />);
+    renderRunner();
 
     expect(screen.getByText("No results yet")).toBeInTheDocument();
     expect(runReport).not.toHaveBeenCalled();

@@ -1,10 +1,9 @@
 import { v } from "convex/values";
 
-import { ConvexError } from "convex/values";
-
 import type { Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
 import { mutation, query } from "./_generated/server";
+import { appError, type AppErrorPayload } from "./model/appErrors";
 import { clinicSheetColumns } from "./model/clinicSheetColumns";
 import { listProfileClinics, profileUsesAllClinics } from "./model/reporting";
 import { requireAdmin, requireOperator } from "./model/staff";
@@ -48,10 +47,10 @@ const clinicInputFields = {
   clientId: v.id("clients"),
 };
 
-function cleanRequiredText(value: string, label: string): string {
+function cleanRequiredText(value: string, missingField: AppErrorPayload): string {
   const trimmed = value.trim();
   if (trimmed === "") {
-    throw new Error(`${label} is required.`);
+    throw appError(missingField);
   }
   return trimmed;
 }
@@ -78,7 +77,7 @@ function cleanQaGroupKeys(keys: string[]): string[] {
 async function requireClient(ctx: MutationCtx, clientId: Id<"clients">) {
   const client = await ctx.db.get("clients", clientId);
   if (client === null) {
-    throw new Error("Client was not found.");
+    throw appError({ code: "CLIENT_NOT_FOUND" });
   }
   return client;
 }
@@ -94,7 +93,7 @@ async function assertGoogleSheetIdAvailable(
     .first();
 
   if (existing !== null && existing._id !== ignoreClinicId) {
-    throw new Error("Another clinic already uses this Google Sheet.");
+    throw appError({ code: "GOOGLE_SHEET_TAKEN" });
   }
 }
 
@@ -110,7 +109,7 @@ async function assertClinicNameAvailable(
     .first();
 
   if (existing !== null && existing._id !== ignoreClinicId) {
-    throw new Error("A clinic with this name already exists for this client.");
+    throw appError({ code: "CLINIC_NAME_TAKEN" });
   }
 }
 
@@ -125,7 +124,7 @@ async function assertClientNameAvailable(
 ): Promise<string> {
   const key = clientKeyFromName(name);
   if (key === "") {
-    throw new Error("Client name must contain letters or numbers.");
+    throw appError({ code: "CLIENT_NAME_INVALID" });
   }
 
   const existingByKey = await ctx.db
@@ -133,7 +132,7 @@ async function assertClientNameAvailable(
     .withIndex("by_key", (query) => query.eq("key", key))
     .first();
   if (existingByKey !== null && existingByKey._id !== ignoreClientId) {
-    throw new Error("A client with this name already exists.");
+    throw appError({ code: "CLIENT_NAME_TAKEN" });
   }
 
   const scannedClients = await ctx.db.query("clients").withIndex("by_key").take(MAX_CLIENTS);
@@ -141,7 +140,7 @@ async function assertClientNameAvailable(
     (client) => client.name.toLowerCase() === name.toLowerCase() && client._id !== ignoreClientId
   );
   if (existingByName !== undefined) {
-    throw new Error("A client with this name already exists.");
+    throw appError({ code: "CLIENT_NAME_TAKEN" });
   }
 
   return key;
@@ -184,12 +183,12 @@ async function requireAssignedClinic(
 ) {
   const accessible = await listProfileClinics(ctx, profile);
   if (!accessible.some((clinic) => clinic._id === clinicId)) {
-    throw new ConvexError({ code: "FORBIDDEN", message: "This clinic is not assigned to you." });
+    throw appError({ code: "CLINIC_NOT_ASSIGNED" });
   }
 
   const clinic = await ctx.db.get("clinics", clinicId);
   if (clinic === null) {
-    throw new Error("Clinic was not found.");
+    throw appError({ code: "CLINIC_NOT_FOUND" });
   }
   return clinic;
 }
@@ -226,7 +225,7 @@ export const createClient = mutation({
   handler: async (ctx, args) => {
     await requireAdmin(ctx);
 
-    const name = cleanRequiredText(args.name, "Client name");
+    const name = cleanRequiredText(args.name, { code: "CLIENT_NAME_REQUIRED" });
     const key = await assertClientNameAvailable(ctx, name);
 
     const clientId = await ctx.db.insert("clients", { key, name, isActive: true });
@@ -246,10 +245,10 @@ export const updateClient = mutation({
 
     const client = await ctx.db.get("clients", args.clientId);
     if (client === null) {
-      throw new Error("Client was not found.");
+      throw appError({ code: "CLIENT_NOT_FOUND" });
     }
 
-    const name = cleanRequiredText(args.name, "Client name");
+    const name = cleanRequiredText(args.name, { code: "CLIENT_NAME_REQUIRED" });
     const key = await assertClientNameAvailable(ctx, name, args.clientId);
 
     await ctx.db.patch(args.clientId, { key, name, isActive: args.isActive });
@@ -271,7 +270,7 @@ export const removeClient = mutation({
 
     const client = await ctx.db.get("clients", args.clientId);
     if (client === null) {
-      throw new Error("Client was not found.");
+      throw appError({ code: "CLIENT_NOT_FOUND" });
     }
 
     const ownedClinics = await ctx.db
@@ -280,10 +279,11 @@ export const removeClient = mutation({
       .take(MAX_CLINICS);
 
     if (ownedClinics.length > 0) {
-      const label = ownedClinics.length === 1 ? "clinic" : "clinics";
-      throw new Error(
-        `${client.name} still owns ${ownedClinics.length} ${label}. Move or delete them first.`
-      );
+      throw appError({
+        code: "CLIENT_HAS_CLINICS",
+        clientName: client.name,
+        clinicCount: ownedClinics.length,
+      });
     }
 
     await ctx.db.delete("clients", args.clientId);
@@ -384,7 +384,7 @@ export const updateAssigned = mutation({
     const { profile } = await requireOperator(ctx);
     const clinic = await requireAssignedClinic(ctx, profile, args.clinicId);
 
-    const googleSheetId = cleanRequiredText(args.googleSheetId, "Google Sheet ID");
+    const googleSheetId = cleanRequiredText(args.googleSheetId, { code: "GOOGLE_SHEET_REQUIRED" });
     await assertGoogleSheetIdAvailable(ctx, googleSheetId, args.clinicId);
 
     await ctx.db.patch(args.clinicId, {
@@ -408,8 +408,8 @@ export const create = mutation({
   handler: async (ctx, args) => {
     await requireAdmin(ctx);
 
-    const name = cleanRequiredText(args.name, "Clinic name");
-    const googleSheetId = cleanRequiredText(args.googleSheetId, "Google Sheet ID");
+    const name = cleanRequiredText(args.name, { code: "CLINIC_NAME_REQUIRED" });
+    const googleSheetId = cleanRequiredText(args.googleSheetId, { code: "GOOGLE_SHEET_REQUIRED" });
     await requireClient(ctx, args.clientId);
     await assertGoogleSheetIdAvailable(ctx, googleSheetId);
     await assertClinicNameAvailable(ctx, args.clientId, name);
@@ -443,11 +443,11 @@ export const update = mutation({
 
     const clinic = await ctx.db.get("clinics", args.clinicId);
     if (clinic === null) {
-      throw new Error("Clinic was not found.");
+      throw appError({ code: "CLINIC_NOT_FOUND" });
     }
 
-    const name = cleanRequiredText(args.name, "Clinic name");
-    const googleSheetId = cleanRequiredText(args.googleSheetId, "Google Sheet ID");
+    const name = cleanRequiredText(args.name, { code: "CLINIC_NAME_REQUIRED" });
+    const googleSheetId = cleanRequiredText(args.googleSheetId, { code: "GOOGLE_SHEET_REQUIRED" });
     await requireClient(ctx, args.clientId);
     await assertGoogleSheetIdAvailable(ctx, googleSheetId, args.clinicId);
     await assertClinicNameAvailable(ctx, args.clientId, name, args.clinicId);
@@ -477,7 +477,7 @@ export const remove = mutation({
 
     const clinic = await ctx.db.get("clinics", args.clinicId);
     if (clinic === null) {
-      throw new Error("Clinic was not found.");
+      throw appError({ code: "CLINIC_NOT_FOUND" });
     }
 
     await removeClinicFromStaffProfiles(ctx, args.clinicId);

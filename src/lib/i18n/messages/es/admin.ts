@@ -1,0 +1,113 @@
+export const admin = {
+  accessDeniedTitle: "Se requiere acceso de administrador",
+  accounts: {
+    pageTitle: "Cuentas",
+    pageDescription: "Habilita cuentas nuevas y asigna a cada persona el rol mínimo que necesita.",
+    accessDeniedBody: "Tu cuenta no puede gestionar otros usuarios.",
+    updateFailedTitle: "Falló la actualización",
+    staffAccounts: "Cuentas de personal",
+    listing: (limit: number) => `Mostrando hasta ${limit} cuentas.`,
+    table: {
+      account: "Cuenta",
+      role: "Rol",
+      clinics: "Clínicas",
+      enabled: "Habilitada",
+    },
+    roleFor: (name: string) => `Rol de ${name}`,
+    assign: "Asignar",
+    allClinics: "Todas",
+    enabled: "Habilitada",
+    disabled: "Deshabilitada",
+    failures: {
+      role: "Falló la actualización del rol.",
+      status: "Falló la actualización del estado.",
+      assignment: "Falló la asignación de clínicas.",
+    },
+    assignment: {
+      title: "Asignar clínicas",
+      descriptionFor: (name: string) =>
+        `${name} ejecuta reportes solo en las clínicas que selecciones. Los administradores sin asignaciones ejecutan todas las clínicas activas.`,
+      descriptionGeneric:
+        "Elige en qué clínicas puede ejecutar reportes esta cuenta. Los administradores sin asignaciones ejecutan todas las clínicas activas.",
+      noneAvailable: "Aún no hay clínicas. Añádelas antes de asignarlas.",
+      failedTitle: "No se pudieron asignar las clínicas",
+      save: "Guardar clínicas",
+    },
+  },
+  clinics: {
+    pageTitle: "Clínicas",
+    pageDescription:
+      "Los clientes son dueños de las clínicas, y cada clínica apunta a una hoja de Google que lee el backend de reportes.",
+    accessDeniedBody: "Tu cuenta no puede gestionar clínicas.",
+    addClinic: "Añadir clínica",
+    clientsTitle: "Clientes",
+    clientsDescription:
+      "Organizaciones que poseen una o más clínicas, como una marca dental o una organización de soporte.",
+    addClient: "Añadir cliente",
+    noClients: "Aún no hay clientes. Crea el primero antes de añadir clínicas.",
+    clientTable: {
+      client: "Cliente",
+      key: "Clave",
+      status: "Estado",
+    },
+    clientsLimit: (limit: number) => `Mostrando los primeros ${limit} clientes.`,
+    allClinicsTitle: "Todas las clínicas",
+    allClinicsDescription:
+      "Cada clínica se asigna a una hoja de Google y a las columnas de estado que contiene.",
+    noClinics: "Aún no hay clínicas. Crea un cliente arriba y luego añade la primera clínica.",
+    clinicTable: {
+      clinic: "Clínica",
+      client: "Cliente",
+      googleSheet: "Hoja de Google",
+      columns: "Columnas",
+      status: "Estado",
+    },
+    clinicsLimit: (limit: number) => `Mostrando las primeras ${limit} clínicas.`,
+    clientForm: {
+      editTitle: "Editar cliente",
+      createTitle: "Nuevo cliente",
+      description:
+        "Los clientes son organizaciones que poseen una o más clínicas, como una marca dental o una organización de soporte.",
+      name: "Nombre del cliente",
+      namePlaceholder: "p. ej. Smilist",
+      active: "Activo",
+      saveFailedTitle: "No se pudo guardar el cliente",
+      create: "Crear cliente",
+      nameRequired: "El nombre del cliente es obligatorio.",
+      saveFailed: "No se pudo guardar el cliente.",
+    },
+    clinicForm: {
+      editTitle: "Editar clínica",
+      createTitle: "Nueva clínica",
+      editDescription: "Actualiza los datos de la clínica y las letras de columna de la hoja.",
+      createDescription:
+        "Pega la URL o el ID de la hoja de Google y define las letras de columna si esta clínica es distinta a los valores predeterminados.",
+      name: "Nombre de la clínica",
+      client: "Cliente",
+      chooseClient: "Elige un cliente",
+      sheetLabel: "URL o ID de la hoja de Google",
+      externalId: "ID externo de la clínica (opcional)",
+      active: "Activa",
+      inactiveSuffix: "(inactivo)",
+      saveFailedTitle: "No se pudo guardar la clínica",
+      create: "Crear clínica",
+      nameRequired: "El nombre de la clínica es obligatorio.",
+      invalidSheet: "Pega una URL o un ID de hoja de Google.",
+      clientRequired: "Elige un cliente.",
+      saveFailed: "No se pudo guardar la clínica.",
+    },
+    delete: {
+      failedTitle: "Falló la eliminación",
+      clinicTitle: "Eliminar clínica",
+      clinicDescription: (name: string) =>
+        `¿Eliminar "${name}"? También se eliminan sus columnas de hoja y cualquier asignación de esta clínica en las cuentas de personal. Esta acción no se puede deshacer.`,
+      clientTitle: "Eliminar cliente",
+      clientDescription: (name: string) =>
+        `¿Eliminar "${name}"? Esta acción no se puede deshacer. Solo se puede eliminar un cliente que no tenga clínicas.`,
+      deleteClinic: "Eliminar clínica",
+      deleteClient: "Eliminar cliente",
+      clinicFailed: "No se pudo eliminar la clínica.",
+      clientFailed: "No se pudo eliminar el cliente.",
+    },
+  },
+};

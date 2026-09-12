@@ -1,18 +1,20 @@
+import { useI18n } from "@/lib/i18n/context";
 import { isSamePath } from "@/lib/paths";
 import { cn } from "@/lib/utils";
 
 import { AppLink, useNavigation } from "./navigation";
 
 const ADMIN_TABS = [
-  { href: "/admin", label: "Accounts" },
-  { href: "/admin/clinics", label: "Clinics" },
+  { href: "/admin", labelKey: "accounts" },
+  { href: "/admin/clinics", labelKey: "clinics" },
 ] as const;
 
 export function AdminTabs() {
   const { path } = useNavigation();
+  const { t } = useI18n();
 
   return (
-    <nav aria-label="Admin sections" className="flex items-center gap-1 border-b">
+    <nav aria-label={t.app.nav.adminSections} className="flex items-center gap-1 border-b">
       {ADMIN_TABS.map((tab) => {
         const active = isSamePath(tab.href, path);
         return (
@@ -27,7 +29,7 @@ export function AdminTabs() {
                 : "border-transparent text-muted-foreground hover:text-foreground"
             )}
           >
-            {tab.label}
+            {t.app.nav[tab.labelKey]}
           </AppLink>
         );
       })}

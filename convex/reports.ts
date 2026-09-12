@@ -5,6 +5,12 @@ import type { Id } from "./_generated/dataModel";
 import type { QueryCtx } from "./_generated/server";
 import { action, internalMutation, internalQuery } from "./_generated/server";
 import { internal } from "./_generated/api.js";
+import {
+  appError,
+  appErrorPayloadOf,
+  reportSheetError,
+  type ReportSheetError,
+} from "./model/appErrors";
 import type { ResolvedClinicSheetColumns } from "./model/clinicSheetColumns";
 import {
   bucketCatalogFor,
@@ -49,7 +55,7 @@ const reportSheetResult = v.object({
   bucketRows: v.array(
     v.object({ bucketKey: v.string(), label: v.string(), rows: v.array(reportRow) })
   ),
-  error: v.union(v.string(), v.null()),
+  error: v.union(reportSheetError, v.null()),
 });
 
 type SheetResultEntry = {
@@ -59,8 +65,22 @@ type SheetResultEntry = {
   tabTitle: string;
   headers: string[];
   bucketRows: Array<{ bucketKey: string; label: string; rows: ReportRow[] }>;
-  error: string | null;
+  error: ReportSheetError | null;
 };
+
+// A failure on one clinic's sheet. A bad column mapping is a configuration
+// error the user can fix from the app, so it keeps its code; everything else
+// (Google refusing the read, a missing tab) travels as text.
+function sheetErrorFrom(error: unknown): ReportSheetError {
+  const payload = appErrorPayloadOf(error);
+  if (payload !== null && payload.code === "INVALID_SHEET_COLUMN") {
+    return { code: "SHEET_INVALID_COLUMN", column: payload.column };
+  }
+  return {
+    code: "SHEET_FAILED",
+    message: error instanceof Error ? error.message : String(error),
+  };
+}
 
 type ClinicRunConfig = {
   clinicId: Id<"clinics">;
@@ -102,10 +122,10 @@ async function reportRunConfigForUser(
     .withIndex("by_userId", (query) => query.eq("userId", userId))
     .unique();
   if (profile === null || profile.status !== "active") {
-    throw new Error("An active staff account is required.");
+    throw appError({ code: "ACTIVE_STAFF_REQUIRED" });
   }
   if (profile.role !== "admin" && profile.role !== "operator") {
-    throw new Error("Operator access is required.");
+    throw appError({ code: "OPERATOR_REQUIRED" });
   }
 
   const clinics = await listProfileClinics(ctx, profile);
@@ -256,7 +276,7 @@ export const runSheetReport = action({
           tabTitle: "",
           headers: [],
           bucketRows: [],
-          error: `No tabs found between ${args.startDate} and ${args.endDate}.`,
+          error: { code: "SHEET_NO_TABS", startDate: args.startDate, endDate: args.endDate },
         });
         continue;
       }
@@ -274,7 +294,7 @@ export const runSheetReport = action({
           tabTitle: "",
           headers: [],
           bucketRows: [],
-          error: error instanceof Error ? error.message : String(error),
+          error: sheetErrorFrom(error),
         });
         continue;
       }
@@ -295,7 +315,7 @@ export const runSheetReport = action({
         // The whole read failed (token, permissions, unknown spreadsheet).
         // Report it on every planned tab and keep going with the next clinic.
         clinicFailed = true;
-        const message = error instanceof Error ? error.message : String(error);
+        const sheetError = sheetErrorFrom(error);
         for (const tabTitle of tabs) {
           sheets.push({
             clinicId: clinic.clinicId,
@@ -304,7 +324,7 @@ export const runSheetReport = action({
             tabTitle,
             headers: [],
             bucketRows: [],
-            error: message,
+            error: sheetError,
           });
         }
       }
@@ -318,7 +338,7 @@ export const runSheetReport = action({
             tabTitle: tabResult.tabTitle,
             headers: [],
             bucketRows: [],
-            error: tabResult.error,
+            error: { code: "SHEET_FAILED", message: tabResult.error },
           });
           continue;
         }
@@ -408,10 +428,13 @@ export const runSheetReportConfig = internalQuery({
   }),
   handler: async (ctx, args) => {
     if (args.startDate > args.endDate) {
-      throw new Error("The start date must be on or before the end date.");
+      throw appError({ code: "INVALID_DATE_RANGE" });
     }
     if (args.target.source === "builtin" && !isImplementedOperation(args.target.operationKey)) {
-      throw new Error(`No conditions are defined for "${args.target.operationKey}" yet.`);
+      throw appError({
+        code: "OPERATION_NOT_CONFIGURED",
+        operationKey: args.target.operationKey,
+      });
     }
     return reportRunConfigForUser(ctx, args.userId, args.target);
   },

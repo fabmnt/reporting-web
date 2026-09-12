@@ -1,0 +1,17 @@
+export const common = {
+  cancel: "Cancel",
+  close: "Close",
+  add: "Add",
+  edit: "Edit",
+  delete: "Delete",
+  saveChanges: "Save changes",
+  loading: "Loading",
+  active: "Active",
+  inactive: "Inactive",
+  status: "Status",
+  actions: "Actions",
+  you: "You",
+  row: "Row",
+  columnFallback: (index: number) => `Col ${index + 1}`,
+  pickDateRange: "Pick a date range",
+};

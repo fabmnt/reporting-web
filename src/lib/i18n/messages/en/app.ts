@@ -1,0 +1,66 @@
+export const app = {
+  brand: "Reporting Web",
+  skipToContent: "Skip to content",
+  signOut: "Sign out",
+  signedInAs: (name: string) => `Signed in as ${name}`,
+  roles: {
+    admin: "Admin",
+    operator: "Operator",
+  },
+  nav: {
+    primary: "Primary",
+    reports: "Reports",
+    clinics: "Clinics",
+    configuration: "Configuration",
+    admin: "Admin",
+    adminSections: "Admin sections",
+    accounts: "Accounts",
+  },
+  theme: {
+    light: "light",
+    dark: "dark",
+    system: "system (device default)",
+    switchTo: (name: string) => `Switch to ${name} theme`,
+  },
+  language: {
+    switchTo: (name: string) => `Switch to ${name}`,
+  },
+  states: {
+    somethingWentWrong: "Something went wrong",
+    accountSetupFailed: "Account setup failed",
+    accountSetupFailedFallback: "Account setup failed.",
+    awaitingApprovalTitle: "Account awaiting approval",
+    awaitingApprovalBody: (email: string) =>
+      `An administrator must enable ${email} before you can use Reporting Web.`,
+    yourAccount: "your account",
+  },
+  notFound: {
+    title: "Page not found",
+    description: "That page does not exist.",
+  },
+  convex: {
+    notConnectedTitle: "Convex is not connected",
+    notConnectedBefore: "Run",
+    notConnectedAfter: "before using authentication.",
+  },
+  auth: {
+    email: "Email",
+    password: "Password",
+    signInTitle: "Sign in",
+    signUpTitle: "Create your account",
+    signInDescription: "Use your Reporting Web account.",
+    signUpDescription: "An administrator must enable your account before you can use the app.",
+    signIn: "Sign in",
+    createAccount: "Create account",
+    useExistingAccount: "Use existing account",
+    failed: "Authentication failed.",
+  },
+  titles: {
+    report: "Run report | Reporting Web",
+    clinics: "Clinics | Reporting Web",
+    configuration: "Configuration | Reporting Web",
+    accounts: "Accounts | Reporting Web",
+    signIn: "Sign in | Reporting Web",
+    signUp: "Create account | Reporting Web",
+  },
+};

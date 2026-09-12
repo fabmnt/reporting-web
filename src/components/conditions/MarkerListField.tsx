@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { MAX_MARKER_LENGTH, MAX_MARKERS_PER_RULE } from "../../../convex/model/reportConditions";
+import { useI18n } from "@/lib/i18n/context";
 import { normalizeMarker } from "@/lib/reportConditions";
 
 export function MarkerListField({
@@ -22,6 +23,7 @@ export function MarkerListField({
   disabled: boolean;
   emptyHint: string;
 }) {
+  const { t } = useI18n();
   const [draft, setDraft] = useState("");
   const inputId = useId();
   const atLimit = values.length >= MAX_MARKERS_PER_RULE;
@@ -46,8 +48,8 @@ export function MarkerListField({
               type="button"
               onClick={() => onChange(values.filter((item) => item !== value))}
               disabled={disabled}
-              aria-label={`Remove ${value}`}
-              title={`Remove ${value}`}
+              aria-label={t.conditions.markers.remove(value)}
+              title={t.conditions.markers.remove(value)}
               className="group inline-flex shrink-0 cursor-pointer items-center gap-1.5 rounded-full bg-secondary py-1 pr-1.5 pl-2.5 text-xs font-medium text-secondary-foreground transition-colors hover:bg-destructive/10 hover:text-destructive disabled:cursor-not-allowed disabled:opacity-40"
             >
               {value}
@@ -70,7 +72,7 @@ export function MarkerListField({
             addMarker();
           }}
           maxLength={MAX_MARKER_LENGTH}
-          placeholder="Type a value and press Enter"
+          placeholder={t.conditions.markers.placeholder}
           disabled={disabled || atLimit}
           className="uppercase"
         />
@@ -80,13 +82,12 @@ export function MarkerListField({
           onClick={addMarker}
           disabled={disabled || atLimit || draft.trim() === ""}
         >
-          Add
+          {t.common.add}
         </Button>
       </div>
       {atLimit ? (
         <p className="text-xs text-muted-foreground">
-          This rule already has the maximum of {MAX_MARKERS_PER_RULE} values. Remove one to add
-          another.
+          {t.conditions.markers.limit(MAX_MARKERS_PER_RULE)}
         </p>
       ) : null}
     </Field>

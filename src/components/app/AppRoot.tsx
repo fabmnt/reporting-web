@@ -4,6 +4,7 @@ import { AssignedClinicsPanel } from "@/components/clinics/AssignedClinicsPanel"
 import { ConditionsPanel } from "@/components/conditions/ConditionsPanel";
 import { ReportRunner } from "@/components/reports/ReportPanel";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { useI18n } from "@/lib/i18n/context";
 import { normalizePath } from "@/lib/paths";
 
 import { AppShell } from "./AppShell";
@@ -16,17 +17,20 @@ const ROUTES: Record<string, () => React.JSX.Element> = {
   "/admin/clinics": AdminClinicsPanel,
 };
 
+function NotFound() {
+  const { t } = useI18n();
+
+  return (
+    <Alert variant="destructive">
+      <AlertTitle>{t.app.notFound.title}</AlertTitle>
+      <AlertDescription>{t.app.notFound.description}</AlertDescription>
+    </Alert>
+  );
+}
+
 function renderContent(path: string) {
   const Route = ROUTES[path];
-  if (Route === undefined) {
-    return (
-      <Alert variant="destructive">
-        <AlertTitle>Page not found</AlertTitle>
-        <AlertDescription>That page does not exist.</AlertDescription>
-      </Alert>
-    );
-  }
-  return <Route />;
+  return Route === undefined ? <NotFound /> : <Route />;
 }
 
 export function AppRoot({ convexUrl, initialPath }: { convexUrl?: string; initialPath: string }) {

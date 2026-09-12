@@ -2,6 +2,8 @@ import { Monitor, Moon, Sun } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { applyTheme, NEXT_THEME, readStoredTheme, storeTheme, type Theme } from "@/lib/theme";
+import { useI18n } from "@/lib/i18n/context";
+import type { Messages } from "@/lib/i18n/messages";
 import { Button } from "@/components/ui/button";
 
 const THEME_ICON: Record<Theme, typeof Sun> = {
@@ -10,13 +12,14 @@ const THEME_ICON: Record<Theme, typeof Sun> = {
   system: Monitor,
 };
 
-const THEME_LABEL: Record<Theme, string> = {
-  light: "light",
-  dark: "dark",
-  system: "system (device default)",
+const THEME_NAME: Record<Theme, (t: Messages) => string> = {
+  light: (t) => t.app.theme.light,
+  dark: (t) => t.app.theme.dark,
+  system: (t) => t.app.theme.system,
 };
 
 export function ThemeToggle() {
+  const { t } = useI18n();
   const [theme, setTheme] = useState<Theme>("system");
 
   useEffect(() => {
@@ -43,15 +46,15 @@ export function ThemeToggle() {
   };
 
   const Icon = THEME_ICON[theme];
-  const nextThemeLabel = THEME_LABEL[NEXT_THEME[theme]];
+  const nextThemeLabel = THEME_NAME[NEXT_THEME[theme]](t);
 
   return (
     <Button
       variant="ghost"
       size="icon"
       onClick={selectNextTheme}
-      aria-label={`Switch to ${nextThemeLabel} theme`}
-      title={`Switch to ${nextThemeLabel} theme`}
+      aria-label={t.app.theme.switchTo(nextThemeLabel)}
+      title={t.app.theme.switchTo(nextThemeLabel)}
     >
       <Icon />
     </Button>

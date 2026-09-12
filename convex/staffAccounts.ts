@@ -2,8 +2,9 @@ import { v } from "convex/values";
 
 import type { Id } from "./_generated/dataModel";
 import { mutation, query } from "./_generated/server";
+import { appError } from "./model/appErrors";
 import { getStaffProfile, requireAdmin, requireCurrentUserId } from "./model/staff";
-import { staffRole, staffStatus } from "./schema";
+import { staffLanguage, staffRole, staffStatus } from "./schema";
 
 const currentAccount = v.object({
   profileId: v.id("staffProfiles"),
@@ -12,6 +13,9 @@ const currentAccount = v.object({
   email: v.union(v.string(), v.null()),
   role: staffRole,
   status: staffStatus,
+  // null means the user has never picked a language, so the app follows the
+  // device preference.
+  language: v.union(staffLanguage, v.null()),
 });
 
 const managedAccount = currentAccount.extend({
@@ -43,7 +47,7 @@ export const ensureCurrentProfile = mutation({
     const user = await ctx.db.get("users", userId);
 
     if (user === null) {
-      throw new Error("Authenticated user record was not found.");
+      throw appError({ code: "USER_RECORD_MISSING" });
     }
 
     const existingProfile = await getStaffProfile(ctx, userId);
@@ -55,6 +59,7 @@ export const ensureCurrentProfile = mutation({
         email: user.email ?? null,
         role: existingProfile.role,
         status: existingProfile.status,
+        language: existingProfile.language ?? null,
       };
     }
 
@@ -81,6 +86,7 @@ export const ensureCurrentProfile = mutation({
       email: user.email ?? null,
       role,
       status,
+      language: null,
     };
   },
 });
@@ -104,7 +110,26 @@ export const current = query({
       email: user?.email ?? null,
       role: profile.role,
       status: profile.status,
+      language: profile.language ?? null,
     };
+  },
+});
+
+// The user's own language choice. It follows the account, so the app opens in
+// the same language on every device.
+export const setLanguage = mutation({
+  args: { language: staffLanguage },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const userId = await requireCurrentUserId(ctx);
+    const profile = await getStaffProfile(ctx, userId);
+
+    if (profile === null) {
+      throw appError({ code: "PROFILE_NOT_FOUND" });
+    }
+
+    await ctx.db.patch("staffProfiles", profile._id, { language: args.language });
+    return null;
   },
 });
 
@@ -132,6 +157,7 @@ export const listManaged = query({
           email: user?.email ?? null,
           role: profile.role,
           status: profile.status,
+          language: profile.language ?? null,
           isCurrentUser: profile.userId === userId,
           assignedClinicIds: profile.assignedClinicIds ?? [],
         };
@@ -157,10 +183,10 @@ export const setRole = mutation({
     const target = await ctx.db.get("staffProfiles", args.profileId);
 
     if (target === null) {
-      throw new Error("Staff profile was not found.");
+      throw appError({ code: "PROFILE_NOT_FOUND" });
     }
     if (target.userId === userId) {
-      throw new Error("You cannot change your own role.");
+      throw appError({ code: "CANNOT_CHANGE_OWN_ROLE" });
     }
 
     await ctx.db.patch("staffProfiles", args.profileId, { role: args.role });
@@ -179,10 +205,10 @@ export const setStatus = mutation({
     const target = await ctx.db.get("staffProfiles", args.profileId);
 
     if (target === null) {
-      throw new Error("Staff profile was not found.");
+      throw appError({ code: "PROFILE_NOT_FOUND" });
     }
     if (target.userId === userId) {
-      throw new Error("You cannot disable your own account.");
+      throw appError({ code: "CANNOT_DISABLE_SELF" });
     }
 
     await ctx.db.patch("staffProfiles", args.profileId, { status: args.status });
@@ -200,14 +226,14 @@ export const setAssignedClinics = mutation({
     await requireAdmin(ctx);
     const target = await ctx.db.get("staffProfiles", args.profileId);
     if (target === null) {
-      throw new Error("Staff profile was not found.");
+      throw appError({ code: "PROFILE_NOT_FOUND" });
     }
 
     const clinicIds = cleanAssignedClinicIds(args.clinicIds);
     for (const clinicId of clinicIds) {
       const clinic = await ctx.db.get("clinics", clinicId);
       if (clinic === null) {
-        throw new Error("One of the selected clinics was not found.");
+        throw appError({ code: "SELECTED_CLINIC_NOT_FOUND" });
       }
     }
 

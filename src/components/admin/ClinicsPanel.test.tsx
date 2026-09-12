@@ -5,6 +5,7 @@ import { useMutation, useQuery } from "convex/react";
 import { beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 
 import { NavigationContext } from "@/components/app/navigation";
+import { I18nProvider } from "@/lib/i18n/context";
 
 import { api } from "../../../convex/_generated/api";
 import { AdminClinicsPanel } from "./ClinicsPanel";
@@ -104,9 +105,11 @@ function mockMutations() {
 
 function renderPanel() {
   return render(
-    <NavigationContext.Provider value={{ path: "/admin/clinics", navigate: vi.fn() }}>
-      <AdminClinicsPanel />
-    </NavigationContext.Provider>
+    <I18nProvider>
+      <NavigationContext.Provider value={{ path: "/admin/clinics", navigate: vi.fn() }}>
+        <AdminClinicsPanel />
+      </NavigationContext.Provider>
+    </I18nProvider>
   );
 }
 

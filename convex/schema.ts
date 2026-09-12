@@ -8,6 +8,8 @@ import { reportTypeBucket } from "./model/reportTypes";
 
 export const staffRole = v.union(v.literal("admin"), v.literal("operator"));
 export const staffStatus = v.union(v.literal("active"), v.literal("disabled"));
+// The language the user picked in the app. Missing means "follow the device".
+export const staffLanguage = v.union(v.literal("en"), v.literal("es"));
 export const reportOperationKey = v.union(
   v.literal("pending-audit"),
   v.literal("pending-execution"),
@@ -34,6 +36,7 @@ export default defineSchema({
     role: staffRole,
     status: staffStatus,
     assignedClinicIds: v.optional(v.array(v.id("clinics"))),
+    language: v.optional(staffLanguage),
   }).index("by_userId", ["userId"]),
 
   clients: defineTable({
