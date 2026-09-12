@@ -4,93 +4,24 @@ import type { Id } from "./_generated/dataModel";
 import type { QueryCtx } from "./_generated/server";
 import { action, internalMutation, internalQuery } from "./_generated/server";
 import { internal } from "./_generated/api.js";
+import {
+  cell,
+  evaluatePendingAudit,
+  evaluateReadyToUpload,
+  isImplementedOperation,
+  reportConditionSet,
+  resolveConditionsForClinics,
+  type ImplementedOperationKey,
+  type ReportConditionSet,
+} from "./model/reportConditions";
 import { columnLetterToIndex, listProfileClinics } from "./model/reporting";
 import { reportOperationKey } from "./schema";
 
 type SheetRow = string[];
 
-function cell(row: SheetRow, index: number): string {
-  return (row[index] ?? "").toUpperCase().trim();
-}
-
-// Old tool rule (get_rows_ready_to_upload): column L says DONE, update status
-// says DONE, upload status says EMPTY. Review bucket: same but upload status
-// says CHECK, ERROR, UPLOAD INCOMPLETE, or NOT UPLOADED.
-const REVIEW_UPLOAD_MARKERS = ["CHECK", "ERROR", "UPLOAD INCOMPLETE", "NOT UPLOADED"];
-
 // TEMPORARY while project is in development: cap debug samples per sheet so
 // the response stays small while operators learn the row rules.
 const MAX_DEBUG_SAMPLES = 10;
-
-function getUploadOutcome(
-  row: SheetRow,
-  updateStatus: number,
-  uploadStatus: number
-): { bucket: "ready" | "review" | null; reason: string } {
-  // Column L (index 11) is the execution control column in every legacy sheet.
-  if (row.length <= Math.max(11, updateStatus, uploadStatus))
-    return { bucket: null, reason: "too_short" };
-  if (!cell(row, 11).includes("DONE")) return { bucket: null, reason: "col_l_not_done" };
-  if (!cell(row, updateStatus).includes("DONE"))
-    return { bucket: null, reason: "update_status_not_done" };
-  const upload = cell(row, uploadStatus);
-  // Terminal states never need action again.
-  if (upload.includes("UPLOADED") || upload.includes("DONE BY"))
-    return { bucket: null, reason: "upload_terminal" };
-  if (upload.includes("EMPTY")) return { bucket: "ready", reason: "kept_ready" };
-  if (REVIEW_UPLOAD_MARKERS.some((marker) => upload.includes(marker)))
-    return { bucket: "review", reason: "kept_review" };
-  return { bucket: null, reason: "upload_no_match" };
-}
-
-// Old tool rule (get_rows_pending_to_audit_conditions): DONE in column L plus
-// the verification-type condition, update status not in the exclude list,
-// upload status EMPTY or UNCHECKED. Rows short of 14 columns are skipped.
-const AUDIT_EXCLUDE_STATUS = [
-  "DONE",
-  "MEDICAL PLAN",
-  "UNKNOWN",
-  "NOT FOUND",
-  "INCIDENCE",
-  "NO DENTAL COVERAGE",
-  "NOT ELIGIBLE FOR DENTAL BENEFITS",
-  "NO PROVIDER",
-  "CHECK THAT THERE IS NO TITLE FOR THIS LOCATION",
-  "CHECK THERE IS NO TITLE FOR THIS OFFICE BUT PATIENT IS ACTIVE",
-  "CHECK THERE IS NO TITLE FOR THIS OFFICE BUT PATIENT IS INACTIVE",
-  "CHECK THERE IS NO TITLE FOR THIS OFFICE",
-  "WFL",
-  "REVIEWED BY QA",
-];
-
-function getAuditDropReason(
-  row: SheetRow,
-  updateStatus: number,
-  uploadStatus: number,
-  verificationType: number,
-  verificationFilter: "all" | "fbd" | "elg"
-): string | null {
-  if (row.length <= Math.max(13, updateStatus, uploadStatus, verificationType)) return "too_short";
-  const l = cell(row, 11);
-  const m = cell(row, 12);
-  const verification = cell(row, verificationType);
-  const matchesType =
-    verificationFilter === "all"
-      ? verification.includes("FBD") || verification.includes("ELG")
-      : verification === verificationFilter.toUpperCase();
-  if (!matchesType) return "verification_mismatch";
-  const dynamicHit =
-    l.includes("DONE") ||
-    (l.includes("CHECK") && m.includes("NOT FOUND")) ||
-    (l.includes("DONE") && m.includes("TERMED"));
-  if (!dynamicHit) return "l_m_condition_failed";
-  if (AUDIT_EXCLUDE_STATUS.some((status) => cell(row, updateStatus).includes(status)))
-    return "update_status_excluded";
-  const upload = cell(row, uploadStatus);
-  if (!(upload === "EMPTY" || upload === "UNCHECKED"))
-    return "upload_status_not_empty_or_unchecked";
-  return null;
-}
 
 // TEMPORARY while project is in development: explains why rows were kept or
 // dropped so operators can test the /reports form without reading backend code.
@@ -302,7 +233,8 @@ function buildRunDebug(
 
 async function reportRunConfigForUser(
   ctx: QueryCtx,
-  userId: Id<"users">
+  userId: Id<"users">,
+  operationKey: ImplementedOperationKey
 ): Promise<{
   clinics: Array<{
     clinicId: Id<"clinics">;
@@ -312,6 +244,7 @@ async function reportRunConfigForUser(
     updateStatusColumn: string;
     uploadStatusColumn: string;
     verificationTypeColumn: string;
+    conditions: ReportConditionSet;
   }>;
 }> {
   const profile = await ctx.db
@@ -326,6 +259,7 @@ async function reportRunConfigForUser(
   }
 
   const clinics = await listProfileClinics(ctx, profile);
+  const resolved = await resolveConditionsForClinics(ctx, userId, operationKey);
   return {
     clinics: clinics.map((clinic) => ({
       clinicId: clinic._id,
@@ -335,6 +269,7 @@ async function reportRunConfigForUser(
       updateStatusColumn: clinic.sheetColumns.updateStatus,
       uploadStatusColumn: clinic.sheetColumns.uploadStatus,
       verificationTypeColumn: clinic.sheetColumns.verificationType,
+      conditions: resolved.byClinicId.get(clinic._id) ?? resolved.defaultConditions,
     })),
   };
 }
@@ -412,9 +347,11 @@ export const runSheetReport = action({
         updateStatusColumn: string;
         uploadStatusColumn: string;
         verificationTypeColumn: string;
+        conditions: ReportConditionSet;
       }>;
     } = await ctx.runQuery(internal.reports.runSheetReportConfig, {
       userId,
+      operationKey: args.operationKey,
       startDate: args.startDate,
       endDate: args.endDate,
     });
@@ -541,22 +478,25 @@ export const runSheetReport = action({
         values.forEach((row, index) => {
           const rowNumber = index + 2;
           if (args.operationKey === "ready-to-upload") {
-            const { bucket, reason } = getUploadOutcome(row, updateStatus, uploadStatus);
+            const { bucket, reason } = evaluateReadyToUpload(
+              row,
+              { updateStatus, uploadStatus },
+              clinic.conditions
+            );
             if (bucket === "ready") readyRows.push({ rowNumber, values: row });
             else if (bucket === "review") reviewRows.push({ rowNumber, values: row });
             else if (wantDebug) trackDrop(row, rowNumber, reason);
           } else {
-            const dropReason = getAuditDropReason(
+            const outcome = evaluatePendingAudit(
               row,
-              updateStatus,
-              uploadStatus,
-              verificationType,
+              { updateStatus, uploadStatus, verificationType },
+              clinic.conditions,
               verificationFilter
             );
-            if (dropReason === null) {
+            if (outcome.kept) {
               auditRows.push({ rowNumber, values: row });
             } else if (wantDebug) {
-              trackDrop(row, rowNumber, dropReason);
+              trackDrop(row, rowNumber, outcome.reason ?? "dropped");
             }
           }
         });
@@ -639,6 +579,7 @@ export const runSheetReport = action({
 export const runSheetReportConfig = internalQuery({
   args: {
     userId: v.id("users"),
+    operationKey: reportOperationKey,
     startDate: v.string(),
     endDate: v.string(),
   },
@@ -652,6 +593,7 @@ export const runSheetReportConfig = internalQuery({
         updateStatusColumn: v.string(),
         uploadStatusColumn: v.string(),
         verificationTypeColumn: v.string(),
+        conditions: reportConditionSet,
       })
     ),
   }),
@@ -659,6 +601,9 @@ export const runSheetReportConfig = internalQuery({
     if (args.startDate > args.endDate) {
       throw new Error("The start date must be on or before the end date.");
     }
-    return reportRunConfigForUser(ctx, args.userId);
+    if (!isImplementedOperation(args.operationKey)) {
+      throw new Error(`No conditions are defined for "${args.operationKey}" yet.`);
+    }
+    return reportRunConfigForUser(ctx, args.userId, args.operationKey);
   },
 });

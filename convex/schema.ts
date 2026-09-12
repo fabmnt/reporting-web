@@ -3,6 +3,7 @@ import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 
 import { clinicSheetColumns } from "./model/clinicSheetColumns";
+import { reportConditionSet } from "./model/reportConditions";
 
 export const staffRole = v.union(v.literal("admin"), v.literal("operator"));
 export const staffStatus = v.union(v.literal("active"), v.literal("disabled"));
@@ -68,4 +69,17 @@ export default defineSchema({
     .index("by_initiatedByUserId_and_startedAt", ["initiatedByUserId", "startedAt"])
     .index("by_clientId_and_startedAt", ["clientId", "startedAt"])
     .index("by_status_and_startedAt", ["status", "startedAt"]),
+
+  // Row conditions per user and report operation. `clinicId: null` is the
+  // user's general default; a clinic id is a full override for that clinic.
+  // A missing row means "use the code default".
+  reportConditions: defineTable({
+    userId: v.id("users"),
+    operationKey: reportOperationKey,
+    clinicId: v.union(v.id("clinics"), v.null()),
+    conditions: reportConditionSet,
+    updatedAt: v.number(),
+  })
+    .index("by_userId_and_operationKey", ["userId", "operationKey"])
+    .index("by_clinicId", ["clinicId"]),
 });

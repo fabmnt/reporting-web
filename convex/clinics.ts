@@ -6,6 +6,7 @@ import type { Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
 import { mutation, query } from "./_generated/server";
 import { clinicSheetColumns } from "./model/clinicSheetColumns";
+import { MAX_CONDITION_ROWS } from "./model/reportConditions";
 import { listProfileClinics, profileUsesAllClinics } from "./model/reporting";
 import { requireAdmin, requireOperator } from "./model/staff";
 
@@ -157,6 +158,21 @@ async function removeClinicFromStaffProfiles(ctx: MutationCtx, clinicId: Id<"cli
     await ctx.db.patch(profile._id, {
       assignedClinicIds: assignedClinicIds.filter((id) => id !== clinicId),
     });
+  }
+}
+
+async function removeReportConditionsForClinic(ctx: MutationCtx, clinicId: Id<"clinics">) {
+  // One clinic can hold more override rows than a single batch reads, so keep
+  // deleting until the index has nothing left for it.
+  for (;;) {
+    const rows = await ctx.db
+      .query("reportConditions")
+      .withIndex("by_clinicId", (query) => query.eq("clinicId", clinicId))
+      .take(MAX_CONDITION_ROWS);
+    if (rows.length === 0) return;
+    for (const row of rows) {
+      await ctx.db.delete("reportConditions", row._id);
+    }
   }
 }
 
@@ -464,6 +480,7 @@ export const remove = mutation({
     }
 
     await removeClinicFromStaffProfiles(ctx, args.clinicId);
+    await removeReportConditionsForClinic(ctx, args.clinicId);
     await ctx.db.delete("clinics", args.clinicId);
 
     return null;

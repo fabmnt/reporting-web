@@ -15,6 +15,7 @@ export type CurrentAccount = NonNullable<FunctionReturnType<typeof api.staffAcco
 
 const REPORT_PATH = "/";
 const CLINICS_PATH = "/clinics";
+const CONFIGURATION_PATH = "/configuration";
 const ADMIN_PATH = "/admin";
 
 function initialsFor(account: CurrentAccount): string {
@@ -34,6 +35,7 @@ export function AppHeader({ account }: { account: CurrentAccount }) {
   const navItems = [
     { href: REPORT_PATH, label: "Reports" },
     ...(canConfigureClinics ? [{ href: CLINICS_PATH, label: "Clinics" }] : []),
+    ...(canConfigureClinics ? [{ href: CONFIGURATION_PATH, label: "Configuration" }] : []),
     ...(canAdmin ? [{ href: ADMIN_PATH, label: "Admin" }] : []),
   ];
 
