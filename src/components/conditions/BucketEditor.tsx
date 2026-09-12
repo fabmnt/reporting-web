@@ -1,7 +1,7 @@
 "use client";
 
 import { Plus, Trash2 } from "lucide-react";
-import { useRef } from "react";
+import { useState } from "react";
 
 import {
   MAX_CLAUSES_PER_SECTION,
@@ -40,29 +40,44 @@ function newClause(): ConditionClause {
 // Keys follow the item, not its position: removing a middle clause or group
 // must not hand the editor state of the removed one to the next. An edit
 // replaces the object at the same position, so that position keeps its key and
-// the editor is not remounted while it is being used. Ids live in a WeakMap so
-// they never reach the persisted condition shape.
-function useStableItemKeys<T extends object>(items: readonly T[]): string[] {
-  const idsRef = useRef(new WeakMap<T, string>());
-  const counterRef = useRef(0);
-  const previousRef = useRef<{ items: readonly T[]; keys: string[] }>({ items: [], keys: [] });
+// the editor is not remounted while it is being used.
+type KeyedItems<T> = { items: readonly T[]; keys: string[]; nextId: number };
 
-  const keys = items.map((item, index) => {
-    const existing = idsRef.current.get(item);
-    if (existing !== undefined) return existing;
-
-    const previous = previousRef.current;
-    let id = previous.items.length === items.length ? previous.keys[index] : undefined;
-    if (id === undefined) {
-      counterRef.current += 1;
-      id = `item-${counterRef.current}`;
-    }
-    idsRef.current.set(item, id);
-    return id;
+function allocateItemKeys<T extends object>(
+  items: readonly T[],
+  previous: KeyedItems<T>
+): KeyedItems<T> {
+  const keysByIdentity = new Map<T, string>();
+  previous.items.forEach((item, index) => {
+    const key = previous.keys[index];
+    if (key !== undefined) keysByIdentity.set(item, key);
   });
 
-  previousRef.current = { items, keys };
-  return keys;
+  let nextId = previous.nextId;
+  const keys = items.map((item, index) => {
+    const byIdentity = keysByIdentity.get(item);
+    if (byIdentity !== undefined) return byIdentity;
+    const byPosition = previous.items.length === items.length ? previous.keys[index] : undefined;
+    if (byPosition !== undefined) return byPosition;
+    nextId += 1;
+    return `item-${nextId}`;
+  });
+  return { items, keys, nextId };
+}
+
+// Allocation lives in state, not in a ref, so a render React discards cannot
+// change the keys a later commit uses. The length check is the documented
+// "adjust state when props change" pattern.
+function useItemKeys<T extends object>(items: readonly T[]): string[] {
+  const [state, setState] = useState<KeyedItems<T>>(() => ({
+    items,
+    keys: items.map((_, index) => `item-${index + 1}`),
+    nextId: items.length,
+  }));
+  if (state.items !== items) {
+    setState(allocateItemKeys(items, state));
+  }
+  return state.keys;
 }
 
 function ClauseList({
@@ -80,7 +95,7 @@ function ClauseList({
   disabled: boolean;
   addLabel: string;
 }) {
-  const keys = useStableItemKeys(clauses);
+  const keys = useItemKeys(clauses);
   const atLimit = clauses.length >= MAX_CLAUSES_PER_SECTION;
   return (
     <>
@@ -230,7 +245,7 @@ export function BucketEditor({
     updateExpression({ groups: [...expression.groups, { match: "all", clauses: [newClause()] }] });
 
   const noCriteria = !bucket.catchAll && expressionHasNoClauses(expression);
-  const groupKeys = useStableItemKeys(expression.groups);
+  const groupKeys = useItemKeys(expression.groups);
   const groupsAtLimit = expression.groups.length >= MAX_GROUPS_PER_EXPRESSION;
 
   return (

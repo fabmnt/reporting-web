@@ -108,10 +108,13 @@ export const listRunnable = query({
   },
 });
 
-// Full definitions for the configuration panel, which edits rules and buckets.
+// Names for the configuration panel. The rules of one type are read through
+// getMine, so the list stays small no matter how many types exist.
 export const listMine = query({
   args: {},
-  returns: v.object({ types: v.array(reportTypeView) }),
+  returns: v.object({
+    types: v.array(v.object({ reportTypeId: v.id("reportTypes"), name: v.string() })),
+  }),
   handler: async (ctx) => {
     const { userId } = await requireOperator(ctx);
     const rows = await ctx.db
@@ -119,14 +122,26 @@ export const listMine = query({
       .withIndex("by_userId", (query) => query.eq("userId", userId))
       .collect();
     rows.sort((a, b) => a.name.localeCompare(b.name));
+    return { types: rows.map((row) => ({ reportTypeId: row._id, name: row.name })) };
+  },
+});
+
+// Full definition of one of the caller's report types. A missing or foreign id
+// reads as null instead of throwing, so a run can select a type while it is
+// being deleted without breaking the panel.
+export const getMine = query({
+  args: { reportTypeId: v.id("reportTypes") },
+  returns: v.union(reportTypeView, v.null()),
+  handler: async (ctx, args) => {
+    const { userId } = await requireOperator(ctx);
+    const row = await ctx.db.get("reportTypes", args.reportTypeId);
+    if (row === null || row.userId !== userId) return null;
     return {
-      types: rows.map((row) => ({
-        reportTypeId: row._id,
-        name: row.name,
-        description: row.description,
-        buckets: row.buckets,
-        conditions: row.conditions,
-      })),
+      reportTypeId: row._id,
+      name: row.name,
+      description: row.description,
+      buckets: row.buckets,
+      conditions: row.conditions,
     };
   },
 });

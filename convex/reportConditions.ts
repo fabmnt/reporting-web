@@ -1,12 +1,13 @@
 import { ConvexError, v } from "convex/values";
 
 import type { Id } from "./_generated/dataModel";
-import type { MutationCtx } from "./_generated/server";
+import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { mutation, query } from "./_generated/server";
 import {
   assertBucketKeys,
   bucketCatalogFor,
   bucketKeysFor,
+  bucketKeysMatch,
   cleanConditionSet,
   IMPLEMENTED_REPORT_OPERATIONS,
   isImplementedOperation,
@@ -52,10 +53,27 @@ async function findConditionRow(
   return newest ?? null;
 }
 
+// Read-only lookup for one scope, used when the panel asks for the rules of the
+// scope it is editing. Duplicates are left for save and reset to clean up.
+async function readConditionRow(
+  ctx: QueryCtx,
+  userId: Id<"users">,
+  operationKey: ImplementedOperationKey,
+  clinicId: Id<"clinics"> | null
+) {
+  return await ctx.db
+    .query("reportConditions")
+    .withIndex("by_userId_and_operationKey_and_clinicId", (query) =>
+      query.eq("userId", userId).eq("operationKey", operationKey).eq("clinicId", clinicId)
+    )
+    .order("desc")
+    .first();
+}
+
 // A clinic scope must be one the caller can run reports for. A null scope is
 // the caller's own default and needs no clinic.
 async function assertClinicAssigned(
-  ctx: MutationCtx,
+  ctx: QueryCtx,
   profile: StaffProfileForReporting,
   clinicId: Id<"clinics"> | null
 ): Promise<void> {
@@ -69,6 +87,10 @@ async function assertClinicAssigned(
   }
 }
 
+// The panel only needs to know which scopes have stored rules and what the
+// defaults are. Shipping every override's rules here would grow the response
+// with the number of assigned clinics, so one scope at a time is read through
+// getMine instead.
 export const listMine = query({
   args: {},
   returns: v.object({
@@ -85,7 +107,7 @@ export const listMine = query({
         label: v.string(),
         buckets: v.array(reportBucket),
         default: v.object({ conditions: reportConditionSet, isCustom: v.boolean() }),
-        overrides: v.array(v.object({ clinicId: v.id("clinics"), conditions: reportConditionSet })),
+        overrides: v.array(v.object({ clinicId: v.id("clinics") })),
       })
     ),
   }),
@@ -110,9 +132,9 @@ export const listMine = query({
     for (const operationKey of IMPLEMENTED_REPORT_OPERATIONS) {
       const resolved = await resolveConditionsForClinics(ctx, userId, operationKey);
       const overrides = [];
-      for (const [clinicId, conditions] of resolved.byClinicId) {
+      for (const clinicId of resolved.byClinicId.keys()) {
         if (!assignedIds.has(clinicId)) continue;
-        overrides.push({ clinicId, conditions });
+        overrides.push({ clinicId });
       }
       operations.push({
         operationKey,
@@ -129,6 +151,33 @@ export const listMine = query({
     }
 
     return { clinics, operations };
+  },
+});
+
+// Rules stored for one clinic scope. A row whose buckets no longer match the
+// report type, or a clinic the caller cannot use, reads as missing the same way
+// a run ignores it instead of failing the panel.
+export const getMine = query({
+  args: { operationKey: reportOperationKey, clinicId: v.id("clinics") },
+  returns: v.object({ conditions: v.union(reportConditionSet, v.null()) }),
+  handler: async (ctx, args) => {
+    const { userId, profile } = await requireOperator(ctx);
+    if (!isImplementedOperation(args.operationKey)) {
+      throw new ConvexError({
+        code: "INVALID_OPERATION",
+        message: `"${args.operationKey}" does not support conditions yet.`,
+      });
+    }
+    const assigned = await listProfileClinics(ctx, profile);
+    if (!assigned.some((clinic) => clinic._id === args.clinicId)) {
+      return { conditions: null };
+    }
+
+    const row = await readConditionRow(ctx, userId, args.operationKey, args.clinicId);
+    if (row === null || !bucketKeysMatch(row.conditions, bucketKeysFor(args.operationKey))) {
+      return { conditions: null };
+    }
+    return { conditions: row.conditions };
   },
 });
 

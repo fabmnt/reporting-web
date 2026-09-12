@@ -54,10 +54,29 @@ export function ConditionsPanel() {
   const [notice, setNotice] = useState<string | null>(null);
   // Unsaved edits, keyed by report type and scope, so switching between them
   // does not throw the draft away.
-  const [drafts, setDrafts] = useState<Record<string, ReportConditionSet>>({});
-  const [customDrafts, setCustomDrafts] = useState<Record<string, CustomReportTypeDraft>>({});
+  const [drafts, setDrafts] = useState<Record<string, ReportConditionSet | undefined>>({});
+  const [customDrafts, setCustomDrafts] = useState<
+    Record<string, CustomReportTypeDraft | undefined>
+  >({});
   const [creating, setCreating] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+
+  // The list queries only carry names, so the rules of the scope being edited
+  // are read on demand. Each query runs with "skip" until its scope is known.
+  const listedOperation = data?.operations.find((item) => item.operationKey === typeValue);
+  const isCustomSelection =
+    (customTypesData?.types ?? []).some((item) => item.reportTypeId === typeValue) ||
+    customDrafts[typeValue] !== undefined;
+  const overrideData = useQuery(
+    api.reportConditions.getMine,
+    canConfigure && !isCustomSelection && listedOperation !== undefined && scope !== DEFAULT_SCOPE
+      ? { operationKey: listedOperation.operationKey, clinicId: scope as Id<"clinics"> }
+      : "skip"
+  );
+  const customDefinition = useQuery(
+    api.reportTypes.getMine,
+    canConfigure && isCustomSelection ? { reportTypeId: typeValue as Id<"reportTypes"> } : "skip"
+  );
 
   const header = (
     <PageHeader
@@ -98,15 +117,14 @@ export function ConditionsPanel() {
 
   const operations = data.operations;
   const customTypes = customTypesData.types;
-  const storedCustom = customTypes.find((item) => item.reportTypeId === typeValue);
   const storedCustomDraft: CustomReportTypeDraft | undefined =
-    storedCustom === undefined
+    customDefinition === undefined || customDefinition === null
       ? undefined
       : {
-          name: storedCustom.name,
-          description: storedCustom.description,
-          buckets: storedCustom.buckets,
-          conditions: storedCustom.conditions,
+          name: customDefinition.name,
+          description: customDefinition.description,
+          buckets: customDefinition.buckets,
+          conditions: customDefinition.conditions,
         };
   // A draft only covers the gap between a save and the query catching up. Once
   // the stored value matches it, the draft is dropped so later server updates
@@ -121,8 +139,10 @@ export function ConditionsPanel() {
     delete next[typeValue];
     setCustomDrafts(next);
   }
-  const customDraft = customDrafts[typeValue] ?? storedCustomDraft;
-  const isCustom = customDraft !== undefined;
+  // A record lookup is missing until the type is edited or its rules load.
+  const customDraftEntry = customDrafts[typeValue];
+  const customDraft = customDraftEntry ?? storedCustomDraft;
+  const isCustom = isCustomSelection;
 
   const operation = isCustom
     ? undefined
@@ -138,15 +158,14 @@ export function ConditionsPanel() {
   }
 
   const isDefaultScope = scope === DEFAULT_SCOPE;
-  const override =
-    operation !== undefined && !isDefaultScope
-      ? operation.overrides.find((item) => item.clinicId === scope)
-      : undefined;
+  const hasOverride =
+    operation !== undefined && operation.overrides.some((item) => item.clinicId === scope);
+  const overrideConditions = hasOverride ? (overrideData?.conditions ?? undefined) : undefined;
+  const overrideLoading = hasOverride && overrideData === undefined;
   const canReset =
-    operation !== undefined &&
-    (isDefaultScope ? operation.default.isCustom : override !== undefined);
+    operation !== undefined && (isDefaultScope ? operation.default.isCustom : hasOverride);
   const editorKey = operation === undefined ? "" : `${operation.operationKey}:${scope}`;
-  const storedConditions = override?.conditions ?? operation?.default.conditions;
+  const storedConditions = overrideConditions ?? operation?.default.conditions;
   const draftConditions = drafts[editorKey];
   if (
     draftConditions !== undefined &&
@@ -157,7 +176,7 @@ export function ConditionsPanel() {
     delete next[editorKey];
     setDrafts(next);
   }
-  const conditions = drafts[editorKey] ?? storedConditions;
+  const conditions = draftConditions ?? storedConditions;
 
   const scopeItems: Array<{ value: string; label: string }> = [
     { value: DEFAULT_SCOPE, label: "My default" },
@@ -169,12 +188,12 @@ export function ConditionsPanel() {
 
   const inheritanceNote = isDefaultScope
     ? "Clinics use these values unless they have their own override."
-    : override === undefined
-      ? "This clinic inherits your default conditions."
-      : "This clinic uses its own conditions.";
+    : hasOverride
+      ? "This clinic uses its own conditions."
+      : "This clinic inherits your default conditions.";
 
   async function handleSaveBuiltin() {
-    if (operation === undefined || conditions === undefined) return;
+    if (operation === undefined || conditions === undefined || overrideLoading) return;
     setSaving(true);
     setError(null);
     setNotice(null);
@@ -421,7 +440,7 @@ export function ConditionsPanel() {
         <Card>
           <CardHeader>
             <h2 className="font-heading text-base leading-snug font-medium">
-              {isCustom ? customDraft.name : operation?.label}
+              {isCustom ? (customDraft?.name ?? "") : operation?.label}
             </h2>
             <CardDescription>
               {isCustom
@@ -433,14 +452,18 @@ export function ConditionsPanel() {
           </CardHeader>
           <CardContent className="flex flex-col gap-6">
             {isCustom ? (
-              <CustomReportTypeEditor
-                draft={customDraft}
-                onChange={(next) =>
-                  setCustomDrafts((previous) => ({ ...previous, [typeValue]: next }))
-                }
-                disabled={saving}
-              />
-            ) : operation !== undefined && conditions !== undefined ? (
+              customDraft !== undefined ? (
+                <CustomReportTypeEditor
+                  draft={customDraft}
+                  onChange={(next) =>
+                    setCustomDrafts((previous) => ({ ...previous, [typeValue]: next }))
+                  }
+                  disabled={saving}
+                />
+              ) : (
+                <Skeleton className="h-64 w-full" />
+              )
+            ) : operation !== undefined && conditions !== undefined && !overrideLoading ? (
               <ConditionSetEditor
                 key={editorKey}
                 buckets={operation.buckets}
@@ -448,7 +471,9 @@ export function ConditionsPanel() {
                 onChange={(next) => setDrafts((previous) => ({ ...previous, [editorKey]: next }))}
                 disabled={saving}
               />
-            ) : null}
+            ) : (
+              <Skeleton className="h-64 w-full" />
+            )}
 
             <div className="flex flex-wrap justify-end gap-2">
               {isCustom ? (
@@ -485,7 +510,7 @@ export function ConditionsPanel() {
               ) : null}
               <Button
                 onClick={() => void (isCustom ? handleSaveCustom() : handleSaveBuiltin())}
-                disabled={saving}
+                disabled={saving || overrideLoading || (isCustom && customDraft === undefined)}
               >
                 Save conditions
               </Button>
