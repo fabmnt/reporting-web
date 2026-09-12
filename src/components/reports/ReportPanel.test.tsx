@@ -23,11 +23,34 @@ function nameOf(reference: AnyFunctionReference): string {
 }
 
 const ASSIGNMENT_QUERY = nameOf(api.googleSheets.listAssignedReportClinics);
+const TYPES_QUERY = nameOf(api.reportTypes.listRunnable);
 const RUN_ACTION = nameOf(api.reports.runSheetReport);
 
 const ASSIGNMENT = {
   usesAllClinics: false,
   clinics: [{ clinicId: "clinic-1", name: "Downtown", clientName: "Smilist" }],
+};
+
+const REPORT_TYPES = {
+  types: [
+    {
+      source: "builtin",
+      key: "pending-audit",
+      label: "Pending audit",
+      description: "Rows waiting for QA review before upload.",
+      buckets: [{ key: "audit", label: "Pending audit" }],
+    },
+    {
+      source: "builtin",
+      key: "ready-to-upload",
+      label: "Ready to upload",
+      description: "Rows ready to upload and rows that need review.",
+      buckets: [
+        { key: "ready", label: "Ready to upload" },
+        { key: "review", label: "Needs review" },
+      ],
+    },
+  ],
 };
 
 // A pending-audit run: it has audit rows but no ready or review rows. Switching
@@ -43,11 +66,15 @@ const PENDING_AUDIT_RUN = {
       googleSheetId: "sheet-1",
       tabTitle: "2026-09-10",
       headers: ["Name", "Status"],
-      readyRows: [],
-      reviewRows: [],
-      auditRows: [
-        { rowNumber: 2, values: ["a"] },
-        { rowNumber: 3, values: ["b"] },
+      bucketRows: [
+        {
+          bucketKey: "audit",
+          label: "Pending audit",
+          rows: [
+            { rowNumber: 2, values: ["a"] },
+            { rowNumber: 3, values: ["b"] },
+          ],
+        },
       ],
       error: null,
     },
@@ -58,9 +85,12 @@ const runReport = vi.fn();
 
 beforeEach(() => {
   vi.resetAllMocks();
-  useQueryMock.mockImplementation((reference: AnyFunctionReference) =>
-    nameOf(reference) === ASSIGNMENT_QUERY ? ASSIGNMENT : undefined
-  );
+  useQueryMock.mockImplementation((reference: AnyFunctionReference) => {
+    const name = nameOf(reference);
+    if (name === ASSIGNMENT_QUERY) return ASSIGNMENT;
+    if (name === TYPES_QUERY) return REPORT_TYPES;
+    return undefined;
+  });
   useActionMock.mockImplementation((reference: AnyFunctionReference) =>
     nameOf(reference) === RUN_ACTION ? runReport : vi.fn()
   );
@@ -81,7 +111,7 @@ describe("ReportRunner", () => {
 
     // Switch the report type without running again.
     await user.click(screen.getByRole("combobox", { name: "Report type" }));
-    await user.click(await screen.findByRole("option", { name: "Ready to upload (incl. review)" }));
+    await user.click(await screen.findByRole("option", { name: "Ready to upload" }));
 
     // The finished run still renders as it ran, not as the new control value.
     expect(auditHeading()).toBeVisible();

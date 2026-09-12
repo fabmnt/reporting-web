@@ -1,9 +1,6 @@
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import {
-  CLINIC_SHEET_COLUMN_DEFAULTS,
-  type SheetColumnFormValues,
-} from "@/lib/clinicSheetColumns";
+import { CLINIC_SHEET_COLUMN_DEFAULTS, type SheetColumnFormValues } from "@/lib/clinicSheetColumns";
 
 export function SheetColumnFields({
   values,

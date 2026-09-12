@@ -12,6 +12,7 @@ import { requireAdmin, requireOperator } from "./model/staff";
 const MAX_CLINICS = 500;
 const MAX_CLIENTS = 200;
 const MAX_STAFF_PROFILES = 500;
+const CONDITION_DELETE_BATCH_SIZE = 500;
 
 const clientView = v.object({
   clientId: v.id("clients"),
@@ -157,6 +158,22 @@ async function removeClinicFromStaffProfiles(ctx: MutationCtx, clinicId: Id<"cli
     await ctx.db.patch(profile._id, {
       assignedClinicIds: assignedClinicIds.filter((id) => id !== clinicId),
     });
+  }
+}
+
+// A clinic holds at most one condition row per user and operation, so its rows
+// stay far below the mutation write limit even after many operators configure
+// it. Read and delete in batches until the index has nothing left for it.
+async function removeReportConditionsForClinic(ctx: MutationCtx, clinicId: Id<"clinics">) {
+  for (;;) {
+    const rows = await ctx.db
+      .query("reportConditions")
+      .withIndex("by_clinicId", (query) => query.eq("clinicId", clinicId))
+      .take(CONDITION_DELETE_BATCH_SIZE);
+    if (rows.length === 0) return;
+    for (const row of rows) {
+      await ctx.db.delete("reportConditions", row._id);
+    }
   }
 }
 
@@ -464,6 +481,7 @@ export const remove = mutation({
     }
 
     await removeClinicFromStaffProfiles(ctx, args.clinicId);
+    await removeReportConditionsForClinic(ctx, args.clinicId);
     await ctx.db.delete("clinics", args.clinicId);
 
     return null;

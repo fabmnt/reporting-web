@@ -129,8 +129,7 @@ function ClinicConfigForm({
 export function AssignedClinicsPanel() {
   const current = useQuery(api.staffAccounts.current, {});
   const canConfigure =
-    current?.status === "active" &&
-    (current.role === "admin" || current.role === "operator");
+    current?.status === "active" && (current.role === "admin" || current.role === "operator");
   const assignedData = useQuery(api.clinics.listAssigned, canConfigure ? {} : "skip");
   const updateAssigned = useMutation(api.clinics.updateAssigned);
 
