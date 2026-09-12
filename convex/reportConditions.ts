@@ -8,13 +8,12 @@ import {
   cleanConditionSet,
   IMPLEMENTED_REPORT_OPERATIONS,
   isImplementedOperation,
-  MAX_CONDITION_ROWS,
   reportConditionSet,
   resolveConditionsForClinics,
   type ImplementedOperationKey,
 } from "./model/reportConditions";
 import { REPORT_OPERATIONS } from "./model/reportOperations";
-import { listProfileClinics } from "./model/reporting";
+import { listProfileClinics, type StaffProfileForReporting } from "./model/reporting";
 import { requireOperator } from "./model/staff";
 import { reportOperationKey } from "./schema";
 
@@ -26,13 +25,29 @@ async function findConditionRow(
   operationKey: ImplementedOperationKey,
   clinicId: Id<"clinics"> | null
 ) {
-  const rows = await ctx.db
+  return await ctx.db
     .query("reportConditions")
-    .withIndex("by_userId_and_operationKey", (query) =>
-      query.eq("userId", userId).eq("operationKey", operationKey)
+    .withIndex("by_userId_and_operationKey_and_clinicId", (query) =>
+      query.eq("userId", userId).eq("operationKey", operationKey).eq("clinicId", clinicId)
     )
-    .take(MAX_CONDITION_ROWS);
-  return rows.find((row) => row.clinicId === clinicId) ?? null;
+    .unique();
+}
+
+// A clinic scope must be one the caller can run reports for. A null scope is
+// the caller's own default and needs no clinic.
+async function assertClinicAssigned(
+  ctx: MutationCtx,
+  profile: StaffProfileForReporting,
+  clinicId: Id<"clinics"> | null
+): Promise<void> {
+  if (clinicId === null) return;
+  const assigned = await listProfileClinics(ctx, profile);
+  if (!assigned.some((clinic) => clinic._id === clinicId)) {
+    throw new ConvexError({
+      code: "FORBIDDEN",
+      message: "This clinic is not assigned to you.",
+    });
+  }
 }
 
 export const listMine = query({
@@ -113,16 +128,7 @@ export const saveMine = mutation({
       });
     }
     assertConditionKind(args.conditions, args.operationKey);
-
-    if (args.clinicId !== null) {
-      const assigned = await listProfileClinics(ctx, profile);
-      if (!assigned.some((clinic) => clinic._id === args.clinicId)) {
-        throw new ConvexError({
-          code: "FORBIDDEN",
-          message: "This clinic is not assigned to you.",
-        });
-      }
-    }
+    await assertClinicAssigned(ctx, profile, args.clinicId);
 
     const conditions = cleanConditionSet(args.conditions);
     const existing = await findConditionRow(ctx, userId, args.operationKey, args.clinicId);
@@ -150,7 +156,7 @@ export const resetMine = mutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const { userId } = await requireOperator(ctx);
+    const { userId, profile } = await requireOperator(ctx);
 
     if (!isImplementedOperation(args.operationKey)) {
       throw new ConvexError({
@@ -158,6 +164,7 @@ export const resetMine = mutation({
         message: `"${args.operationKey}" does not support conditions yet.`,
       });
     }
+    await assertClinicAssigned(ctx, profile, args.clinicId);
 
     const existing = await findConditionRow(ctx, userId, args.operationKey, args.clinicId);
     if (existing !== null) {

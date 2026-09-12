@@ -436,7 +436,7 @@ export function ReportRunner() {
                 <FieldLabel>Verification type</FieldLabel>
                 <Select
                   items={[
-                    { value: "all", label: "All (FBD + ELG)" },
+                    { value: "all", label: "All" },
                     { value: "fbd", label: "FBD" },
                     { value: "elg", label: "ELG" },
                   ]}
@@ -451,7 +451,7 @@ export function ReportRunner() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectGroup>
-                      <SelectItem value="all">All (FBD + ELG)</SelectItem>
+                      <SelectItem value="all">All</SelectItem>
                       <SelectItem value="fbd">FBD</SelectItem>
                       <SelectItem value="elg">ELG</SelectItem>
                     </SelectGroup>

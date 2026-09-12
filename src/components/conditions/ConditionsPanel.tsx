@@ -125,6 +125,15 @@ function PendingAuditEditor({
           emptyHint="No done markers: this branch never matches."
         />
         <MarkerListField
+          label="M excluded markers"
+          values={conditions.executionHit.mExcludeMarkers}
+          onChange={(mExcludeMarkers) =>
+            update({ executionHit: { ...conditions.executionHit, mExcludeMarkers } })
+          }
+          disabled={disabled || !conditions.executionHit.enabled}
+          emptyHint="Nothing is excluded: the done branch only checks L."
+        />
+        <MarkerListField
           label="L check markers"
           values={conditions.executionHit.lCheckMarkers}
           onChange={(lCheckMarkers) =>
@@ -224,12 +233,7 @@ function ReadyToUploadEditor({
 
   const rules: Array<{
     copy: ConditionCopy;
-    key:
-      | "executionDone"
-      | "updateStatusDone"
-      | "uploadStatusTerminalExclude"
-      | "uploadReady"
-      | "uploadReview";
+    key: "executionDone" | "updateStatusAllowed" | "uploadStatusTerminalExclude" | "uploadReady";
     label: string;
     emptyHint: string;
   }> = [
@@ -240,9 +244,9 @@ function ReadyToUploadEditor({
       emptyHint: "An enabled rule with no values matches nothing.",
     },
     {
-      copy: READY_TO_UPLOAD_CRITERIA.updateStatusDone,
-      key: "updateStatusDone",
-      label: "Update status markers",
+      copy: READY_TO_UPLOAD_CRITERIA.updateStatusAllowed,
+      key: "updateStatusAllowed",
+      label: "Accepted update statuses",
       emptyHint: "An enabled rule with no values matches nothing.",
     },
     {
@@ -257,13 +261,9 @@ function ReadyToUploadEditor({
       label: "Ready values",
       emptyHint: "No row goes to Ready to upload through this rule.",
     },
-    {
-      copy: READY_TO_UPLOAD_CRITERIA.uploadReview,
-      key: "uploadReview",
-      label: "Review values",
-      emptyHint: "No row goes to Needs review through this rule.",
-    },
   ];
+
+  const review = conditions.uploadReview;
 
   return (
     <div className="flex flex-col gap-4">
@@ -287,34 +287,64 @@ function ReadyToUploadEditor({
           </RuleCard>
         );
       })}
+
+      <RuleCard
+        copy={READY_TO_UPLOAD_CRITERIA.uploadReview}
+        enabled={review.enabled}
+        onToggle={(enabled) => update({ uploadReview: { ...review, enabled } })}
+        disabled={disabled}
+      >
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex flex-col gap-1">
+            <span className="text-sm font-medium">Catch all unmatched rows</span>
+            <p className="text-xs text-muted-foreground">
+              Every remaining row goes to Needs review.
+            </p>
+          </div>
+          <Switch
+            checked={review.catchAll}
+            onCheckedChange={(catchAll) => update({ uploadReview: { ...review, catchAll } })}
+            disabled={disabled || !review.enabled}
+            aria-label="Catch all unmatched rows"
+          />
+        </div>
+        <MarkerListField
+          label="Review values"
+          values={review.markers}
+          onChange={(markers) => update({ uploadReview: { ...review, markers } })}
+          disabled={disabled || !review.enabled || review.catchAll}
+          emptyHint="No row goes to Needs review through this rule."
+        />
+      </RuleCard>
     </div>
   );
 }
 
 function ConditionsEditor({
-  initial,
+  conditions,
+  onChange,
   disabled,
   saving,
   canReset,
   onSave,
   onReset,
 }: {
-  initial: ReportConditionSet;
+  conditions: ReportConditionSet;
+  onChange: (conditions: ReportConditionSet) => void;
   disabled: boolean;
   saving: boolean;
   canReset: boolean;
   onSave: (conditions: ReportConditionSet) => void;
   onReset: () => void;
 }) {
-  const [conditions, setConditions] = useState<ReportConditionSet>(initial);
   const noCriteria = !hasEnabledCriterion(conditions);
 
   return (
     <div className="flex flex-col gap-6">
       {conditions.kind === "pending-audit" ? (
-        <PendingAuditEditor conditions={conditions} onChange={setConditions} disabled={disabled} />
+        <PendingAuditEditor conditions={conditions} onChange={onChange} disabled={disabled} />
       ) : (
-        <ReadyToUploadEditor conditions={conditions} onChange={setConditions} disabled={disabled} />
+        <ReadyToUploadEditor conditions={conditions} onChange={onChange} disabled={disabled} />
       )}
 
       {noCriteria ? (
@@ -354,6 +384,9 @@ export function ConditionsPanel() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  // Unsaved edits, keyed by report type and scope, so switching between them
+  // does not throw the draft away.
+  const [drafts, setDrafts] = useState<Record<string, ReportConditionSet>>({});
 
   const header = (
     <PageHeader
@@ -402,7 +435,9 @@ export function ConditionsPanel() {
     ? undefined
     : operation.overrides.find((item) => item.clinicId === scope);
   const canReset = isDefaultScope ? operation.default.isCustom : override !== undefined;
-  const initial = override?.conditions ?? operation.default.conditions;
+  const stored = override?.conditions ?? operation.default.conditions;
+  const editorKey = `${operation.operationKey}:${scope}`;
+  const conditions = drafts[editorKey] ?? stored;
   const clinicId = isDefaultScope ? null : (scope as Id<"clinics">);
 
   const scopeItems: Array<{ value: string; label: string }> = [
@@ -419,12 +454,28 @@ export function ConditionsPanel() {
       ? "This clinic inherits your default conditions."
       : "This clinic uses its own conditions.";
 
-  async function handleSave(conditions: ReportConditionSet) {
+  function setDraft(next: ReportConditionSet) {
+    setDrafts((previous) => ({ ...previous, [editorKey]: next }));
+  }
+
+  function clearDraft() {
+    setDrafts((previous) => {
+      if (!(editorKey in previous)) return previous;
+      const next = { ...previous };
+      delete next[editorKey];
+      return next;
+    });
+  }
+
+  async function handleSave(next: ReportConditionSet) {
     setSaving(true);
     setError(null);
     setNotice(null);
     try {
-      await saveMine({ operationKey: operation.operationKey, clinicId, conditions });
+      await saveMine({ operationKey: operation.operationKey, clinicId, conditions: next });
+      // Keep the draft on screen until the query catches up, so the form does
+      // not flash back to the previously stored value.
+      setDrafts((previous) => ({ ...previous, [editorKey]: next }));
       setNotice(isDefaultScope ? "Default conditions saved." : "Clinic conditions saved.");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Saving the conditions failed.");
@@ -439,6 +490,9 @@ export function ConditionsPanel() {
     setNotice(null);
     try {
       await resetMine({ operationKey: operation.operationKey, clinicId });
+      // Drop the draft so the row falls back to the stored value once the
+      // query refetches.
+      clearDraft();
       setNotice(
         isDefaultScope
           ? "Default conditions reset."
@@ -457,14 +511,14 @@ export function ConditionsPanel() {
 
       {error ? (
         <Alert variant="destructive">
-          <AlertTitle>Could not save</AlertTitle>
+          <AlertTitle>Could not update conditions</AlertTitle>
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       ) : null}
 
       {notice ? (
         <Alert>
-          <AlertTitle>Saved</AlertTitle>
+          <AlertTitle>Updated</AlertTitle>
           <AlertDescription>{notice}</AlertDescription>
         </Alert>
       ) : null}
@@ -543,12 +597,13 @@ export function ConditionsPanel() {
           </CardHeader>
           <CardContent>
             <ConditionsEditor
-              key={`${operation.operationKey}-${String(scope)}-${JSON.stringify(initial)}`}
-              initial={initial}
+              key={editorKey}
+              conditions={conditions}
+              onChange={setDraft}
               disabled={saving}
               saving={saving}
               canReset={canReset}
-              onSave={(conditions) => void handleSave(conditions)}
+              onSave={(next) => void handleSave(next)}
               onReset={() => void handleReset()}
             />
           </CardContent>

@@ -8,16 +8,17 @@ export type CriterionCopy = {
 export const PENDING_AUDIT_CRITERIA = {
   verificationType: {
     title: "Verification type",
-    description: "Keep rows whose verification column contains one of these values.",
+    description:
+      "Extra filter: keep rows whose verification column contains one of these values. Off means no verification condition, like the legacy TODOS option.",
   },
   executionHit: {
     title: "Execution markers (columns L and M)",
     description:
-      "Keep rows where L contains a done marker, or where L contains a check marker and M contains a not-found marker.",
+      "Keep rows where L contains a done marker and M has none of the excluded markers, or where L contains a check marker and M contains a not-found marker.",
   },
   updateStatusExclude: {
     title: "Excluded update statuses",
-    description: "Drop rows whose update status contains any of these values.",
+    description: "Drop rows whose update status is exactly one of these values.",
   },
   uploadStatusAllowed: {
     title: "Allowed upload statuses",
@@ -30,9 +31,10 @@ export const READY_TO_UPLOAD_CRITERIA = {
     title: "Execution done (column L)",
     description: "Require column L to contain one of these markers.",
   },
-  updateStatusDone: {
-    title: "Update status done",
-    description: "Require the update status to contain one of these markers.",
+  updateStatusAllowed: {
+    title: "Accepted update statuses",
+    description:
+      "A row with an empty upload status becomes Ready only when its update status contains one of these values.",
   },
   uploadStatusTerminalExclude: {
     title: "Terminal upload statuses",
@@ -43,8 +45,9 @@ export const READY_TO_UPLOAD_CRITERIA = {
     description: "Rows whose upload status contains one of these values go to Ready to upload.",
   },
   uploadReview: {
-    title: "Review upload markers",
-    description: "Rows whose upload status contains one of these values go to Needs review.",
+    title: "Needs review",
+    description:
+      "Rows left after the rules above go to Needs review. Turn off catch all to group them by these markers instead.",
   },
 } satisfies Record<string, CriterionCopy>;
 
@@ -65,7 +68,7 @@ export function hasEnabledCriterion(conditions: ReportConditionSet): boolean {
   }
   return (
     conditions.executionDone.enabled ||
-    conditions.updateStatusDone.enabled ||
+    conditions.updateStatusAllowed.enabled ||
     conditions.uploadStatusTerminalExclude.enabled ||
     conditions.uploadReady.enabled ||
     conditions.uploadReview.enabled

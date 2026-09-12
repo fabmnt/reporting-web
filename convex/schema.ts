@@ -81,5 +81,6 @@ export default defineSchema({
     updatedAt: v.number(),
   })
     .index("by_userId_and_operationKey", ["userId", "operationKey"])
+    .index("by_userId_and_operationKey_and_clinicId", ["userId", "operationKey", "clinicId"])
     .index("by_clinicId", ["clinicId"]),
 });

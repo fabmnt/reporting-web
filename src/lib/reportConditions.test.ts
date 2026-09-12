@@ -57,26 +57,30 @@ function readyToUploadDefaults(): ReadyToUploadConditions {
 }
 
 describe("defaultConditionsFor", () => {
-  it("reproduces the legacy ready-to-upload markers", () => {
+  it("reproduces the legacy ready-to-upload rules", () => {
     const conditions = readyToUploadDefaults();
     expect(conditions.executionDone.markers).toEqual(["DONE"]);
-    expect(conditions.updateStatusDone.markers).toEqual(["DONE"]);
-    expect(conditions.uploadStatusTerminalExclude.markers).toEqual(["UPLOADED", "DONE BY"]);
-    expect(conditions.uploadReady.markers).toEqual(["EMPTY"]);
-    expect(conditions.uploadReview.markers).toEqual([
-      "CHECK",
-      "ERROR",
-      "UPLOAD INCOMPLETE",
-      "NOT UPLOADED",
+    expect(conditions.updateStatusAllowed.markers).toEqual(["DONE", "NOT FOUND"]);
+    expect(conditions.uploadStatusTerminalExclude.markers).toEqual([
+      "UPLOADED",
+      "DONE BY DR",
+      "DONE BY DIVA",
     ]);
+    expect(conditions.uploadReady.markers).toEqual(["EMPTY"]);
+    expect(conditions.uploadReview).toEqual({ enabled: true, catchAll: true, markers: [] });
   });
 
   it("reproduces the legacy pending-audit rules", () => {
     const conditions = pendingAuditDefaults();
-    expect(conditions.verificationType.values).toEqual(["FBD", "ELG"]);
-    expect(conditions.executionHit.lDoneMarkers).toEqual(["DONE"]);
-    expect(conditions.executionHit.lCheckMarkers).toEqual(["CHECK"]);
-    expect(conditions.executionHit.mNotFoundMarkers).toEqual(["NOT FOUND"]);
+    // Legacy TODOS applies no verification condition, so the rule starts off.
+    expect(conditions.verificationType).toEqual({ enabled: false, values: ["FBD", "ELG"] });
+    expect(conditions.executionHit).toEqual({
+      enabled: true,
+      lDoneMarkers: ["DONE"],
+      mExcludeMarkers: ["NO ACTION", "EMPTY", "NEXT VERIFICATION ON"],
+      lCheckMarkers: ["CHECK"],
+      mNotFoundMarkers: ["NOT FOUND"],
+    });
     expect(conditions.updateStatusExclude.markers).toContain("DONE");
     expect(conditions.uploadStatusAllowed).toEqual({
       enabled: true,
@@ -120,7 +124,8 @@ describe("evaluatePendingAudit with the default conditions", () => {
     expect(outcome.kept).toBe(true);
   });
 
-  it("drops rows whose verification is neither FBD nor ELG", () => {
+  it("keeps rows regardless of the verification value while the rule is off", () => {
+    // Legacy TODOS has no verification condition.
     const outcome = evaluatePendingAudit(
       sheetRow({
         l: "DONE",
@@ -132,28 +137,58 @@ describe("evaluatePendingAudit with the default conditions", () => {
       conditions,
       "all"
     );
-    expect(outcome).toEqual({ kept: false, reason: "verification_mismatch" });
+    expect(outcome).toEqual({ kept: true, reason: null });
   });
 
-  it("requires an exact verification match when a specific filter is set", () => {
+  it("filters by verification with contains when a specific filter is set", () => {
     const row = sheetRow({
       l: "DONE",
       verification: "FBD EXTRA",
       updateStatus: "WAITING",
       uploadStatus: "EMPTY",
     });
-    expect(evaluatePendingAudit(row, COLUMNS, conditions, "fbd")).toEqual({
-      kept: false,
-      reason: "verification_mismatch",
-    });
+    expect(evaluatePendingAudit(row, COLUMNS, conditions, "fbd").kept).toBe(true);
 
-    const exact = sheetRow({
+    const other = sheetRow({
       l: "DONE",
-      verification: "fbd",
+      verification: "ELG",
       updateStatus: "WAITING",
       uploadStatus: "EMPTY",
     });
-    expect(evaluatePendingAudit(exact, COLUMNS, conditions, "fbd").kept).toBe(true);
+    expect(evaluatePendingAudit(other, COLUMNS, conditions, "fbd")).toEqual({
+      kept: false,
+      reason: "verification_mismatch",
+    });
+  });
+
+  it("drops a done row whose column M is excluded", () => {
+    const outcome = evaluatePendingAudit(
+      sheetRow({
+        l: "DONE",
+        m: "NO ACTION | 01/01/2025",
+        updateStatus: "WAITING",
+        uploadStatus: "EMPTY",
+      }),
+      COLUMNS,
+      conditions,
+      "all"
+    );
+    expect(outcome).toEqual({ kept: false, reason: "l_m_condition_failed" });
+  });
+
+  it("only excludes an update status on an exact match", () => {
+    // Legacy uses exact equality, so DONE BY DR is not the excluded DONE.
+    const outcome = evaluatePendingAudit(
+      sheetRow({
+        l: "DONE",
+        updateStatus: "DONE BY DR",
+        uploadStatus: "EMPTY",
+      }),
+      COLUMNS,
+      conditions,
+      "all"
+    );
+    expect(outcome).toEqual({ kept: true, reason: null });
   });
 
   it("drops an excluded update status", () => {
@@ -198,7 +233,13 @@ describe("evaluatePendingAudit with the default conditions", () => {
     const disabled: ReportConditionSet = {
       kind: "pending-audit",
       verificationType: { enabled: false, values: [] },
-      executionHit: { enabled: false, lDoneMarkers: [], lCheckMarkers: [], mNotFoundMarkers: [] },
+      executionHit: {
+        enabled: false,
+        lDoneMarkers: [],
+        mExcludeMarkers: [],
+        lCheckMarkers: [],
+        mNotFoundMarkers: [],
+      },
       updateStatusExclude: { enabled: false, markers: [] },
       uploadStatusAllowed: { enabled: false, values: [], match: "exact" },
     };
@@ -267,9 +308,9 @@ describe("evaluateReadyToUpload with the default conditions", () => {
     }
   );
 
-  it("drops NOT UPLOADED as terminal, shadowing its review marker", () => {
-    // Legacy behavior: the terminal markers match with `includes`, so
-    // "NOT UPLOADED" hits "UPLOADED" first and never reaches the review list.
+  it("drops NOT UPLOADED as terminal", () => {
+    // Terminal markers match with `includes`, so "NOT UPLOADED" hits
+    // "UPLOADED" first and is ignored before reaching review.
     const outcome = evaluateReadyToUpload(
       sheetRow({ l: "DONE", updateStatus: "DONE", uploadStatus: "NOT UPLOADED" }),
       columns,
@@ -296,13 +337,22 @@ describe("evaluateReadyToUpload with the default conditions", () => {
     expect(outcome).toEqual({ bucket: null, reason: "col_l_not_done" });
   });
 
-  it("drops rows where the update status is not done", () => {
+  it("marks an EMPTY row ready when the update status is NOT FOUND", () => {
+    const outcome = evaluateReadyToUpload(
+      sheetRow({ l: "DONE", updateStatus: "NOT FOUND", uploadStatus: "EMPTY" }),
+      columns,
+      conditions
+    );
+    expect(outcome).toEqual({ bucket: "ready", reason: "kept_ready" });
+  });
+
+  it("drops an EMPTY row whose update status is not accepted", () => {
     const outcome = evaluateReadyToUpload(
       sheetRow({ l: "DONE", updateStatus: "WAITING", uploadStatus: "EMPTY" }),
       columns,
       conditions
     );
-    expect(outcome).toEqual({ bucket: null, reason: "update_status_not_done" });
+    expect(outcome).toEqual({ bucket: null, reason: "update_status_not_allowed" });
   });
 
   it("drops rows that are shorter than the mapped columns", () => {
@@ -313,11 +363,24 @@ describe("evaluateReadyToUpload with the default conditions", () => {
     });
   });
 
-  it("returns no bucket when the upload status matches nothing", () => {
+  it("sends an unmatched upload status to review while catch all is on", () => {
     const outcome = evaluateReadyToUpload(
       sheetRow({ l: "DONE", updateStatus: "DONE", uploadStatus: "WHATEVER" }),
       columns,
       conditions
+    );
+    expect(outcome).toEqual({ bucket: "review", reason: "kept_review" });
+  });
+
+  it("returns no bucket when catch all is off and the markers do not match", () => {
+    const marked: ReportConditionSet = {
+      ...conditions,
+      uploadReview: { enabled: true, catchAll: false, markers: ["CHECK"] },
+    };
+    const outcome = evaluateReadyToUpload(
+      sheetRow({ l: "DONE", updateStatus: "DONE", uploadStatus: "WHATEVER" }),
+      columns,
+      marked
     );
     expect(outcome).toEqual({ bucket: null, reason: "upload_no_match" });
   });
@@ -344,6 +407,7 @@ describe("cleanConditionSet", () => {
       executionHit: {
         enabled: true,
         lDoneMarkers: ["done"],
+        mExcludeMarkers: [" no action "],
         lCheckMarkers: [],
         mNotFoundMarkers: [],
       },
@@ -354,6 +418,7 @@ describe("cleanConditionSet", () => {
 
     expect(cleaned.verificationType.values).toEqual(["FBD", "ELG"]);
     expect(cleaned.executionHit.lDoneMarkers).toEqual(["DONE"]);
+    expect(cleaned.executionHit.mExcludeMarkers).toEqual(["NO ACTION"]);
     expect(cleaned.updateStatusExclude.markers).toEqual([]);
     expect(cleaned.uploadStatusAllowed).toEqual({
       enabled: true,
@@ -368,10 +433,10 @@ describe("cleanConditionSet", () => {
     const cleaned = cleanConditionSet({
       kind: "ready-to-upload",
       executionDone: { enabled: true, markers: [long, ...many] },
-      updateStatusDone: { enabled: true, markers: [] },
+      updateStatusAllowed: { enabled: true, markers: [] },
       uploadStatusTerminalExclude: { enabled: true, markers: [] },
       uploadReady: { enabled: true, markers: [] },
-      uploadReview: { enabled: true, markers: [] },
+      uploadReview: { enabled: true, catchAll: true, markers: [] },
     });
     if (cleaned.kind !== "ready-to-upload") throw new Error("Expected ready-to-upload conditions.");
 
@@ -406,15 +471,18 @@ type ConditionRow = {
 
 type IndexQuery = {
   eq: (field: string, value: unknown) => IndexQuery;
-  take: (limit: number) => Promise<ConditionRow[]>;
+  [Symbol.asyncIterator]: () => AsyncIterator<ConditionRow>;
 };
 
-// Minimal stand-in for the Convex query builder. The real code only calls
-// eq().eq().take(), and the tests hand it the rows of one user and operation.
+// Minimal stand-in for the Convex query builder. The resolver only calls
+// eq().eq() and then iterates the result, and the tests hand it the rows of one
+// user and operation.
 function fakeCtx(rows: ConditionRow[]): QueryCtx {
   const query: IndexQuery = {
     eq: () => query,
-    take: async (limit) => rows.slice(0, limit),
+    async *[Symbol.asyncIterator]() {
+      for (const row of rows) yield row;
+    },
   };
   return {
     db: {
@@ -460,6 +528,21 @@ describe("resolveConditionsForClinics", () => {
     expect(resolved.byClinicId.get(clinicId)).toEqual(override);
   });
 
+  it("considers every stored row, past the old fixed cap", async () => {
+    const rows: ConditionRow[] = Array.from({ length: 600 }, (_, index) => ({
+      userId,
+      operationKey: "pending-audit",
+      clinicId: `clinic-${index}` as Id<"clinics">,
+      conditions: pendingAuditDefaults(),
+    }));
+    const lastClinicId = "clinic-599" as Id<"clinics">;
+
+    const resolved = await resolveConditionsForClinics(fakeCtx(rows), userId, "pending-audit");
+
+    expect(resolved.byClinicId.size).toBe(600);
+    expect(resolved.byClinicId.get(lastClinicId)).toBeDefined();
+  });
+
   it("skips a stored row whose kind does not match the operation", async () => {
     const resolved = await resolveConditionsForClinics(
       fakeCtx([
@@ -492,7 +575,13 @@ describe("hasEnabledCriterion", () => {
     const disabled: ReportConditionSet = {
       kind: "pending-audit",
       verificationType: { enabled: false, values: [] },
-      executionHit: { enabled: false, lDoneMarkers: [], lCheckMarkers: [], mNotFoundMarkers: [] },
+      executionHit: {
+        enabled: false,
+        lDoneMarkers: [],
+        mExcludeMarkers: [],
+        lCheckMarkers: [],
+        mNotFoundMarkers: [],
+      },
       updateStatusExclude: { enabled: false, markers: [] },
       uploadStatusAllowed: { enabled: false, values: [], match: "exact" },
     };
@@ -504,10 +593,10 @@ describe("hasEnabledCriterion", () => {
     const disabled: ReportConditionSet = {
       kind: "ready-to-upload",
       executionDone: { enabled: false, markers: [] },
-      updateStatusDone: { enabled: false, markers: [] },
+      updateStatusAllowed: { enabled: false, markers: [] },
       uploadStatusTerminalExclude: { enabled: false, markers: [] },
       uploadReady: { enabled: false, markers: [] },
-      uploadReview: { enabled: false, markers: [] },
+      uploadReview: { enabled: false, catchAll: true, markers: [] },
     };
     expect(hasEnabledCriterion(disabled)).toBe(false);
     expect(hasEnabledCriterion(readyToUploadDefaults())).toBe(true);
