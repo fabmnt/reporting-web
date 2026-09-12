@@ -7,16 +7,106 @@ import type { ReportOperationKey } from "./reportOperations";
 
 type SheetRow = string[];
 
-export function cell(row: SheetRow, index: number): string {
+function cell(row: SheetRow, index: number): string {
   return (row[index] ?? "").toUpperCase().trim();
 }
 
-// Old tool rule (get_rows_pending_to_audit_conditions), non-view branch.
-// Column L says DONE and M is not excluded, or L says CHECK and M says
-// NOT FOUND. The legacy DONE + TERMED option is covered by the DONE branch.
-// Update status must not be exactly one of the exclude values, and upload
-// status must be EMPTY or UNCHECKED. Rows short of 14 columns are skipped.
-// The verification-type condition only exists for FBD/ELG, not for TODOS.
+// ---------------------------------------------------------------------------
+// Vocabulary
+// ---------------------------------------------------------------------------
+
+// Columns a condition can read. L (execution) and M (message) are fixed
+// positions in every sheet; the rest come from the clinic's sheetColumns
+// mapping, so the stored conditions stay portable between clinics.
+export const conditionColumn = v.union(
+  v.literal("L"),
+  v.literal("M"),
+  v.literal("updateStatus"),
+  v.literal("uploadStatus"),
+  v.literal("verificationType"),
+  v.literal("fileUrl")
+);
+export type ConditionColumn = Infer<typeof conditionColumn>;
+
+// `contains` / `notContains` work on the text inside the cell, `equals` /
+// `notEquals` on the whole cell, and the empty operators ignore `values`.
+// Several values in one clause are an OR; the negated operators negate that OR.
+export const conditionOperator = v.union(
+  v.literal("contains"),
+  v.literal("notContains"),
+  v.literal("equals"),
+  v.literal("notEquals"),
+  v.literal("isEmpty"),
+  v.literal("isNotEmpty")
+);
+export type ConditionOperator = Infer<typeof conditionOperator>;
+
+const conditionClause = v.object({
+  column: conditionColumn,
+  operator: conditionOperator,
+  values: v.array(v.string()),
+});
+
+const conditionGroup = v.object({
+  match: v.union(v.literal("all"), v.literal("any")),
+  clauses: v.array(conditionClause),
+});
+
+const conditionExpression = v.object({
+  // Every filter must match. An empty list matches everything.
+  filters: v.array(conditionClause),
+  // At least one group must match. An empty list matches everything, an empty
+  // group matches with "all" and never with "any".
+  groups: v.array(conditionGroup),
+});
+
+const conditionBucket = v.object({
+  bucketKey: v.string(),
+  // Ignores the expression and takes every row no earlier bucket took.
+  catchAll: v.boolean(),
+  expression: conditionExpression,
+});
+
+export const reportConditionSet = v.object({ buckets: v.array(conditionBucket) });
+
+export type ConditionClause = Infer<typeof conditionClause>;
+export type ConditionGroup = Infer<typeof conditionGroup>;
+export type ConditionExpression = Infer<typeof conditionExpression>;
+export type ConditionBucket = Infer<typeof conditionBucket>;
+export type ReportConditionSet = Infer<typeof reportConditionSet>;
+
+// ---------------------------------------------------------------------------
+// Buckets
+// ---------------------------------------------------------------------------
+
+// Operations whose row rules are configurable. The other report types in
+// `reportOperationKey` do not have conditions yet.
+export const IMPLEMENTED_REPORT_OPERATIONS = ["pending-audit", "ready-to-upload"] as const;
+export type ImplementedOperationKey = (typeof IMPLEMENTED_REPORT_OPERATIONS)[number];
+
+export function isImplementedOperation(key: string): key is ImplementedOperationKey {
+  return (IMPLEMENTED_REPORT_OPERATIONS as readonly string[]).includes(key);
+}
+
+// Each report type owns its buckets in code; users edit the expression of each
+// one. Rows land in the first bucket that matches, in this order.
+export const REPORT_BUCKETS: Record<
+  ImplementedOperationKey,
+  ReadonlyArray<{ key: string; label: string }>
+> = {
+  "pending-audit": [{ key: "audit", label: "Pending audit" }],
+  "ready-to-upload": [
+    { key: "ready", label: "Ready to upload" },
+    { key: "review", label: "Needs review" },
+  ],
+};
+
+// ---------------------------------------------------------------------------
+// Defaults (legacy parity)
+// ---------------------------------------------------------------------------
+
+// Old tool rule (get_rows_pending_to_audit_conditions), non-view branch. An
+// update status equal to one of these means the row already has an answer.
 export const AUDIT_EXCLUDE_STATUS = [
   "DONE",
   "MEDICAL PLAN",
@@ -34,90 +124,92 @@ export const AUDIT_EXCLUDE_STATUS = [
   "REVIEWED BY QA",
 ];
 
-// Operations whose row rules are configurable. The other report types in
-// `reportOperationKey` do not have conditions yet.
-export const IMPLEMENTED_REPORT_OPERATIONS = ["pending-audit", "ready-to-upload"] as const;
-export type ImplementedOperationKey = (typeof IMPLEMENTED_REPORT_OPERATIONS)[number];
-
-export function isImplementedOperation(key: string): key is ImplementedOperationKey {
-  return (IMPLEMENTED_REPORT_OPERATIONS as readonly string[]).includes(key);
-}
-
-const markerRule = v.object({ enabled: v.boolean(), markers: v.array(v.string()) });
-
-const pendingAuditConditions = v.object({
-  kind: v.literal("pending-audit"),
-  verificationType: v.object({ enabled: v.boolean(), values: v.array(v.string()) }),
-  executionHit: v.object({
-    enabled: v.boolean(),
-    lDoneMarkers: v.array(v.string()),
-    mExcludeMarkers: v.array(v.string()),
-    lCheckMarkers: v.array(v.string()),
-    mNotFoundMarkers: v.array(v.string()),
-  }),
-  updateStatusExclude: markerRule,
-  uploadStatusAllowed: v.object({
-    enabled: v.boolean(),
-    values: v.array(v.string()),
-    match: v.union(v.literal("exact"), v.literal("contains")),
-  }),
-});
-
-// Old tool rule (get_rows_ready_to_upload_ts), which is what both active
-// legacy wrappers call. Rows need column L = DONE. Terminal upload statuses
-// are ignored, upload status EMPTY plus an accepted update status is ready,
-// and every other remaining row goes to review.
-const readyToUploadConditions = v.object({
-  kind: v.literal("ready-to-upload"),
-  executionDone: markerRule,
-  updateStatusAllowed: markerRule,
-  uploadStatusTerminalExclude: markerRule,
-  uploadReady: markerRule,
-  uploadReview: v.object({
-    enabled: v.boolean(),
-    catchAll: v.boolean(),
-    markers: v.array(v.string()),
-  }),
-});
-
-export const reportConditionSet = v.union(pendingAuditConditions, readyToUploadConditions);
-export type ReportConditionSet = Infer<typeof reportConditionSet>;
-export type PendingAuditConditions = Infer<typeof pendingAuditConditions>;
-export type ReadyToUploadConditions = Infer<typeof readyToUploadConditions>;
-
-export const MAX_MARKERS_PER_RULE = 50;
-export const MAX_MARKER_LENGTH = 80;
+// Old tool rule (get_rows_ready_to_upload_ts). Terminal upload statuses never
+// need action again, so they leave the report completely.
+const TERMINAL_UPLOAD_STATUS = ["UPLOADED", "DONE BY DR", "DONE BY DIVA"];
 
 // The conditions that reproduce the hardcoded rules. Built fresh on every call
 // so callers can edit the result without touching each other.
 export function defaultConditionsFor(operationKey: ReportOperationKey): ReportConditionSet {
   if (operationKey === "pending-audit") {
     return {
-      kind: "pending-audit",
-      // Legacy TODOS applies no verification condition, so the rule starts off.
-      verificationType: { enabled: false, values: ["FBD", "ELG"] },
-      executionHit: {
-        enabled: true,
-        lDoneMarkers: ["DONE"],
-        mExcludeMarkers: ["NO ACTION", "EMPTY", "NEXT VERIFICATION ON"],
-        lCheckMarkers: ["CHECK"],
-        mNotFoundMarkers: ["NOT FOUND"],
-      },
-      updateStatusExclude: { enabled: true, markers: [...AUDIT_EXCLUDE_STATUS] },
-      uploadStatusAllowed: { enabled: true, values: ["EMPTY", "UNCHECKED"], match: "exact" },
+      buckets: [
+        {
+          bucketKey: "audit",
+          catchAll: false,
+          expression: {
+            filters: [
+              { column: "updateStatus", operator: "notEquals", values: [...AUDIT_EXCLUDE_STATUS] },
+              { column: "uploadStatus", operator: "equals", values: ["EMPTY", "UNCHECKED"] },
+            ],
+            // The legacy DONE + TERMED option is already covered by the first
+            // group, because TERMED is not an excluded M marker.
+            groups: [
+              {
+                match: "all",
+                clauses: [
+                  { column: "L", operator: "contains", values: ["DONE"] },
+                  {
+                    column: "M",
+                    operator: "notContains",
+                    values: ["NO ACTION", "EMPTY", "NEXT VERIFICATION ON"],
+                  },
+                ],
+              },
+              {
+                match: "all",
+                clauses: [
+                  { column: "L", operator: "contains", values: ["CHECK"] },
+                  { column: "M", operator: "contains", values: ["NOT FOUND"] },
+                ],
+              },
+            ],
+          },
+        },
+      ],
     };
   }
   if (operationKey === "ready-to-upload") {
     return {
-      kind: "ready-to-upload",
-      executionDone: { enabled: true, markers: ["DONE"] },
-      updateStatusAllowed: { enabled: true, markers: ["DONE", "NOT FOUND"] },
-      uploadStatusTerminalExclude: {
-        enabled: true,
-        markers: ["UPLOADED", "DONE BY DR", "DONE BY DIVA"],
-      },
-      uploadReady: { enabled: true, markers: ["EMPTY"] },
-      uploadReview: { enabled: true, catchAll: true, markers: [] },
+      buckets: [
+        {
+          bucketKey: "ready",
+          catchAll: false,
+          expression: {
+            filters: [
+              { column: "L", operator: "contains", values: ["DONE"] },
+              {
+                column: "uploadStatus",
+                operator: "notContains",
+                values: [...TERMINAL_UPLOAD_STATUS],
+              },
+              { column: "uploadStatus", operator: "contains", values: ["EMPTY"] },
+              { column: "updateStatus", operator: "contains", values: ["DONE", "NOT FOUND"] },
+            ],
+            groups: [],
+          },
+        },
+        {
+          // The legacy rule drops rows with an empty upload status whose update
+          // status is not accepted, and rows with a terminal upload status,
+          // instead of sending them to review. The clauses below repeat those
+          // two exclusions so the default keeps behaving the same way. Catch
+          // all stays available for users who prefer the plain fallthrough.
+          bucketKey: "review",
+          catchAll: false,
+          expression: {
+            filters: [
+              { column: "L", operator: "contains", values: ["DONE"] },
+              {
+                column: "uploadStatus",
+                operator: "notContains",
+                values: [...TERMINAL_UPLOAD_STATUS, "EMPTY"],
+              },
+            ],
+            groups: [],
+          },
+        },
+      ],
     };
   }
   throw new ConvexError({
@@ -125,6 +217,67 @@ export function defaultConditionsFor(operationKey: ReportOperationKey): ReportCo
     message: `No conditions are defined for "${operationKey}" yet.`,
   });
 }
+
+export type BucketDefinition = { key: string; label: string };
+
+// Only the last bucket of a multi-bucket report can catch all rows no earlier
+// bucket took.
+export function bucketCatalog(
+  definitions: ReadonlyArray<BucketDefinition>
+): Array<{ key: string; label: string; canCatchAll: boolean }> {
+  return definitions.map((bucket, index) => ({
+    key: bucket.key,
+    label: bucket.label,
+    canCatchAll: definitions.length > 1 && index === definitions.length - 1,
+  }));
+}
+
+// What the config UI needs to render the bucket picker of a built-in report.
+export function bucketCatalogFor(operationKey: ImplementedOperationKey): Array<{
+  key: string;
+  label: string;
+  canCatchAll: boolean;
+}> {
+  return bucketCatalog(REPORT_BUCKETS[operationKey]);
+}
+
+export function bucketKeysFor(operationKey: ImplementedOperationKey): string[] {
+  return REPORT_BUCKETS[operationKey].map((bucket) => bucket.key);
+}
+
+export function bucketKeysMatch(
+  conditions: ReportConditionSet,
+  expectedKeys: readonly string[]
+): boolean {
+  return (
+    conditions.buckets.length === expectedKeys.length &&
+    conditions.buckets.every((bucket, index) => bucket.bucketKey === expectedKeys[index])
+  );
+}
+
+// A stored set is only usable by the bucket list it was written for, so a set
+// that no longer matches is rejected instead of evaluated.
+export function assertBucketKeys(
+  conditions: ReportConditionSet,
+  expectedKeys: readonly string[],
+  scopeLabel: string
+): void {
+  if (!bucketKeysMatch(conditions, expectedKeys)) {
+    throw new ConvexError({
+      code: "INVALID_CONFIG",
+      message: `Row groups for "${scopeLabel}" must be exactly ${expectedKeys.join(", ")}.`,
+    });
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Cleaning
+// ---------------------------------------------------------------------------
+
+export const MAX_MARKERS_PER_RULE = 50;
+export const MAX_MARKER_LENGTH = 80;
+export const MAX_CLAUSES_PER_SECTION = 25;
+export const MAX_GROUPS_PER_EXPRESSION = 10;
 
 function cleanMarkers(markers: string[]): string[] {
   const seen = new Set<string>();
@@ -139,55 +292,37 @@ function cleanMarkers(markers: string[]): string[] {
   return cleaned;
 }
 
-function cleanRule(rule: { enabled: boolean; markers: string[] }) {
-  return { enabled: rule.enabled, markers: cleanMarkers(rule.markers) };
-}
-
-export function cleanConditionSet(conditions: ReportConditionSet): ReportConditionSet {
-  if (conditions.kind === "pending-audit") {
-    return {
-      kind: "pending-audit",
-      verificationType: {
-        enabled: conditions.verificationType.enabled,
-        values: cleanMarkers(conditions.verificationType.values),
-      },
-      executionHit: {
-        enabled: conditions.executionHit.enabled,
-        lDoneMarkers: cleanMarkers(conditions.executionHit.lDoneMarkers),
-        mExcludeMarkers: cleanMarkers(conditions.executionHit.mExcludeMarkers),
-        lCheckMarkers: cleanMarkers(conditions.executionHit.lCheckMarkers),
-        mNotFoundMarkers: cleanMarkers(conditions.executionHit.mNotFoundMarkers),
-      },
-      updateStatusExclude: cleanRule(conditions.updateStatusExclude),
-      uploadStatusAllowed: {
-        enabled: conditions.uploadStatusAllowed.enabled,
-        values: cleanMarkers(conditions.uploadStatusAllowed.values),
-        match: conditions.uploadStatusAllowed.match,
-      },
-    };
-  }
+function cleanClause(clause: ConditionClause): ConditionClause {
   return {
-    kind: "ready-to-upload",
-    executionDone: cleanRule(conditions.executionDone),
-    updateStatusAllowed: cleanRule(conditions.updateStatusAllowed),
-    uploadStatusTerminalExclude: cleanRule(conditions.uploadStatusTerminalExclude),
-    uploadReady: cleanRule(conditions.uploadReady),
-    uploadReview: {
-      enabled: conditions.uploadReview.enabled,
-      catchAll: conditions.uploadReview.catchAll,
-      markers: cleanMarkers(conditions.uploadReview.markers),
-    },
+    column: clause.column,
+    operator: clause.operator,
+    values: cleanMarkers(clause.values),
   };
 }
 
-export function assertConditionKind(conditions: ReportConditionSet, operationKey: string): void {
-  if (conditions.kind !== operationKey) {
-    throw new ConvexError({
-      code: "INVALID_CONFIG",
-      message: `Conditions for "${conditions.kind}" do not match the operation "${operationKey}".`,
-    });
-  }
+function cleanExpression(expression: ConditionExpression): ConditionExpression {
+  return {
+    filters: expression.filters.slice(0, MAX_CLAUSES_PER_SECTION).map(cleanClause),
+    groups: expression.groups.slice(0, MAX_GROUPS_PER_EXPRESSION).map((group) => ({
+      match: group.match,
+      clauses: group.clauses.slice(0, MAX_CLAUSES_PER_SECTION).map(cleanClause),
+    })),
+  };
 }
+
+export function cleanConditionSet(conditions: ReportConditionSet): ReportConditionSet {
+  return {
+    buckets: conditions.buckets.map((bucket) => ({
+      bucketKey: bucket.bucketKey.trim(),
+      catchAll: bucket.catchAll,
+      expression: cleanExpression(bucket.expression),
+    })),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Resolution
+// ---------------------------------------------------------------------------
 
 export type ResolvedConditions = {
   defaultConditions: ReportConditionSet;
@@ -212,7 +347,7 @@ export async function resolveConditionsForClinics(
     .withIndex("by_userId_and_operationKey", (query) =>
       query.eq("userId", userId).eq("operationKey", operationKey)
     )) {
-    if (row.conditions.kind !== operationKey) continue;
+    if (!bucketKeysMatch(row.conditions, bucketKeysFor(operationKey))) continue;
     if (row.clinicId === null) defaultConditions = row.conditions;
     else byClinicId.set(row.clinicId, row.conditions);
   }
@@ -224,114 +359,87 @@ export async function resolveConditionsForClinics(
   };
 }
 
-function matchesAny(value: string, markers: string[]): boolean {
-  return markers.length > 0 && markers.some((marker) => value.includes(marker));
+// ---------------------------------------------------------------------------
+// Evaluation
+// ---------------------------------------------------------------------------
+
+// Column L holds the execution text and column M the message text in every
+// clinic sheet.
+export const EXECUTION_COLUMN_INDEX = 11;
+export const MESSAGE_COLUMN_INDEX = 12;
+
+export type ConditionColumnIndexes = Record<ConditionColumn, number>;
+
+function clauseMatches(row: SheetRow, indexes: ConditionColumnIndexes, clause: ConditionClause) {
+  const value = cell(row, indexes[clause.column]);
+  switch (clause.operator) {
+    case "contains":
+      return clause.values.some((marker) => value.includes(marker));
+    case "notContains":
+      return !clause.values.some((marker) => value.includes(marker));
+    case "equals":
+      return clause.values.includes(value);
+    case "notEquals":
+      return !clause.values.includes(value);
+    case "isEmpty":
+      return value === "";
+    case "isNotEmpty":
+      return value !== "";
+  }
+}
+
+function groupMatches(row: SheetRow, indexes: ConditionColumnIndexes, group: ConditionGroup) {
+  if (group.clauses.length === 0) return group.match === "all";
+  const matches = (clause: ConditionClause) => clauseMatches(row, indexes, clause);
+  return group.match === "all" ? group.clauses.every(matches) : group.clauses.some(matches);
+}
+
+function expressionMatches(
+  row: SheetRow,
+  indexes: ConditionColumnIndexes,
+  expression: ConditionExpression
+) {
+  if (!expression.filters.every((clause) => clauseMatches(row, indexes, clause))) return false;
+  if (expression.groups.length === 0) return true;
+  return expression.groups.some((group) => groupMatches(row, indexes, group));
+}
+
+// Rows that do not reach the highest column the conditions read are skipped:
+// the legacy tool did the same, and a missing cell would otherwise look empty.
+function shortestUsableLength(
+  buckets: ConditionBucket[],
+  extraFilters: ConditionClause[],
+  indexes: ConditionColumnIndexes
+): number {
+  let highest = -1;
+  const consider = (clause: ConditionClause) => {
+    highest = Math.max(highest, indexes[clause.column]);
+  };
+  for (const bucket of buckets) {
+    if (bucket.catchAll) continue;
+    bucket.expression.filters.forEach(consider);
+    for (const group of bucket.expression.groups) group.clauses.forEach(consider);
+  }
+  extraFilters.forEach(consider);
+  return highest + 1;
 }
 
 /**
- * Pending audit keeps a row when every enabled criterion passes. A disabled
- * criterion is ignored. Structural guards (row length) are never configurable.
- *
- * The runtime verification filter narrows further: "all" adds nothing (legacy
- * TODOS), while "fbd"/"elg" require the verification column to contain that
- * value, exactly like the legacy FBD/ELG condition sets.
+ * Returns the key of the first bucket that takes the row, or null when no
+ * bucket does (the row is dropped). `extraFilters` narrow the whole set, for
+ * example the verification type chosen in the report form.
  */
-export function evaluatePendingAudit(
+export function evaluateConditionSet(
   row: SheetRow,
-  columns: { updateStatus: number; uploadStatus: number; verificationType: number },
+  indexes: ConditionColumnIndexes,
   conditions: ReportConditionSet,
-  verificationFilter: "all" | "fbd" | "elg"
-): { kept: boolean; reason: string | null } {
-  const { updateStatus, uploadStatus, verificationType } = columns;
-  if (row.length <= Math.max(13, updateStatus, uploadStatus, verificationType))
-    return { kept: false, reason: "too_short" };
-  if (conditions.kind !== "pending-audit") return { kept: false, reason: "kind_mismatch" };
-
-  const verification = cell(row, verificationType);
-  if (
-    conditions.verificationType.enabled &&
-    !matchesAny(verification, conditions.verificationType.values)
-  )
-    return { kept: false, reason: "verification_mismatch" };
-  if (verificationFilter !== "all" && !verification.includes(verificationFilter.toUpperCase()))
-    return { kept: false, reason: "verification_mismatch" };
-
-  if (conditions.executionHit.enabled) {
-    const l = cell(row, 11);
-    const m = cell(row, 12);
-    const doneHit =
-      matchesAny(l, conditions.executionHit.lDoneMarkers) &&
-      !matchesAny(m, conditions.executionHit.mExcludeMarkers);
-    const checkHit =
-      matchesAny(l, conditions.executionHit.lCheckMarkers) &&
-      matchesAny(m, conditions.executionHit.mNotFoundMarkers);
-    if (!doneHit && !checkHit) return { kept: false, reason: "l_m_condition_failed" };
+  extraFilters: ConditionClause[] = []
+): string | null {
+  if (row.length < shortestUsableLength(conditions.buckets, extraFilters, indexes)) return null;
+  for (const bucket of conditions.buckets) {
+    if (!extraFilters.every((clause) => clauseMatches(row, indexes, clause))) continue;
+    if (bucket.catchAll) return bucket.bucketKey;
+    if (expressionMatches(row, indexes, bucket.expression)) return bucket.bucketKey;
   }
-
-  // The legacy tool compares the update status with equality, not "contains".
-  if (
-    conditions.updateStatusExclude.enabled &&
-    conditions.updateStatusExclude.markers.includes(cell(row, updateStatus))
-  )
-    return { kept: false, reason: "update_status_excluded" };
-
-  if (conditions.uploadStatusAllowed.enabled) {
-    const upload = cell(row, uploadStatus);
-    const allowed =
-      conditions.uploadStatusAllowed.match === "exact"
-        ? conditions.uploadStatusAllowed.values.includes(upload)
-        : matchesAny(upload, conditions.uploadStatusAllowed.values);
-    if (!allowed) return { kept: false, reason: "upload_status_not_allowed" };
-  }
-
-  return { kept: true, reason: null };
-}
-
-/**
- * Ready to upload mirrors the active legacy rule (get_rows_ready_to_upload_ts):
- * a row needs column L done and a non-terminal upload status. It is ready when
- * the upload status is empty and the update status is accepted; every other
- * remaining row goes to review, unless the review rule asks for markers only.
- */
-export function evaluateReadyToUpload(
-  row: SheetRow,
-  columns: { updateStatus: number; uploadStatus: number },
-  conditions: ReportConditionSet
-): { bucket: "ready" | "review" | null; reason: string } {
-  const { updateStatus, uploadStatus } = columns;
-  // The legacy rule also reads column M, so it requires 13 columns.
-  if (row.length <= Math.max(12, updateStatus, uploadStatus))
-    return { bucket: null, reason: "too_short" };
-  if (conditions.kind !== "ready-to-upload") return { bucket: null, reason: "kind_mismatch" };
-
-  const l = cell(row, 11);
-  if (conditions.executionDone.enabled && !matchesAny(l, conditions.executionDone.markers))
-    return { bucket: null, reason: "col_l_not_done" };
-
-  const upload = cell(row, uploadStatus);
-  // Terminal states never need action again, and are checked before ready and
-  // review, same order as the legacy tool.
-  if (
-    conditions.uploadStatusTerminalExclude.enabled &&
-    matchesAny(upload, conditions.uploadStatusTerminalExclude.markers)
-  )
-    return { bucket: null, reason: "upload_terminal" };
-
-  if (conditions.uploadReady.enabled && matchesAny(upload, conditions.uploadReady.markers)) {
-    const update = cell(row, updateStatus);
-    if (
-      conditions.updateStatusAllowed.enabled &&
-      !matchesAny(update, conditions.updateStatusAllowed.markers)
-    )
-      return { bucket: null, reason: "update_status_not_allowed" };
-    return { bucket: "ready", reason: "kept_ready" };
-  }
-
-  if (conditions.uploadReview.enabled) {
-    if (conditions.uploadReview.catchAll) return { bucket: "review", reason: "kept_review" };
-    if (matchesAny(upload, conditions.uploadReview.markers))
-      return { bucket: "review", reason: "kept_review" };
-  }
-
-  return { bucket: null, reason: "upload_no_match" };
+  return null;
 }

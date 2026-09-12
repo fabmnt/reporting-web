@@ -1,3 +1,5 @@
+"use client";
+
 import { useAction, useQuery } from "convex/react";
 import { CircleCheck, ClipboardList, FileText, TriangleAlert } from "lucide-react";
 import { useState } from "react";
@@ -16,6 +18,7 @@ import {
   SelectContent,
   SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
@@ -33,7 +36,16 @@ import {
 import { todayIso } from "@/lib/dates";
 import { cn } from "@/lib/utils";
 
-type OperationKey = "pending-audit" | "ready-to-upload";
+type BuiltinOperationKey = "pending-audit" | "ready-to-upload";
+type ReportTypeSource = "builtin" | "custom";
+
+type RunnableType = {
+  source: ReportTypeSource;
+  key: string;
+  label: string;
+  description: string;
+  buckets: Array<{ key: string; label: string }>;
+};
 
 type ReportRow = { rowNumber: number; values: string[] };
 type SheetResult = {
@@ -42,9 +54,7 @@ type SheetResult = {
   googleSheetId: string;
   tabTitle: string;
   headers: string[];
-  readyRows: ReportRow[];
-  reviewRows: ReportRow[];
-  auditRows: ReportRow[];
+  bucketRows: Array<{ bucketKey: string; label: string; rows: ReportRow[] }>;
   error: string | null;
 };
 type ReportResult = {
@@ -56,7 +66,7 @@ type ReportResult = {
 // only from here, so editing the controls never rewrites what a run returned.
 type CompletedRun = {
   data: ReportResult;
-  operation: OperationKey;
+  source: ReportTypeSource;
   startDate: string;
   endDate: string;
 };
@@ -83,19 +93,18 @@ const TONES: Record<
   },
 };
 
-const OPERATIONS: Array<{ key: OperationKey; label: string; description: string }> = [
-  {
-    key: "pending-audit",
-    label: "Pending audit",
-    description: "Rows waiting for QA review before upload.",
-  },
-  {
-    key: "ready-to-upload",
-    label: "Ready to upload (incl. review)",
-    description:
-      "Rows ready to upload and rows that need review. Both groups come from the same report.",
-  },
-];
+// Row tone per built-in bucket key. Custom report types name their own groups,
+// so they stay neutral instead of guessing what a name means.
+const BUCKET_TONES: Record<string, RowTone> = {
+  ready: "success",
+  review: "warning",
+  audit: "neutral",
+};
+
+function bucketTone(source: ReportTypeSource, bucketKey: string): RowTone {
+  if (source !== "builtin") return "neutral";
+  return BUCKET_TONES[bucketKey] ?? "neutral";
+}
 
 function ResultTable({
   title,
@@ -231,10 +240,11 @@ function ResultsPlaceholder({ running, clinicCount }: { running: boolean; clinic
 }
 
 function countRows(run: CompletedRun): number {
-  return run.data.sheets.reduce((sum, sheet) => {
-    if (run.operation === "pending-audit") return sum + sheet.auditRows.length;
-    return sum + sheet.readyRows.length + sheet.reviewRows.length;
-  }, 0);
+  return run.data.sheets.reduce(
+    (sum, sheet) =>
+      sum + sheet.bucketRows.reduce((sheetSum, bucket) => sheetSum + bucket.rows.length, 0),
+    0
+  );
 }
 
 /**
@@ -278,38 +288,17 @@ function ResultsCard({ run }: { run: CompletedRun }) {
               </Alert>
             ) : (
               <>
-                {run.operation === "ready-to-upload" ? (
-                  <>
-                    <ResultTable
-                      title="Ready to upload"
-                      tone="success"
-                      count={sheet.readyRows.length}
-                      headers={sheet.headers}
-                      rows={sheet.readyRows}
-                    />
-                    <ResultTable
-                      title="Needs review"
-                      tone="warning"
-                      count={sheet.reviewRows.length}
-                      headers={sheet.headers}
-                      rows={sheet.reviewRows}
-                    />
-                  </>
-                ) : (
+                {sheet.bucketRows.map((bucket) => (
                   <ResultTable
-                    title="Pending audit"
-                    tone="neutral"
-                    count={sheet.auditRows.length}
+                    key={bucket.bucketKey}
+                    title={bucket.label}
+                    tone={bucketTone(run.source, bucket.bucketKey)}
+                    count={bucket.rows.length}
                     headers={sheet.headers}
-                    rows={sheet.auditRows}
+                    rows={bucket.rows}
                   />
-                )}
-                {run.operation === "ready-to-upload" &&
-                sheet.readyRows.length === 0 &&
-                sheet.reviewRows.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No matching rows.</p>
-                ) : null}
-                {run.operation === "pending-audit" && sheet.auditRows.length === 0 ? (
+                ))}
+                {sheet.bucketRows.every((bucket) => bucket.rows.length === 0) ? (
                   <p className="text-sm text-muted-foreground">No matching rows.</p>
                 ) : null}
               </>
@@ -323,18 +312,28 @@ function ResultsCard({ run }: { run: CompletedRun }) {
 
 export function ReportRunner() {
   const assignment = useQuery(api.googleSheets.listAssignedReportClinics, {});
+  const typeData = useQuery(api.reportTypes.listRunnable, {});
   const runReport = useAction(api.reports.runSheetReport);
 
-  const [operation, setOperation] = useState<OperationKey>("pending-audit");
+  const [typeKey, setTypeKey] = useState<string | null>(null);
   const [dateRange, setDateRange] = useState({ startDate: todayIso(), endDate: todayIso() });
   const [verification, setVerification] = useState<"all" | "fbd" | "elg">("all");
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<CompletedRun | null>(null);
 
+  const types: RunnableType[] = typeData?.types ?? [];
+  const selectedType = types.find((item) => item.key === typeKey) ?? types[0];
+  const builtinTypes = types.filter((item) => item.source === "builtin");
+  const customTypes = types.filter((item) => item.source === "custom");
+
   async function handleRun() {
     if ((assignment?.clinics.length ?? 0) === 0) {
       setError("No assigned clinics to run.");
+      return;
+    }
+    if (selectedType === undefined) {
+      setError("No report type to run.");
       return;
     }
     if (!dateRange.startDate || !dateRange.endDate) {
@@ -350,14 +349,17 @@ export function ReportRunner() {
     setResult(null);
     try {
       const data = await runReport({
-        operationKey: operation,
+        target:
+          selectedType.source === "builtin"
+            ? { source: "builtin", operationKey: selectedType.key as BuiltinOperationKey }
+            : { source: "custom", reportTypeId: selectedType.key as Id<"reportTypes"> },
         startDate: dateRange.startDate,
         endDate: dateRange.endDate,
         verificationFilter: verification,
       });
       setResult({
         data,
-        operation,
+        source: selectedType.source,
         startDate: dateRange.startDate,
         endDate: dateRange.endDate,
       });
@@ -368,11 +370,9 @@ export function ReportRunner() {
     }
   }
 
-  if (assignment === undefined) return <ReportRunnerSkeleton />;
+  if (assignment === undefined || typeData === undefined) return <ReportRunnerSkeleton />;
 
   const assignedClinicCount = assignment.clinics.length;
-
-  const selectedOperation = OPERATIONS.find((item) => item.key === operation);
 
   return (
     <div className="flex flex-col gap-6">
@@ -408,9 +408,9 @@ export function ReportRunner() {
             <Field>
               <FieldLabel>Report type</FieldLabel>
               <Select
-                items={OPERATIONS.map((item) => ({ value: item.key, label: item.label }))}
-                value={operation}
-                onValueChange={(value) => setOperation((value as OperationKey) ?? "pending-audit")}
+                items={types.map((item) => ({ value: item.key, label: item.label }))}
+                value={selectedType?.key ?? ""}
+                onValueChange={(value) => setTypeKey((value as string) ?? null)}
                 disabled={running}
               >
                 <SelectTrigger aria-label="Report type" className="w-full">
@@ -418,20 +418,31 @@ export function ReportRunner() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectGroup>
-                    {OPERATIONS.map((item) => (
+                    <SelectLabel>Built-in</SelectLabel>
+                    {builtinTypes.map((item) => (
                       <SelectItem key={item.key} value={item.key}>
                         {item.label}
                       </SelectItem>
                     ))}
                   </SelectGroup>
+                  {customTypes.length > 0 ? (
+                    <SelectGroup>
+                      <SelectLabel>My report types</SelectLabel>
+                      {customTypes.map((item) => (
+                        <SelectItem key={item.key} value={item.key}>
+                          {item.label}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  ) : null}
                 </SelectContent>
               </Select>
-              {selectedOperation ? (
-                <p className="text-xs text-muted-foreground">{selectedOperation.description}</p>
+              {selectedType ? (
+                <p className="text-xs text-muted-foreground">{selectedType.description}</p>
               ) : null}
             </Field>
 
-            {operation === "pending-audit" ? (
+            {selectedType?.source === "builtin" && selectedType.key === "pending-audit" ? (
               <Field>
                 <FieldLabel>Verification type</FieldLabel>
                 <Select
@@ -494,7 +505,7 @@ export function ReportRunner() {
               size="lg"
               className="w-full"
               onClick={() => void handleRun()}
-              disabled={running || assignedClinicCount === 0}
+              disabled={running || assignedClinicCount === 0 || selectedType === undefined}
             >
               {running ? (
                 <>

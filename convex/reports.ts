@@ -1,51 +1,43 @@
 import { v } from "convex/values";
+import type { Infer } from "convex/values";
 
 import type { Id } from "./_generated/dataModel";
 import type { QueryCtx } from "./_generated/server";
 import { action, internalMutation, internalQuery } from "./_generated/server";
 import { internal } from "./_generated/api.js";
+import type { ResolvedClinicSheetColumns } from "./model/clinicSheetColumns";
 import {
-  cell,
-  evaluatePendingAudit,
-  evaluateReadyToUpload,
+  bucketCatalogFor,
+  evaluateConditionSet,
+  EXECUTION_COLUMN_INDEX,
   isImplementedOperation,
+  MESSAGE_COLUMN_INDEX,
   reportConditionSet,
   resolveConditionsForClinics,
-  type ImplementedOperationKey,
+  type ConditionClause,
+  type ConditionColumnIndexes,
   type ReportConditionSet,
 } from "./model/reportConditions";
 import { columnLetterToIndex, listProfileClinics } from "./model/reporting";
+import { loadOwnedReportType, type ReportTypeBucket } from "./model/reportTypes";
 import { reportOperationKey } from "./schema";
 
 type SheetRow = string[];
+type ReportRow = { rowNumber: number; values: string[] };
 
-// TEMPORARY while project is in development: cap debug samples per sheet so
-// the response stays small while operators learn the row rules.
-const MAX_DEBUG_SAMPLES = 10;
+const reportRow = v.object({ rowNumber: v.number(), values: v.array(v.string()) });
 
-// TEMPORARY while project is in development: explains why rows were kept or
-// dropped so operators can test the /reports form without reading backend code.
-const reportSheetDebug = v.object({
-  totalRows: v.number(),
-  keptRows: v.number(),
-  operationKey: v.string(),
-  verificationFilter: v.string(),
-  updateStatusColumn: v.string(),
-  uploadStatusColumn: v.string(),
-  verificationTypeColumn: v.string(),
-  droppedByReason: v.array(v.object({ reason: v.string(), count: v.number() })),
-  samples: v.array(
-    v.object({
-      rowNumber: v.number(),
-      reason: v.string(),
-      l: v.string(),
-      m: v.string(),
-      verification: v.string(),
-      updateStatus: v.string(),
-      uploadStatus: v.string(),
-    })
-  ),
-});
+// A run either uses a built-in report or one of the caller's own report types.
+// The two cases resolve their rules differently, so they stay separate in the
+// arguments instead of sharing an ambiguous id.
+const reportRunTarget = v.union(
+  v.object({
+    source: v.literal("builtin"),
+    operationKey: v.union(v.literal("pending-audit"), v.literal("ready-to-upload")),
+  }),
+  v.object({ source: v.literal("custom"), reportTypeId: v.id("reportTypes") })
+);
+type ReportRunTarget = Infer<typeof reportRunTarget>;
 
 const reportSheetResult = v.object({
   clinicId: v.id("clinics"),
@@ -53,45 +45,12 @@ const reportSheetResult = v.object({
   googleSheetId: v.string(),
   tabTitle: v.string(),
   headers: v.array(v.string()),
-  readyRows: v.array(v.object({ rowNumber: v.number(), values: v.array(v.string()) })),
-  reviewRows: v.array(v.object({ rowNumber: v.number(), values: v.array(v.string()) })),
-  auditRows: v.array(v.object({ rowNumber: v.number(), values: v.array(v.string()) })),
-  error: v.union(v.string(), v.null()),
-  // TEMPORARY while project is in development: null unless the client passes debug=true.
-  debug: v.union(reportSheetDebug, v.null()),
-});
-
-// TEMPORARY while project is in development: run-level reasons when the run
-// returns zero rows or sheets were never read.
-const reportRunDebug = v.object({
-  clinicCount: v.number(),
-  startDate: v.string(),
-  endDate: v.string(),
-  operationKey: v.string(),
-  verificationFilter: v.string(),
-  summary: v.string(),
-  totalSheetRowsRead: v.number(),
-  totalRowsKept: v.number(),
-  clinics: v.array(
-    v.object({
-      clinicName: v.string(),
-      googleSheetId: v.string(),
-      tabsInRange: v.array(v.string()),
-      dateTabsOutsideRange: v.array(v.string()),
-      nonDateTabCount: v.number(),
-      nonDateTabSamples: v.array(v.string()),
-      sheetError: v.union(v.string(), v.null()),
-    })
+  // One entry per bucket of the report type, in bucket order.
+  bucketRows: v.array(
+    v.object({ bucketKey: v.string(), label: v.string(), rows: v.array(reportRow) })
   ),
-  aggregateDropReasons: v.array(v.object({ reason: v.string(), count: v.number() })),
+  error: v.union(v.string(), v.null()),
 });
-
-type TabCatalogEntry = {
-  inRange: string[];
-  dateTabsOutsideRange: string[];
-  nonDateTabSamples: string[];
-  nonDateTabCount: number;
-};
 
 type SheetResultEntry = {
   clinicId: Id<"clinics">;
@@ -99,154 +58,45 @@ type SheetResultEntry = {
   googleSheetId: string;
   tabTitle: string;
   headers: string[];
-  readyRows: Array<{ rowNumber: number; values: string[] }>;
-  reviewRows: Array<{ rowNumber: number; values: string[] }>;
-  auditRows: Array<{ rowNumber: number; values: string[] }>;
+  bucketRows: Array<{ bucketKey: string; label: string; rows: ReportRow[] }>;
   error: string | null;
-  debug: {
-    totalRows: number;
-    keptRows: number;
-    operationKey: string;
-    verificationFilter: string;
-    updateStatusColumn: string;
-    uploadStatusColumn: string;
-    verificationTypeColumn: string;
-    droppedByReason: Array<{ reason: string; count: number }>;
-    samples: Array<{
-      rowNumber: number;
-      reason: string;
-      l: string;
-      m: string;
-      verification: string;
-      updateStatus: string;
-      uploadStatus: string;
-    }>;
-  } | null;
 };
 
-function buildRunDebugSummary(
-  clinicCount: number,
-  totalRowsKept: number,
-  totalSheetRowsRead: number,
-  clinics: Array<{
-    tabsInRange: string[];
-    dateTabsOutsideRange: string[];
-    sheetError: string | null;
-  }>
-): string {
-  if (clinicCount === 0) {
-    return "No assigned clinics to read. Ask an admin to assign clinics to your account.";
-  }
-  const tabsInRangeTotal = clinics.reduce((sum, clinic) => sum + clinic.tabsInRange.length, 0);
-  if (tabsInRangeTotal === 0) {
-    const hasDateTabsElsewhere = clinics.some((clinic) => clinic.dateTabsOutsideRange.length > 0);
-    if (hasDateTabsElsewhere) {
-      return "No tabs matched the date range, but the sheets do have date tabs outside that range. Tab names must be YYYY-MM-DD.";
-    }
-    return "No sheet tabs matched the date range. Tab names must be YYYY-MM-DD and fall between the start and end dates.";
-  }
-  if (totalSheetRowsRead === 0) {
-    return "Tabs were selected but no data rows were read from Google Sheets.";
-  }
-  if (totalRowsKept === 0) {
-    return "Rows were read from the sheet tabs, but every row was filtered out by the report rules.";
-  }
-  const sheetErrors = clinics.filter((clinic) => clinic.sheetError !== null);
-  if (sheetErrors.length > 0) {
-    return "Some sheets failed to load. See clinic details below.";
-  }
-  return `${totalRowsKept} row(s) matched the report rules.`;
-}
+type ClinicRunConfig = {
+  clinicId: Id<"clinics">;
+  clientId: Id<"clients">;
+  name: string;
+  googleSheetId: string;
+  sheetColumns: ResolvedClinicSheetColumns;
+  conditions: ReportConditionSet;
+};
 
-function buildRunDebug(
-  args: {
-    startDate: string;
-    endDate: string;
-    operationKey: "pending-audit" | "ready-to-upload";
-    verificationFilter: "all" | "fbd" | "elg";
-  },
-  configClinics: Array<{
-    clinicId: Id<"clinics">;
-    name: string;
-    googleSheetId: string;
-  }>,
-  tabCatalogForClinic: Record<string, TabCatalogEntry>,
-  sheets: SheetResultEntry[]
-) {
-  const aggregateDrops = new Map<string, number>();
-  let totalSheetRowsRead = 0;
-  let totalRowsKept = 0;
-  for (const sheet of sheets) {
-    if (sheet.debug) {
-      totalSheetRowsRead += sheet.debug.totalRows;
-      totalRowsKept += sheet.debug.keptRows;
-      for (const item of sheet.debug.droppedByReason) {
-        aggregateDrops.set(item.reason, (aggregateDrops.get(item.reason) ?? 0) + item.count);
-      }
-    }
-  }
-
-  const clinicSummaries = configClinics.map((clinic) => {
-    const catalog = tabCatalogForClinic[clinic.clinicId] ?? {
-      inRange: [],
-      dateTabsOutsideRange: [],
-      nonDateTabSamples: [],
-      nonDateTabCount: 0,
-    };
-    const clinicSheets = sheets.filter((sheet) => sheet.clinicId === clinic.clinicId);
-    const sheetError =
-      clinicSheets.find((sheet) => sheet.error !== null)?.error ??
-      (catalog.inRange.length === 0
-        ? `No tabs found between ${args.startDate} and ${args.endDate}.`
-        : null);
-    return {
-      clinicName: clinic.name,
-      googleSheetId: clinic.googleSheetId,
-      tabsInRange: catalog.inRange,
-      dateTabsOutsideRange: catalog.dateTabsOutsideRange,
-      nonDateTabCount: catalog.nonDateTabCount,
-      nonDateTabSamples: catalog.nonDateTabSamples,
-      sheetError,
-    };
-  });
-
+// The engine only knows about column roles, so each clinic resolves its own
+// mapping once per run.
+function conditionColumnIndexes(columns: ResolvedClinicSheetColumns): ConditionColumnIndexes {
   return {
-    clinicCount: configClinics.length,
-    startDate: args.startDate,
-    endDate: args.endDate,
-    operationKey: args.operationKey,
-    verificationFilter: args.verificationFilter,
-    summary: buildRunDebugSummary(
-      configClinics.length,
-      totalRowsKept,
-      totalSheetRowsRead,
-      clinicSummaries
-    ),
-    totalSheetRowsRead,
-    totalRowsKept,
-    clinics: clinicSummaries,
-    aggregateDropReasons: [...aggregateDrops.entries()]
-      .map(([reason, count]) => ({ reason, count }))
-      .sort((a, b) => b.count - a.count),
+    L: EXECUTION_COLUMN_INDEX,
+    M: MESSAGE_COLUMN_INDEX,
+    updateStatus: columnLetterToIndex(columns.updateStatus),
+    uploadStatus: columnLetterToIndex(columns.uploadStatus),
+    verificationType: columnLetterToIndex(columns.verificationType),
+    fileUrl: columnLetterToIndex(columns.fileUrl),
   };
 }
+
+type ReportRunConfig = {
+  clinics: ClinicRunConfig[];
+  // Row groups of the run target, in evaluation order.
+  buckets: ReportTypeBucket[];
+  // Only custom targets have a name to snapshot on the run.
+  reportTypeName: string | null;
+};
 
 async function reportRunConfigForUser(
   ctx: QueryCtx,
   userId: Id<"users">,
-  operationKey: ImplementedOperationKey
-): Promise<{
-  clinics: Array<{
-    clinicId: Id<"clinics">;
-    clientId: Id<"clients">;
-    name: string;
-    googleSheetId: string;
-    updateStatusColumn: string;
-    uploadStatusColumn: string;
-    verificationTypeColumn: string;
-    conditions: ReportConditionSet;
-  }>;
-}> {
+  target: ReportRunTarget
+): Promise<ReportRunConfig> {
   const profile = await ctx.db
     .query("staffProfiles")
     .withIndex("by_userId", (query) => query.eq("userId", userId))
@@ -259,24 +109,43 @@ async function reportRunConfigForUser(
   }
 
   const clinics = await listProfileClinics(ctx, profile);
-  const resolved = await resolveConditionsForClinics(ctx, userId, operationKey);
+  const base = clinics.map((clinic) => ({
+    clinicId: clinic._id,
+    clientId: clinic.clientId,
+    name: clinic.name,
+    googleSheetId: clinic.googleSheetId,
+    sheetColumns: clinic.sheetColumns,
+  }));
+
+  // A custom type has one rule set for every clinic, with no overrides.
+  if (target.source === "custom") {
+    const reportType = await loadOwnedReportType(ctx, userId, target.reportTypeId);
+    return {
+      clinics: base.map((clinic) => ({ ...clinic, conditions: reportType.conditions })),
+      buckets: reportType.buckets,
+      reportTypeName: reportType.name,
+    };
+  }
+
+  const resolved = await resolveConditionsForClinics(ctx, userId, target.operationKey);
   return {
-    clinics: clinics.map((clinic) => ({
-      clinicId: clinic._id,
-      clientId: clinic.clientId,
-      name: clinic.name,
-      googleSheetId: clinic.googleSheetId,
-      updateStatusColumn: clinic.sheetColumns.updateStatus,
-      uploadStatusColumn: clinic.sheetColumns.uploadStatus,
-      verificationTypeColumn: clinic.sheetColumns.verificationType,
-      conditions: resolved.byClinicId.get(clinic._id) ?? resolved.defaultConditions,
+    clinics: base.map((clinic) => ({
+      ...clinic,
+      conditions: resolved.byClinicId.get(clinic.clinicId) ?? resolved.defaultConditions,
     })),
+    buckets: bucketCatalogFor(target.operationKey).map((bucket) => ({
+      key: bucket.key,
+      label: bucket.label,
+    })),
+    reportTypeName: null,
   };
 }
 
 export const recordReportRun = internalMutation({
   args: {
-    operationKey: reportOperationKey,
+    operationKey: v.optional(reportOperationKey),
+    reportTypeId: v.optional(v.id("reportTypes")),
+    reportTypeName: v.optional(v.string()),
     clientId: v.optional(v.id("clients")),
     status: v.union(v.literal("completed"), v.literal("failed"), v.literal("cancelled")),
     initiatedByUserId: v.id("users"),
@@ -292,6 +161,8 @@ export const recordReportRun = internalMutation({
     const reportRunId = await ctx.db.insert("reportRuns", {
       initiatedByUserId: args.initiatedByUserId,
       operationKey: args.operationKey,
+      reportTypeId: args.reportTypeId,
+      reportTypeName: args.reportTypeName,
       clientId: args.clientId,
       status: args.status,
       startedAt: args.startedAt,
@@ -305,21 +176,19 @@ export const recordReportRun = internalMutation({
   },
 });
 
-// v1: pending-audit and ready-to-upload only. The execute operation needs
-// carrier API data and comes later.
+// v1: the two built-in row reports and the caller's own report types. The
+// execute operation needs carrier API data and comes later.
 export const runSheetReport = action({
   args: {
-    operationKey: v.union(v.literal("pending-audit"), v.literal("ready-to-upload")),
+    target: reportRunTarget,
     startDate: v.string(),
     endDate: v.string(),
     verificationFilter: v.optional(v.union(v.literal("all"), v.literal("fbd"), v.literal("elg"))),
-    debug: v.optional(v.boolean()),
   },
   returns: v.object({
     reportRunId: v.union(v.id("reportRuns"), v.null()),
     assignedClinicCount: v.number(),
     sheets: v.array(reportSheetResult),
-    runDebug: v.union(reportRunDebug, v.null()),
   }),
   handler: async (
     ctx,
@@ -328,7 +197,6 @@ export const runSheetReport = action({
     reportRunId: Id<"reportRuns"> | null;
     assignedClinicCount: number;
     sheets: SheetResultEntry[];
-    runDebug: ReturnType<typeof buildRunDebug> | null;
   }> => {
     const { userId }: { userId: Id<"users"> } = await ctx.runQuery(
       internal.staffAuth.currentOperator,
@@ -336,40 +204,42 @@ export const runSheetReport = action({
     );
     const startedAt = Date.now();
     const verificationFilter = args.verificationFilter ?? "all";
-    const wantDebug = args.debug ?? false;
 
-    const config: {
-      clinics: Array<{
-        clinicId: Id<"clinics">;
-        clientId: Id<"clients">;
-        name: string;
-        googleSheetId: string;
-        updateStatusColumn: string;
-        uploadStatusColumn: string;
-        verificationTypeColumn: string;
-        conditions: ReportConditionSet;
-      }>;
-    } = await ctx.runQuery(internal.reports.runSheetReportConfig, {
+    // The verification choice is a run-level narrowing, not part of the stored
+    // rules: it becomes one more clause every bucket has to satisfy. Only the
+    // pending audit report offers it, like the legacy tool.
+    const isPendingAudit =
+      args.target.source === "builtin" && args.target.operationKey === "pending-audit";
+    const extraFilters: ConditionClause[] =
+      isPendingAudit && verificationFilter !== "all"
+        ? [
+            {
+              column: "verificationType",
+              operator: "contains",
+              values: [verificationFilter.toUpperCase()],
+            },
+          ]
+        : [];
+
+    const config: ReportRunConfig = await ctx.runQuery(internal.reports.runSheetReportConfig, {
       userId,
-      operationKey: args.operationKey,
+      target: args.target,
       startDate: args.startDate,
       endDate: args.endDate,
     });
+    const bucketLabels = new Map(config.buckets.map((bucket) => [bucket.key, bucket.label]));
 
-    const {
-      tabsForClinic,
-      tabCatalogForClinic,
-    }: {
-      tabsForClinic: Record<string, string[]>;
-      tabCatalogForClinic: Record<string, TabCatalogEntry>;
-    } = await ctx.runAction(internal.sheets.planSheetTabs, {
-      clinics: config.clinics.map((c) => ({
-        clinicId: c.clinicId,
-        googleSheetId: c.googleSheetId,
-      })),
-      startDate: args.startDate,
-      endDate: args.endDate,
-    });
+    const { tabsForClinic }: { tabsForClinic: Record<string, string[]> } = await ctx.runAction(
+      internal.sheets.planSheetTabs,
+      {
+        clinics: config.clinics.map((c) => ({
+          clinicId: c.clinicId,
+          googleSheetId: c.googleSheetId,
+        })),
+        startDate: args.startDate,
+        endDate: args.endDate,
+      }
+    );
 
     const sheets: SheetResultEntry[] = [];
 
@@ -385,17 +255,12 @@ export const runSheetReport = action({
           googleSheetId: clinic.googleSheetId,
           tabTitle: "",
           headers: [],
-          readyRows: [],
-          reviewRows: [],
-          auditRows: [],
+          bucketRows: [],
           error: `No tabs found between ${args.startDate} and ${args.endDate}.`,
-          debug: null,
         });
         continue;
       }
-      const updateStatus = columnLetterToIndex(clinic.updateStatusColumn);
-      const uploadStatus = columnLetterToIndex(clinic.uploadStatusColumn);
-      const verificationType = columnLetterToIndex(clinic.verificationTypeColumn);
+      const indexes = conditionColumnIndexes(clinic.sheetColumns);
       let clinicFailed = false;
       // One batched read per clinic instead of one call per tab.
       let tabResults: Array<{
@@ -421,11 +286,8 @@ export const runSheetReport = action({
             googleSheetId: clinic.googleSheetId,
             tabTitle,
             headers: [],
-            readyRows: [],
-            reviewRows: [],
-            auditRows: [],
+            bucketRows: [],
             error: message,
-            debug: null,
           });
         }
       }
@@ -438,95 +300,31 @@ export const runSheetReport = action({
             googleSheetId: clinic.googleSheetId,
             tabTitle: tabResult.tabTitle,
             headers: [],
-            readyRows: [],
-            reviewRows: [],
-            auditRows: [],
+            bucketRows: [],
             error: tabResult.error,
-            debug: null,
           });
           continue;
         }
         const { tabTitle, headers, values } = tabResult;
-        const readyRows: Array<{ rowNumber: number; values: string[] }> = [];
-        const reviewRows: Array<{ rowNumber: number; values: string[] }> = [];
-        const auditRows: Array<{ rowNumber: number; values: string[] }> = [];
-        // TEMPORARY while project is in development: count why each row is
-        // dropped so the UI can show it. Same checks as the real filter.
-        const dropCounts = new Map<string, number>();
-        const dropSamples: Array<{
-          rowNumber: number;
-          reason: string;
-          l: string;
-          m: string;
-          verification: string;
-          updateStatus: string;
-          uploadStatus: string;
-        }> = [];
-        function trackDrop(row: SheetRow, rowNumber: number, reason: string) {
-          dropCounts.set(reason, (dropCounts.get(reason) ?? 0) + 1);
-          if (dropSamples.length >= MAX_DEBUG_SAMPLES) return;
-          dropSamples.push({
-            rowNumber,
-            reason,
-            l: cell(row, 11),
-            m: cell(row, 12),
-            verification: cell(row, verificationType),
-            updateStatus: cell(row, updateStatus),
-            uploadStatus: cell(row, uploadStatus),
-          });
-        }
-        values.forEach((row, index) => {
-          const rowNumber = index + 2;
-          if (args.operationKey === "ready-to-upload") {
-            const { bucket, reason } = evaluateReadyToUpload(
-              row,
-              { updateStatus, uploadStatus },
-              clinic.conditions
-            );
-            if (bucket === "ready") readyRows.push({ rowNumber, values: row });
-            else if (bucket === "review") reviewRows.push({ rowNumber, values: row });
-            else if (wantDebug) trackDrop(row, rowNumber, reason);
-          } else {
-            const outcome = evaluatePendingAudit(
-              row,
-              { updateStatus, uploadStatus, verificationType },
-              clinic.conditions,
-              verificationFilter
-            );
-            if (outcome.kept) {
-              auditRows.push({ rowNumber, values: row });
-            } else if (wantDebug) {
-              trackDrop(row, rowNumber, outcome.reason ?? "dropped");
-            }
-          }
+        const bucketRows = clinic.conditions.buckets.map((bucket) => ({
+          bucketKey: bucket.bucketKey,
+          label: bucketLabels.get(bucket.bucketKey) ?? bucket.bucketKey,
+          rows: [] as ReportRow[],
+        }));
+        const rowsByBucket = new Map(bucketRows.map((bucket) => [bucket.bucketKey, bucket.rows]));
+        values.forEach((row: SheetRow, index) => {
+          const bucketKey = evaluateConditionSet(row, indexes, clinic.conditions, extraFilters);
+          if (bucketKey === null) return;
+          rowsByBucket.get(bucketKey)?.push({ rowNumber: index + 2, values: row });
         });
-        const keptRows = readyRows.length + reviewRows.length + auditRows.length;
         sheets.push({
           clinicId: clinic.clinicId,
           clinicName: clinic.name,
           googleSheetId: clinic.googleSheetId,
           tabTitle,
           headers,
-          readyRows,
-          reviewRows,
-          auditRows,
+          bucketRows,
           error: null,
-          debug: wantDebug
-            ? {
-                totalRows: values.length,
-                keptRows,
-                operationKey: args.operationKey,
-                verificationFilter,
-                updateStatusColumn: clinic.updateStatusColumn,
-                uploadStatusColumn: clinic.uploadStatusColumn,
-                verificationTypeColumn: clinic.verificationTypeColumn,
-                droppedByReason: [...dropCounts.entries()].map(([reason, count]) => ({
-                  reason,
-                  count,
-                })),
-                samples: dropSamples,
-              }
-            : null,
         });
       }
       if (clinicFailed) {
@@ -542,7 +340,9 @@ export const runSheetReport = action({
     const { reportRunId }: { reportRunId: Id<"reportRuns"> } = await ctx.runMutation(
       internal.reports.recordReportRun,
       {
-        operationKey: args.operationKey,
+        operationKey: args.target.source === "builtin" ? args.target.operationKey : undefined,
+        reportTypeId: args.target.source === "custom" ? args.target.reportTypeId : undefined,
+        reportTypeName: config.reportTypeName ?? undefined,
         clientId: reportClientId,
         status: succeededClinics === 0 ? "failed" : "completed",
         initiatedByUserId: userId,
@@ -558,19 +358,6 @@ export const runSheetReport = action({
       reportRunId,
       assignedClinicCount: config.clinics.length,
       sheets,
-      runDebug: wantDebug
-        ? buildRunDebug(
-            {
-              startDate: args.startDate,
-              endDate: args.endDate,
-              operationKey: args.operationKey,
-              verificationFilter,
-            },
-            config.clinics,
-            tabCatalogForClinic,
-            sheets
-          )
-        : null,
     };
   },
 });
@@ -579,7 +366,7 @@ export const runSheetReport = action({
 export const runSheetReportConfig = internalQuery({
   args: {
     userId: v.id("users"),
-    operationKey: reportOperationKey,
+    target: reportRunTarget,
     startDate: v.string(),
     endDate: v.string(),
   },
@@ -590,20 +377,25 @@ export const runSheetReportConfig = internalQuery({
         clientId: v.id("clients"),
         name: v.string(),
         googleSheetId: v.string(),
-        updateStatusColumn: v.string(),
-        uploadStatusColumn: v.string(),
-        verificationTypeColumn: v.string(),
+        sheetColumns: v.object({
+          updateStatus: v.string(),
+          uploadStatus: v.string(),
+          verificationType: v.string(),
+          fileUrl: v.string(),
+        }),
         conditions: reportConditionSet,
       })
     ),
+    buckets: v.array(v.object({ key: v.string(), label: v.string() })),
+    reportTypeName: v.union(v.string(), v.null()),
   }),
   handler: async (ctx, args) => {
     if (args.startDate > args.endDate) {
       throw new Error("The start date must be on or before the end date.");
     }
-    if (!isImplementedOperation(args.operationKey)) {
-      throw new Error(`No conditions are defined for "${args.operationKey}" yet.`);
+    if (args.target.source === "builtin" && !isImplementedOperation(args.target.operationKey)) {
+      throw new Error(`No conditions are defined for "${args.target.operationKey}" yet.`);
     }
-    return reportRunConfigForUser(ctx, args.userId, args.operationKey);
+    return reportRunConfigForUser(ctx, args.userId, args.target);
   },
 });

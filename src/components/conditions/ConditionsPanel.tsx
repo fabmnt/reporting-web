@@ -1,16 +1,12 @@
 "use client";
 
 import { useMutation, useQuery } from "convex/react";
-import { useState, type ReactNode } from "react";
+import { Plus } from "lucide-react";
+import { useState } from "react";
 
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
-import type {
-  ImplementedOperationKey,
-  PendingAuditConditions,
-  ReadyToUploadConditions,
-  ReportConditionSet,
-} from "../../../convex/model/reportConditions";
+import type { ReportConditionSet } from "../../../convex/model/reportConditions";
 import { PageHeader } from "@/components/app/PageHeader";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -21,365 +17,31 @@ import {
   SelectContent,
   SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Switch } from "@/components/ui/switch";
-import {
-  hasEnabledCriterion,
-  PENDING_AUDIT_CRITERIA,
-  READY_TO_UPLOAD_CRITERIA,
-} from "@/lib/reportConditions";
-import { cn } from "@/lib/utils";
 
-import { MarkerListField } from "./MarkerListField";
+import { ConditionSetEditor } from "./ConditionSetEditor";
+import { CustomReportTypeEditor, type CustomReportTypeDraft } from "./CustomReportTypeEditor";
+import { NewReportTypeDialog, type CreatedReportType } from "./NewReportTypeDialog";
 
 const DEFAULT_SCOPE = "default";
-
-type ConditionCopy = { title: string; description: string };
-
-function RuleCard({
-  copy,
-  enabled,
-  onToggle,
-  disabled,
-  children,
-}: {
-  copy: ConditionCopy;
-  enabled: boolean;
-  onToggle: (enabled: boolean) => void;
-  disabled: boolean;
-  children: ReactNode;
-}) {
-  return (
-    <div className="flex flex-col gap-4 rounded-lg border p-4">
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex flex-col gap-1">
-          <h3 className="text-sm font-medium">{copy.title}</h3>
-          <p className="text-xs text-muted-foreground">{copy.description}</p>
-        </div>
-        <Switch
-          checked={enabled}
-          onCheckedChange={onToggle}
-          disabled={disabled}
-          aria-label={`Enable ${copy.title}`}
-        />
-      </div>
-      <div className={cn("flex flex-col gap-4", !enabled && "opacity-60")}>{children}</div>
-    </div>
-  );
-}
-
-const MATCH_ITEMS = [
-  { value: "exact", label: "Exact value" },
-  { value: "contains", label: "Contains value" },
-];
-
-function PendingAuditEditor({
-  conditions,
-  onChange,
-  disabled,
-}: {
-  conditions: PendingAuditConditions;
-  onChange: (conditions: ReportConditionSet) => void;
-  disabled: boolean;
-}) {
-  const update = (patch: Partial<PendingAuditConditions>) => onChange({ ...conditions, ...patch });
-
-  return (
-    <div className="flex flex-col gap-4">
-      <RuleCard
-        copy={PENDING_AUDIT_CRITERIA.verificationType}
-        enabled={conditions.verificationType.enabled}
-        onToggle={(enabled) =>
-          update({ verificationType: { ...conditions.verificationType, enabled } })
-        }
-        disabled={disabled}
-      >
-        <MarkerListField
-          label="Verification values"
-          values={conditions.verificationType.values}
-          onChange={(values) =>
-            update({ verificationType: { ...conditions.verificationType, values } })
-          }
-          disabled={disabled || !conditions.verificationType.enabled}
-          emptyHint="An enabled rule with no values matches nothing."
-        />
-      </RuleCard>
-
-      <RuleCard
-        copy={PENDING_AUDIT_CRITERIA.executionHit}
-        enabled={conditions.executionHit.enabled}
-        onToggle={(enabled) => update({ executionHit: { ...conditions.executionHit, enabled } })}
-        disabled={disabled}
-      >
-        <MarkerListField
-          label="L done markers"
-          values={conditions.executionHit.lDoneMarkers}
-          onChange={(lDoneMarkers) =>
-            update({ executionHit: { ...conditions.executionHit, lDoneMarkers } })
-          }
-          disabled={disabled || !conditions.executionHit.enabled}
-          emptyHint="No done markers: this branch never matches."
-        />
-        <MarkerListField
-          label="M excluded markers"
-          values={conditions.executionHit.mExcludeMarkers}
-          onChange={(mExcludeMarkers) =>
-            update({ executionHit: { ...conditions.executionHit, mExcludeMarkers } })
-          }
-          disabled={disabled || !conditions.executionHit.enabled}
-          emptyHint="Nothing is excluded: the done branch only checks L."
-        />
-        <MarkerListField
-          label="L check markers"
-          values={conditions.executionHit.lCheckMarkers}
-          onChange={(lCheckMarkers) =>
-            update({ executionHit: { ...conditions.executionHit, lCheckMarkers } })
-          }
-          disabled={disabled || !conditions.executionHit.enabled}
-          emptyHint="No check markers: this branch never matches."
-        />
-        <MarkerListField
-          label="M not-found markers"
-          values={conditions.executionHit.mNotFoundMarkers}
-          onChange={(mNotFoundMarkers) =>
-            update({ executionHit: { ...conditions.executionHit, mNotFoundMarkers } })
-          }
-          disabled={disabled || !conditions.executionHit.enabled}
-          emptyHint="No not-found markers: the check branch never matches."
-        />
-      </RuleCard>
-
-      <RuleCard
-        copy={PENDING_AUDIT_CRITERIA.updateStatusExclude}
-        enabled={conditions.updateStatusExclude.enabled}
-        onToggle={(enabled) =>
-          update({ updateStatusExclude: { ...conditions.updateStatusExclude, enabled } })
-        }
-        disabled={disabled}
-      >
-        <MarkerListField
-          label="Excluded values"
-          values={conditions.updateStatusExclude.markers}
-          onChange={(markers) =>
-            update({ updateStatusExclude: { ...conditions.updateStatusExclude, markers } })
-          }
-          disabled={disabled || !conditions.updateStatusExclude.enabled}
-          emptyHint="Nothing is excluded."
-        />
-      </RuleCard>
-
-      <RuleCard
-        copy={PENDING_AUDIT_CRITERIA.uploadStatusAllowed}
-        enabled={conditions.uploadStatusAllowed.enabled}
-        onToggle={(enabled) =>
-          update({ uploadStatusAllowed: { ...conditions.uploadStatusAllowed, enabled } })
-        }
-        disabled={disabled}
-      >
-        <Field>
-          <FieldLabel>Match</FieldLabel>
-          <Select
-            items={MATCH_ITEMS}
-            value={conditions.uploadStatusAllowed.match}
-            onValueChange={(value) =>
-              update({
-                uploadStatusAllowed: {
-                  ...conditions.uploadStatusAllowed,
-                  match: (value as "exact" | "contains") ?? "exact",
-                },
-              })
-            }
-            disabled={disabled || !conditions.uploadStatusAllowed.enabled}
-          >
-            <SelectTrigger aria-label="Upload status match" className="w-full">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectGroup>
-                <SelectItem value="exact">Exact value</SelectItem>
-                <SelectItem value="contains">Contains value</SelectItem>
-              </SelectGroup>
-            </SelectContent>
-          </Select>
-        </Field>
-        <MarkerListField
-          label="Upload values"
-          values={conditions.uploadStatusAllowed.values}
-          onChange={(values) =>
-            update({ uploadStatusAllowed: { ...conditions.uploadStatusAllowed, values } })
-          }
-          disabled={disabled || !conditions.uploadStatusAllowed.enabled}
-          emptyHint="An enabled rule with no values matches nothing."
-        />
-      </RuleCard>
-    </div>
-  );
-}
-
-function ReadyToUploadEditor({
-  conditions,
-  onChange,
-  disabled,
-}: {
-  conditions: ReadyToUploadConditions;
-  onChange: (conditions: ReportConditionSet) => void;
-  disabled: boolean;
-}) {
-  const update = (patch: Partial<ReadyToUploadConditions>) => onChange({ ...conditions, ...patch });
-
-  const rules: Array<{
-    copy: ConditionCopy;
-    key: "executionDone" | "updateStatusAllowed" | "uploadStatusTerminalExclude" | "uploadReady";
-    label: string;
-    emptyHint: string;
-  }> = [
-    {
-      copy: READY_TO_UPLOAD_CRITERIA.executionDone,
-      key: "executionDone",
-      label: "Column L markers",
-      emptyHint: "An enabled rule with no values matches nothing.",
-    },
-    {
-      copy: READY_TO_UPLOAD_CRITERIA.updateStatusAllowed,
-      key: "updateStatusAllowed",
-      label: "Accepted update statuses",
-      emptyHint: "An enabled rule with no values matches nothing.",
-    },
-    {
-      copy: READY_TO_UPLOAD_CRITERIA.uploadStatusTerminalExclude,
-      key: "uploadStatusTerminalExclude",
-      label: "Terminal values",
-      emptyHint: "Nothing is dropped.",
-    },
-    {
-      copy: READY_TO_UPLOAD_CRITERIA.uploadReady,
-      key: "uploadReady",
-      label: "Ready values",
-      emptyHint: "No row goes to Ready to upload through this rule.",
-    },
-  ];
-
-  const review = conditions.uploadReview;
-
-  return (
-    <div className="flex flex-col gap-4">
-      {rules.map((rule) => {
-        const current = conditions[rule.key];
-        return (
-          <RuleCard
-            key={rule.key}
-            copy={rule.copy}
-            enabled={current.enabled}
-            onToggle={(enabled) => update({ [rule.key]: { ...current, enabled } })}
-            disabled={disabled}
-          >
-            <MarkerListField
-              label={rule.label}
-              values={current.markers}
-              onChange={(markers) => update({ [rule.key]: { ...current, markers } })}
-              disabled={disabled || !current.enabled}
-              emptyHint={rule.emptyHint}
-            />
-          </RuleCard>
-        );
-      })}
-
-      <RuleCard
-        copy={READY_TO_UPLOAD_CRITERIA.uploadReview}
-        enabled={review.enabled}
-        onToggle={(enabled) => update({ uploadReview: { ...review, enabled } })}
-        disabled={disabled}
-      >
-        <div className="flex items-center justify-between gap-4">
-          <div className="flex flex-col gap-1">
-            <span className="text-sm font-medium">Catch all unmatched rows</span>
-            <p className="text-xs text-muted-foreground">
-              Every remaining row goes to Needs review.
-            </p>
-          </div>
-          <Switch
-            checked={review.catchAll}
-            onCheckedChange={(catchAll) => update({ uploadReview: { ...review, catchAll } })}
-            disabled={disabled || !review.enabled}
-            aria-label="Catch all unmatched rows"
-          />
-        </div>
-        <MarkerListField
-          label="Review values"
-          values={review.markers}
-          onChange={(markers) => update({ uploadReview: { ...review, markers } })}
-          disabled={disabled || !review.enabled || review.catchAll}
-          emptyHint="No row goes to Needs review through this rule."
-        />
-      </RuleCard>
-    </div>
-  );
-}
-
-function ConditionsEditor({
-  conditions,
-  onChange,
-  disabled,
-  saving,
-  canReset,
-  onSave,
-  onReset,
-}: {
-  conditions: ReportConditionSet;
-  onChange: (conditions: ReportConditionSet) => void;
-  disabled: boolean;
-  saving: boolean;
-  canReset: boolean;
-  onSave: (conditions: ReportConditionSet) => void;
-  onReset: () => void;
-}) {
-  const noCriteria = !hasEnabledCriterion(conditions);
-
-  return (
-    <div className="flex flex-col gap-6">
-      {conditions.kind === "pending-audit" ? (
-        <PendingAuditEditor conditions={conditions} onChange={onChange} disabled={disabled} />
-      ) : (
-        <ReadyToUploadEditor conditions={conditions} onChange={onChange} disabled={disabled} />
-      )}
-
-      {noCriteria ? (
-        <Alert>
-          <AlertTitle>No criteria enabled</AlertTitle>
-          <AlertDescription>
-            Every row in the date range will be returned. Enable at least one criterion to filter
-            rows.
-          </AlertDescription>
-        </Alert>
-      ) : null}
-
-      <div className="flex flex-wrap justify-end gap-2">
-        {canReset ? (
-          <Button variant="outline" onClick={onReset} disabled={disabled || saving}>
-            Reset to default
-          </Button>
-        ) : null}
-        <Button onClick={() => onSave(conditions)} disabled={disabled || saving}>
-          Save conditions
-        </Button>
-      </div>
-    </div>
-  );
-}
 
 export function ConditionsPanel() {
   const current = useQuery(api.staffAccounts.current, {});
   const canConfigure =
     current?.status === "active" && (current.role === "admin" || current.role === "operator");
   const data = useQuery(api.reportConditions.listMine, canConfigure ? {} : "skip");
+  const customTypesData = useQuery(api.reportTypes.listMine, canConfigure ? {} : "skip");
   const saveMine = useMutation(api.reportConditions.saveMine);
   const resetMine = useMutation(api.reportConditions.resetMine);
+  const saveTypeMine = useMutation(api.reportTypes.saveMine);
+  const removeTypeMine = useMutation(api.reportTypes.removeMine);
 
-  const [operationKey, setOperationKey] = useState<ImplementedOperationKey>("pending-audit");
+  const [typeValue, setTypeValue] = useState<string>("pending-audit");
   const [scope, setScope] = useState<string>(DEFAULT_SCOPE);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -387,15 +49,25 @@ export function ConditionsPanel() {
   // Unsaved edits, keyed by report type and scope, so switching between them
   // does not throw the draft away.
   const [drafts, setDrafts] = useState<Record<string, ReportConditionSet>>({});
+  const [customDrafts, setCustomDrafts] = useState<Record<string, CustomReportTypeDraft>>({});
+  const [creating, setCreating] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   const header = (
     <PageHeader
       title="Configuration"
-      description="Choose which sheet rows each report returns. These conditions apply to your account only."
+      description="Choose which sheet rows each report returns. Report types and conditions apply to your account only."
     />
   );
 
-  if (current === undefined) return <Skeleton className="h-80 w-full" />;
+  if (current === undefined) {
+    return (
+      <div className="flex flex-col gap-6">
+        {header}
+        <Skeleton className="h-80 w-full" />
+      </div>
+    );
+  }
 
   if (!canConfigure) {
     return (
@@ -409,7 +81,7 @@ export function ConditionsPanel() {
     );
   }
 
-  if (data === undefined) {
+  if (data === undefined || customTypesData === undefined) {
     return (
       <div className="flex flex-col gap-6">
         {header}
@@ -418,10 +90,26 @@ export function ConditionsPanel() {
     );
   }
 
-  const operation =
-    data.operations.find((item) => item.operationKey === operationKey) ?? data.operations[0];
+  const operations = data.operations;
+  const customTypes = customTypesData.types;
+  const storedCustom = customTypes.find((item) => item.reportTypeId === typeValue);
+  const customDraft: CustomReportTypeDraft | undefined =
+    customDrafts[typeValue] ??
+    (storedCustom === undefined
+      ? undefined
+      : {
+          name: storedCustom.name,
+          description: storedCustom.description,
+          buckets: storedCustom.buckets,
+          conditions: storedCustom.conditions,
+        });
+  const isCustom = customDraft !== undefined;
 
-  if (operation === undefined) {
+  const operation = isCustom
+    ? undefined
+    : (operations.find((item) => item.operationKey === typeValue) ?? operations[0]);
+
+  if (!isCustom && operation === undefined) {
     return (
       <div className="flex flex-col gap-6">
         {header}
@@ -431,14 +119,15 @@ export function ConditionsPanel() {
   }
 
   const isDefaultScope = scope === DEFAULT_SCOPE;
-  const override = isDefaultScope
-    ? undefined
-    : operation.overrides.find((item) => item.clinicId === scope);
-  const canReset = isDefaultScope ? operation.default.isCustom : override !== undefined;
-  const stored = override?.conditions ?? operation.default.conditions;
-  const editorKey = `${operation.operationKey}:${scope}`;
-  const conditions = drafts[editorKey] ?? stored;
-  const clinicId = isDefaultScope ? null : (scope as Id<"clinics">);
+  const override =
+    operation !== undefined && !isDefaultScope
+      ? operation.overrides.find((item) => item.clinicId === scope)
+      : undefined;
+  const canReset =
+    operation !== undefined &&
+    (isDefaultScope ? operation.default.isCustom : override !== undefined);
+  const editorKey = operation === undefined ? "" : `${operation.operationKey}:${scope}`;
+  const conditions = drafts[editorKey] ?? override?.conditions ?? operation?.default.conditions;
 
   const scopeItems: Array<{ value: string; label: string }> = [
     { value: DEFAULT_SCOPE, label: "My default" },
@@ -454,28 +143,20 @@ export function ConditionsPanel() {
       ? "This clinic inherits your default conditions."
       : "This clinic uses its own conditions.";
 
-  function setDraft(next: ReportConditionSet) {
-    setDrafts((previous) => ({ ...previous, [editorKey]: next }));
-  }
-
-  function clearDraft() {
-    setDrafts((previous) => {
-      if (!(editorKey in previous)) return previous;
-      const next = { ...previous };
-      delete next[editorKey];
-      return next;
-    });
-  }
-
-  async function handleSave(next: ReportConditionSet) {
+  async function handleSaveBuiltin() {
+    if (operation === undefined || conditions === undefined) return;
     setSaving(true);
     setError(null);
     setNotice(null);
     try {
-      await saveMine({ operationKey: operation.operationKey, clinicId, conditions: next });
+      await saveMine({
+        operationKey: operation.operationKey,
+        clinicId: isDefaultScope ? null : (scope as Id<"clinics">),
+        conditions,
+      });
       // Keep the draft on screen until the query catches up, so the form does
       // not flash back to the previously stored value.
-      setDrafts((previous) => ({ ...previous, [editorKey]: next }));
+      setDrafts((previous) => ({ ...previous, [editorKey]: conditions }));
       setNotice(isDefaultScope ? "Default conditions saved." : "Clinic conditions saved.");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Saving the conditions failed.");
@@ -484,15 +165,46 @@ export function ConditionsPanel() {
     }
   }
 
-  async function handleReset() {
+  async function handleSaveCustom() {
+    if (customDraft === undefined) return;
     setSaving(true);
     setError(null);
     setNotice(null);
     try {
-      await resetMine({ operationKey: operation.operationKey, clinicId });
+      await saveTypeMine({
+        reportTypeId: typeValue as Id<"reportTypes">,
+        name: customDraft.name,
+        description: customDraft.description,
+        buckets: customDraft.buckets,
+        conditions: customDraft.conditions,
+      });
+      setCustomDrafts((previous) => ({ ...previous, [typeValue]: customDraft }));
+      setNotice("Report type saved.");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Saving the report type failed.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleReset() {
+    if (operation === undefined) return;
+    setSaving(true);
+    setError(null);
+    setNotice(null);
+    try {
+      await resetMine({
+        operationKey: operation.operationKey,
+        clinicId: isDefaultScope ? null : (scope as Id<"clinics">),
+      });
       // Drop the draft so the row falls back to the stored value once the
       // query refetches.
-      clearDraft();
+      setDrafts((previous) => {
+        if (!(editorKey in previous)) return previous;
+        const next = { ...previous };
+        delete next[editorKey];
+        return next;
+      });
       setNotice(
         isDefaultScope
           ? "Default conditions reset."
@@ -505,13 +217,49 @@ export function ConditionsPanel() {
     }
   }
 
+  async function handleDeleteCustom() {
+    setSaving(true);
+    setError(null);
+    setNotice(null);
+    try {
+      await removeTypeMine({ reportTypeId: typeValue as Id<"reportTypes"> });
+      setCustomDrafts((previous) => {
+        const next = { ...previous };
+        delete next[typeValue];
+        return next;
+      });
+      setConfirmingDelete(false);
+      setTypeValue(operations[0]?.operationKey ?? "pending-audit");
+      setNotice("Report type deleted.");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Deleting the report type failed.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function handleCreated(created: CreatedReportType) {
+    setCustomDrafts((previous) => ({
+      ...previous,
+      [created.reportTypeId]: {
+        name: created.name,
+        description: created.description,
+        buckets: created.buckets,
+        conditions: created.conditions,
+      },
+    }));
+    setTypeValue(created.reportTypeId);
+    setConfirmingDelete(false);
+    setNotice("Report type created.");
+  }
+
   return (
     <div className="flex flex-col gap-6">
       {header}
 
       {error ? (
         <Alert variant="destructive">
-          <AlertTitle>Could not update conditions</AlertTitle>
+          <AlertTitle>Could not update the report type</AlertTitle>
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       ) : null}
@@ -523,6 +271,13 @@ export function ConditionsPanel() {
         </Alert>
       ) : null}
 
+      <NewReportTypeDialog
+        open={creating}
+        onOpenChange={setCreating}
+        onCreated={handleCreated}
+        disabled={saving}
+      />
+
       <div className="grid gap-6 lg:grid-cols-[360px_minmax(0,1fr)] lg:items-start">
         <Card className="lg:sticky lg:top-20">
           <CardHeader>
@@ -533,14 +288,21 @@ export function ConditionsPanel() {
             <Field>
               <FieldLabel>Report type</FieldLabel>
               <Select
-                items={data.operations.map((item) => ({
-                  value: item.operationKey,
-                  label: item.label,
-                }))}
-                value={operation.operationKey}
-                onValueChange={(value) =>
-                  setOperationKey((value as ImplementedOperationKey) ?? "pending-audit")
-                }
+                items={[
+                  ...operations.map((item) => ({
+                    value: item.operationKey,
+                    label: item.label,
+                  })),
+                  ...customTypes.map((item) => ({
+                    value: item.reportTypeId,
+                    label: item.name,
+                  })),
+                ]}
+                value={isCustom ? typeValue : (operation?.operationKey ?? "")}
+                onValueChange={(value) => {
+                  setTypeValue((value as string) ?? "pending-audit");
+                  setConfirmingDelete(false);
+                }}
                 disabled={saving}
               >
                 <SelectTrigger aria-label="Report type" className="w-full">
@@ -548,39 +310,67 @@ export function ConditionsPanel() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectGroup>
-                    {data.operations.map((item) => (
+                    <SelectLabel>Built-in</SelectLabel>
+                    {operations.map((item) => (
                       <SelectItem key={item.operationKey} value={item.operationKey}>
                         {item.label}
                       </SelectItem>
                     ))}
                   </SelectGroup>
+                  {customTypes.length > 0 ? (
+                    <SelectGroup>
+                      <SelectLabel>My report types</SelectLabel>
+                      {customTypes.map((item) => (
+                        <SelectItem key={item.reportTypeId} value={item.reportTypeId}>
+                          {item.name}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  ) : null}
                 </SelectContent>
               </Select>
-            </Field>
-
-            <Field>
-              <FieldLabel>Applies to</FieldLabel>
-              <Select
-                items={scopeItems}
-                value={scope}
-                onValueChange={(value) => setScope(value ?? DEFAULT_SCOPE)}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="w-fit"
+                onClick={() => setCreating(true)}
                 disabled={saving}
               >
-                <SelectTrigger aria-label="Applies to" className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectGroup>
-                    {scopeItems.map((item) => (
-                      <SelectItem key={item.value} value={item.value}>
-                        {item.label}
-                      </SelectItem>
-                    ))}
-                  </SelectGroup>
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground">{inheritanceNote}</p>
+                <Plus data-icon="inline-start" aria-hidden="true" />
+                New report type
+              </Button>
             </Field>
+
+            {isCustom ? (
+              <p className="text-xs text-muted-foreground">
+                This type applies to all your assigned clinics.
+              </p>
+            ) : (
+              <Field>
+                <FieldLabel>Applies to</FieldLabel>
+                <Select
+                  items={scopeItems}
+                  value={scope}
+                  onValueChange={(value) => setScope(value ?? DEFAULT_SCOPE)}
+                  disabled={saving}
+                >
+                  <SelectTrigger aria-label="Applies to" className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectGroup>
+                      {scopeItems.map((item) => (
+                        <SelectItem key={item.value} value={item.value}>
+                          {item.label}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">{inheritanceNote}</p>
+              </Field>
+            )}
 
             <Separator />
 
@@ -592,20 +382,76 @@ export function ConditionsPanel() {
 
         <Card>
           <CardHeader>
-            <h2 className="font-heading text-base leading-snug font-medium">{operation.label}</h2>
-            <CardDescription>Row rules applied when you run this report.</CardDescription>
+            <h2 className="font-heading text-base leading-snug font-medium">
+              {isCustom ? customDraft.name : operation?.label}
+            </h2>
+            <CardDescription>
+              {isCustom
+                ? "A row lands in the first group that matches it."
+                : operation !== undefined && operation.buckets.length > 1
+                  ? "A row lands in the first group that matches it."
+                  : "Rows that do not match are left out of the report."}
+            </CardDescription>
           </CardHeader>
-          <CardContent>
-            <ConditionsEditor
-              key={editorKey}
-              conditions={conditions}
-              onChange={setDraft}
-              disabled={saving}
-              saving={saving}
-              canReset={canReset}
-              onSave={(next) => void handleSave(next)}
-              onReset={() => void handleReset()}
-            />
+          <CardContent className="flex flex-col gap-6">
+            {isCustom ? (
+              <CustomReportTypeEditor
+                draft={customDraft}
+                onChange={(next) =>
+                  setCustomDrafts((previous) => ({ ...previous, [typeValue]: next }))
+                }
+                disabled={saving}
+              />
+            ) : operation !== undefined && conditions !== undefined ? (
+              <ConditionSetEditor
+                key={editorKey}
+                buckets={operation.buckets}
+                conditions={conditions}
+                onChange={(next) => setDrafts((previous) => ({ ...previous, [editorKey]: next }))}
+                disabled={saving}
+              />
+            ) : null}
+
+            <div className="flex flex-wrap justify-end gap-2">
+              {isCustom ? (
+                confirmingDelete ? (
+                  <>
+                    <Button
+                      variant="ghost"
+                      onClick={() => setConfirmingDelete(false)}
+                      disabled={saving}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      onClick={() => void handleDeleteCustom()}
+                      disabled={saving}
+                    >
+                      Confirm delete
+                    </Button>
+                  </>
+                ) : (
+                  <Button
+                    variant="outline"
+                    onClick={() => setConfirmingDelete(true)}
+                    disabled={saving}
+                  >
+                    Delete report type
+                  </Button>
+                )
+              ) : canReset ? (
+                <Button variant="outline" onClick={() => void handleReset()} disabled={saving}>
+                  Reset to default
+                </Button>
+              ) : null}
+              <Button
+                onClick={() => void (isCustom ? handleSaveCustom() : handleSaveBuiltin())}
+                disabled={saving}
+              >
+                Save conditions
+              </Button>
+            </div>
           </CardContent>
         </Card>
       </div>

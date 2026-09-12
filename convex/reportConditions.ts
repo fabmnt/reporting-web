@@ -4,7 +4,9 @@ import type { Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
 import { mutation, query } from "./_generated/server";
 import {
-  assertConditionKind,
+  assertBucketKeys,
+  bucketCatalogFor,
+  bucketKeysFor,
   cleanConditionSet,
   IMPLEMENTED_REPORT_OPERATIONS,
   isImplementedOperation,
@@ -18,6 +20,12 @@ import { requireOperator } from "./model/staff";
 import { reportOperationKey } from "./schema";
 
 const conditionScope = v.union(v.id("clinics"), v.null());
+
+const reportBucket = v.object({
+  key: v.string(),
+  label: v.string(),
+  canCatchAll: v.boolean(),
+});
 
 async function findConditionRow(
   ctx: MutationCtx,
@@ -64,6 +72,7 @@ export const listMine = query({
       v.object({
         operationKey: reportOperationKey,
         label: v.string(),
+        buckets: v.array(reportBucket),
         default: v.object({ conditions: reportConditionSet, isCustom: v.boolean() }),
         overrides: v.array(v.object({ clinicId: v.id("clinics"), conditions: reportConditionSet })),
       })
@@ -99,6 +108,7 @@ export const listMine = query({
         label:
           REPORT_OPERATIONS.find((operation) => operation.key === operationKey)?.label ??
           operationKey,
+        buckets: bucketCatalogFor(operationKey),
         default: {
           conditions: resolved.defaultConditions,
           isCustom: resolved.defaultIsCustom,
@@ -127,7 +137,7 @@ export const saveMine = mutation({
         message: `"${args.operationKey}" does not support conditions yet.`,
       });
     }
-    assertConditionKind(args.conditions, args.operationKey);
+    assertBucketKeys(args.conditions, bucketKeysFor(args.operationKey), args.operationKey);
     await assertClinicAssigned(ctx, profile, args.clinicId);
 
     const conditions = cleanConditionSet(args.conditions);
