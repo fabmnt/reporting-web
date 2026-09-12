@@ -1,6 +1,7 @@
 "use client";
 
 import { Plus, Trash2 } from "lucide-react";
+import { useRef } from "react";
 
 import type {
   ConditionBucket,
@@ -34,6 +35,22 @@ function newClause(): ConditionClause {
   return { column: "L", operator: "contains", values: [] };
 }
 
+// Keys have to follow the item, not its position: removing a middle clause or
+// group would otherwise hand the editor state of the removed one to the next.
+// Ids live in a WeakMap so they never reach the persisted condition shape.
+function useStableItemKeys<T extends object>(items: readonly T[]): string[] {
+  const idsRef = useRef(new WeakMap<T, string>());
+  const counterRef = useRef(0);
+  return items.map((item) => {
+    const existing = idsRef.current.get(item);
+    if (existing !== undefined) return existing;
+    counterRef.current += 1;
+    const id = `item-${counterRef.current}`;
+    idsRef.current.set(item, id);
+    return id;
+  });
+}
+
 function ClauseList({
   clauses,
   onChange,
@@ -49,11 +66,12 @@ function ClauseList({
   disabled: boolean;
   addLabel: string;
 }) {
+  const keys = useStableItemKeys(clauses);
   return (
     <>
       {clauses.map((clause, index) => (
         <ClauseEditor
-          key={index}
+          key={keys[index]}
           clause={clause}
           onChange={(next) => onChange(index, next)}
           onRemove={() => onRemove(index)}
@@ -185,6 +203,7 @@ export function BucketEditor({
     updateExpression({ groups: [...expression.groups, { match: "all", clauses: [newClause()] }] });
 
   const noCriteria = !bucket.catchAll && expressionHasNoClauses(expression);
+  const groupKeys = useStableItemKeys(expression.groups);
 
   return (
     <div className="flex flex-col gap-6">
@@ -216,7 +235,7 @@ export function BucketEditor({
         </div>
         {expression.groups.map((group, index) => (
           <GroupEditor
-            key={index}
+            key={groupKeys[index]}
             index={index}
             group={group}
             onChange={(next) => updateGroup(index, next)}

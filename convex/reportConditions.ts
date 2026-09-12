@@ -27,18 +27,30 @@ const reportBucket = v.object({
   canCatchAll: v.boolean(),
 });
 
+// The scope columns are not a uniqueness constraint, and the first version of
+// this lookup scanned a capped window, so an existing deployment can hold more
+// than one row for the same scope. Deleting the extras keeps save and reset
+// working on that data instead of failing on `.unique()`.
+const MAX_ROWS_PER_CONDITION_SCOPE = 10;
+
 async function findConditionRow(
   ctx: MutationCtx,
   userId: Id<"users">,
   operationKey: ImplementedOperationKey,
   clinicId: Id<"clinics"> | null
 ) {
-  return await ctx.db
+  const rows = await ctx.db
     .query("reportConditions")
     .withIndex("by_userId_and_operationKey_and_clinicId", (query) =>
       query.eq("userId", userId).eq("operationKey", operationKey).eq("clinicId", clinicId)
     )
-    .unique();
+    .order("desc")
+    .take(MAX_ROWS_PER_CONDITION_SCOPE);
+  const [newest, ...duplicates] = rows;
+  for (const duplicate of duplicates) {
+    await ctx.db.delete(duplicate._id);
+  }
+  return newest ?? null;
 }
 
 // A clinic scope must be one the caller can run reports for. A null scope is

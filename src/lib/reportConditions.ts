@@ -42,10 +42,10 @@ export function normalizeMarker(value: string): string {
 }
 
 // An expression without clauses matches every row that reaches the bucket, so
-// the editor warns about it. An empty group counts only when it can match.
+// the editor warns about it. An empty "all" group matches on its own, even
+// beside populated groups; an empty "any" group never matches.
 export function expressionHasNoClauses(expression: ConditionExpression): boolean {
-  return (
-    expression.filters.length === 0 &&
-    expression.groups.every((group) => group.clauses.length === 0)
-  );
+  if (expression.filters.length > 0) return false;
+  if (expression.groups.length === 0) return true;
+  return expression.groups.some((group) => group.match === "all" && group.clauses.length === 0);
 }

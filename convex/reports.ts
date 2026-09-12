@@ -260,7 +260,24 @@ export const runSheetReport = action({
         });
         continue;
       }
-      const indexes = conditionColumnIndexes(clinic.sheetColumns);
+      let indexes: ConditionColumnIndexes;
+      try {
+        indexes = conditionColumnIndexes(clinic.sheetColumns);
+      } catch (error) {
+        // A clinic with an unusable sheet-column mapping fails on its own
+        // instead of stopping the run before the remaining clinics.
+        failedClinics += 1;
+        sheets.push({
+          clinicId: clinic.clinicId,
+          clinicName: clinic.name,
+          googleSheetId: clinic.googleSheetId,
+          tabTitle: "",
+          headers: [],
+          bucketRows: [],
+          error: error instanceof Error ? error.message : String(error),
+        });
+        continue;
+      }
       let clinicFailed = false;
       // One batched read per clinic instead of one call per tab.
       let tabResults: Array<{

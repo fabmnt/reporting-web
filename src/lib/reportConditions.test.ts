@@ -561,6 +561,29 @@ describe("expressions", () => {
     expect(evaluateConditionSet(sheetRow({}), COLUMNS, emptyAny)).toBeNull();
   });
 
+  it("matches every row when an empty all group sits beside populated groups", () => {
+    const set = singleBucket({
+      filters: [],
+      groups: [
+        { match: "all", clauses: [clause("L", "contains", ["DONE"])] },
+        { match: "all", clauses: [] },
+      ],
+    });
+    expect(evaluateConditionSet(sheetRow({ l: "CHECK" }), COLUMNS, set)).toBe("audit");
+  });
+
+  it("keeps an empty any group from matching on its own", () => {
+    const set = singleBucket({
+      filters: [],
+      groups: [
+        { match: "any", clauses: [] },
+        { match: "all", clauses: [clause("L", "contains", ["DONE"])] },
+      ],
+    });
+    expect(evaluateConditionSet(sheetRow({ l: "CHECK" }), COLUMNS, set)).toBeNull();
+    expect(evaluateConditionSet(sheetRow({ l: "DONE" }), COLUMNS, set)).toBe("audit");
+  });
+
   it("applies extra filters to every bucket, including catch all", () => {
     const set: ReportConditionSet = {
       buckets: [
@@ -826,6 +849,33 @@ describe("editor helpers", () => {
     ).toBe(false);
     expect(
       expressionHasNoClauses({ filters: [clause("L", "contains", ["DONE"])], groups: [] })
+    ).toBe(false);
+  });
+
+  it("flags an empty all group even beside populated groups", () => {
+    expect(
+      expressionHasNoClauses({
+        filters: [],
+        groups: [
+          { match: "all", clauses: [clause("L", "contains", ["DONE"])] },
+          { match: "all", clauses: [] },
+        ],
+      })
+    ).toBe(true);
+  });
+
+  it("does not flag an empty any group as matching everything", () => {
+    expect(expressionHasNoClauses({ filters: [], groups: [{ match: "any", clauses: [] }] })).toBe(
+      false
+    );
+    expect(
+      expressionHasNoClauses({
+        filters: [],
+        groups: [
+          { match: "any", clauses: [] },
+          { match: "all", clauses: [clause("L", "contains", ["DONE"])] },
+        ],
+      })
     ).toBe(false);
   });
 });
