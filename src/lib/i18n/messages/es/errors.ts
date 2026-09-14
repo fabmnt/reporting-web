@@ -26,6 +26,7 @@ export const errors = {
   CLINIC_NAME_REQUIRED: "El nombre de la clínica es obligatorio.",
   GOOGLE_SHEET_REQUIRED: "El ID de la hoja de Google es obligatorio.",
   INVALID_DATE_RANGE: "La fecha de inicio debe ser anterior o igual a la fecha de fin.",
+  INVALID_DATE_FORMAT: "Las fechas deben usar el formato AAAA-MM-DD.",
   OPERATION_NOT_CONFIGURED: (label: string) =>
     `Todavía no hay condiciones definidas para "${label}".`,
   OPERATION_NOT_SUPPORTED: (label: string) => `"${label}" todavía no admite condiciones.`,

@@ -28,6 +28,7 @@ export type AppErrorPayload =
   | { code: "CLINIC_NAME_REQUIRED" }
   | { code: "GOOGLE_SHEET_REQUIRED" }
   | { code: "INVALID_DATE_RANGE" }
+  | { code: "INVALID_DATE_FORMAT" }
   | { code: "OPERATION_NOT_CONFIGURED"; operationKey: string }
   | { code: "OPERATION_NOT_SUPPORTED"; operationKey: string }
   | { code: "REPORT_TYPE_NAME_TAKEN"; name: string }

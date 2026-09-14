@@ -59,6 +59,8 @@ function renderAppError(payload: AppErrorPayload, t: Messages): string | null {
       return e.GOOGLE_SHEET_REQUIRED;
     case "INVALID_DATE_RANGE":
       return e.INVALID_DATE_RANGE;
+    case "INVALID_DATE_FORMAT":
+      return e.INVALID_DATE_FORMAT;
     case "OPERATION_NOT_CONFIGURED":
       return e.OPERATION_NOT_CONFIGURED(operationLabel(t, payload.operationKey));
     case "OPERATION_NOT_SUPPORTED":
@@ -92,6 +94,24 @@ export function errorText(error: unknown, t: Messages): string {
     return error.message;
   }
   return String(error);
+}
+
+// A sentence kept in state until it renders, so a language change also rewrites
+// text that is already on screen. The resolver travels in an object because
+// React reads a bare function passed to a state setter as an updater.
+export type LocalizedMessage = { resolve: (t: Messages) => string };
+
+export function localizedMessage(resolve: (t: Messages) => string): LocalizedMessage {
+  return { resolve };
+}
+
+// A caught value: an Error renders its own translated message, while anything
+// else cannot describe itself and renders the operation's fallback instead.
+export function localizedError(
+  cause: unknown,
+  fallback: (t: Messages) => string
+): LocalizedMessage {
+  return localizedMessage((t) => (cause instanceof Error ? errorText(cause, t) : fallback(t)));
 }
 
 // One entry per sheet of a finished run.

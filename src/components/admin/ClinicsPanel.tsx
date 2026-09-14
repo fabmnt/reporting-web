@@ -58,7 +58,7 @@ import {
   type SheetColumnFormValues,
 } from "@/lib/clinicSheetColumns";
 import { useDocumentTitle, useI18n } from "@/lib/i18n/context";
-import { errorText } from "@/lib/i18n/errors";
+import { localizedError, localizedMessage, type LocalizedMessage } from "@/lib/i18n/errors";
 import { SheetColumnFields } from "@/components/clinics/SheetColumnFields";
 
 type ClinicList = FunctionReturnType<typeof api.clinics.list>;
@@ -114,7 +114,7 @@ function ConfirmDeleteDialog({
   description: string;
   confirmLabel: string;
   pending: boolean;
-  error: string | null;
+  error: LocalizedMessage | null;
   onConfirm: () => void;
 }) {
   const { t } = useI18n();
@@ -129,7 +129,7 @@ function ConfirmDeleteDialog({
         {error ? (
           <Alert variant="destructive">
             <AlertTitle>{t.admin.clinics.delete.failedTitle}</AlertTitle>
-            <AlertDescription>{error}</AlertDescription>
+            <AlertDescription>{error.resolve(t)}</AlertDescription>
           </Alert>
         ) : null}
         <AlertDialogFooter>
@@ -158,13 +158,13 @@ function ClientForm({
   isEditing: boolean;
   initialValues: ClientFormValues;
   pending: boolean;
-  error: string | null;
+  error: LocalizedMessage | null;
   onSubmit: (values: ClientFormValues) => Promise<void>;
   onCancel: () => void;
 }) {
   const { t } = useI18n();
   const [values, setValues] = useState(initialValues);
-  const [validationError, setValidationError] = useState<string | null>(null);
+  const [validationError, setValidationError] = useState<LocalizedMessage | null>(null);
 
   async function handleSubmit(event: SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -172,7 +172,7 @@ function ClientForm({
 
     const name = values.name.trim();
     if (name === "") {
-      setValidationError(t.admin.clinics.clientForm.nameRequired);
+      setValidationError(localizedMessage((t) => t.admin.clinics.clientForm.nameRequired));
       return;
     }
 
@@ -217,10 +217,10 @@ function ClientForm({
           {error ? (
             <Alert variant="destructive">
               <AlertTitle>{t.admin.clinics.clientForm.saveFailedTitle}</AlertTitle>
-              <AlertDescription>{error}</AlertDescription>
+              <AlertDescription>{error.resolve(t)}</AlertDescription>
             </Alert>
           ) : null}
-          <FieldError>{validationError}</FieldError>
+          <FieldError>{validationError?.resolve(t)}</FieldError>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onCancel} disabled={pending}>
               {t.common.cancel}
@@ -252,13 +252,13 @@ function ClinicForm({
   clients: ClientView[];
   initialValues: ClinicFormValues;
   pending: boolean;
-  error: string | null;
+  error: LocalizedMessage | null;
   onSubmit: (values: ClinicFormValues) => Promise<void>;
   onCancel: () => void;
 }) {
   const { t } = useI18n();
   const [values, setValues] = useState(initialValues);
-  const [validationError, setValidationError] = useState<string | null>(null);
+  const [validationError, setValidationError] = useState<LocalizedMessage | null>(null);
 
   function update<K extends keyof ClinicFormValues>(key: K, value: ClinicFormValues[K]) {
     setValues((current) => ({ ...current, [key]: value }));
@@ -271,15 +271,15 @@ function ClinicForm({
     const name = values.name.trim();
     const googleSheetId = parseSpreadsheetId(values.sheetInput);
     if (name === "") {
-      setValidationError(t.admin.clinics.clinicForm.nameRequired);
+      setValidationError(localizedMessage((t) => t.admin.clinics.clinicForm.nameRequired));
       return;
     }
     if (googleSheetId === "") {
-      setValidationError(t.admin.clinics.clinicForm.invalidSheet);
+      setValidationError(localizedMessage((t) => t.admin.clinics.clinicForm.invalidSheet));
       return;
     }
     if (values.clientId === "") {
-      setValidationError(t.admin.clinics.clinicForm.clientRequired);
+      setValidationError(localizedMessage((t) => t.admin.clinics.clinicForm.clientRequired));
       return;
     }
 
@@ -382,10 +382,10 @@ function ClinicForm({
           {error ? (
             <Alert variant="destructive">
               <AlertTitle>{t.admin.clinics.clinicForm.saveFailedTitle}</AlertTitle>
-              <AlertDescription>{error}</AlertDescription>
+              <AlertDescription>{error.resolve(t)}</AlertDescription>
             </Alert>
           ) : null}
-          <FieldError>{validationError}</FieldError>
+          <FieldError>{validationError?.resolve(t)}</FieldError>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onCancel} disabled={pending}>
               {t.common.cancel}
@@ -414,10 +414,10 @@ export function AdminClinicsPanel() {
   const updateClient = useMutation(api.clinics.updateClient);
   const removeClient = useMutation(api.clinics.removeClient);
 
-  const [clinicFormError, setClinicFormError] = useState<string | null>(null);
-  const [clientFormError, setClientFormError] = useState<string | null>(null);
-  const [clinicDeleteError, setClinicDeleteError] = useState<string | null>(null);
-  const [clientDeleteError, setClientDeleteError] = useState<string | null>(null);
+  const [clinicFormError, setClinicFormError] = useState<LocalizedMessage | null>(null);
+  const [clientFormError, setClientFormError] = useState<LocalizedMessage | null>(null);
+  const [clinicDeleteError, setClinicDeleteError] = useState<LocalizedMessage | null>(null);
+  const [clientDeleteError, setClientDeleteError] = useState<LocalizedMessage | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isSavingClient, setIsSavingClient] = useState(false);
   const [pendingClinicId, setPendingClinicId] = useState<Id<"clinics"> | null>(null);
@@ -481,7 +481,7 @@ export function AdminClinicsPanel() {
       }
       closeForm();
     } catch (cause) {
-      setClinicFormError(errorText(cause, t));
+      setClinicFormError(localizedError(cause, (t) => t.admin.clinics.clinicForm.saveFailed));
     } finally {
       setIsSaving(false);
     }
@@ -522,7 +522,7 @@ export function AdminClinicsPanel() {
       }
       closeClientForm();
     } catch (cause) {
-      setClientFormError(errorText(cause, t));
+      setClientFormError(localizedError(cause, (t) => t.admin.clinics.clientForm.saveFailed));
     } finally {
       setIsSavingClient(false);
     }
@@ -537,7 +537,7 @@ export function AdminClinicsPanel() {
       await removeClinic({ clinicId: clinicToDelete.clinicId });
       setClinicToDelete(null);
     } catch (cause) {
-      setClinicDeleteError(errorText(cause, t));
+      setClinicDeleteError(localizedError(cause, (t) => t.admin.clinics.delete.clinicFailed));
     } finally {
       setPendingClinicId(null);
     }
@@ -552,7 +552,7 @@ export function AdminClinicsPanel() {
       await removeClient({ clientId: clientToDelete.clientId });
       setClientToDelete(null);
     } catch (cause) {
-      setClientDeleteError(errorText(cause, t));
+      setClientDeleteError(localizedError(cause, (t) => t.admin.clinics.delete.clientFailed));
     } finally {
       setPendingClientId(null);
     }

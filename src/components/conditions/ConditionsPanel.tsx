@@ -24,7 +24,7 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useDocumentTitle, useI18n } from "@/lib/i18n/context";
-import { errorText } from "@/lib/i18n/errors";
+import { localizedError, type LocalizedMessage } from "@/lib/i18n/errors";
 import { bucketLabel, operationLabel } from "@/lib/i18n/reportLabels";
 
 import { ConditionSetEditor } from "./ConditionSetEditor";
@@ -54,7 +54,7 @@ export function ConditionsPanel() {
   const [typeValue, setTypeValue] = useState<string>("pending-audit");
   const [scope, setScope] = useState<string>(DEFAULT_SCOPE);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<LocalizedMessage | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   // Unsaved edits, keyed by report type and scope, so switching between them
   // does not throw the draft away.
@@ -222,7 +222,7 @@ export function ConditionsPanel() {
         isDefaultScope ? t.conditions.notices.defaultSaved : t.conditions.notices.clinicSaved
       );
     } catch (cause) {
-      setError(errorText(cause, t));
+      setError(localizedError(cause, (t) => t.conditions.failures.saveConditions));
     } finally {
       setSaving(false);
     }
@@ -252,7 +252,7 @@ export function ConditionsPanel() {
       }));
       setNotice(t.conditions.notices.typeSaved);
     } catch (cause) {
-      setError(errorText(cause, t));
+      setError(localizedError(cause, (t) => t.conditions.failures.saveType));
     } finally {
       setSaving(false);
     }
@@ -280,7 +280,7 @@ export function ConditionsPanel() {
         isDefaultScope ? t.conditions.notices.defaultReset : t.conditions.notices.clinicInherits
       );
     } catch (cause) {
-      setError(errorText(cause, t));
+      setError(localizedError(cause, (t) => t.conditions.failures.resetConditions));
     } finally {
       setSaving(false);
     }
@@ -301,7 +301,7 @@ export function ConditionsPanel() {
       setTypeValue(operations[0]?.operationKey ?? "pending-audit");
       setNotice(t.conditions.notices.typeDeleted);
     } catch (cause) {
-      setError(errorText(cause, t));
+      setError(localizedError(cause, (t) => t.conditions.failures.deleteType));
     } finally {
       setSaving(false);
     }
@@ -329,7 +329,7 @@ export function ConditionsPanel() {
       {error ? (
         <Alert variant="destructive">
           <AlertTitle>{t.conditions.updateFailedTitle}</AlertTitle>
-          <AlertDescription>{error}</AlertDescription>
+          <AlertDescription>{error.resolve(t)}</AlertDescription>
         </Alert>
       ) : null}
 

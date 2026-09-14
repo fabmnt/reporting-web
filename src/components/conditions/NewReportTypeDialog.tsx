@@ -33,7 +33,7 @@ import {
 } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
 import { useI18n } from "@/lib/i18n/context";
-import { errorText } from "@/lib/i18n/errors";
+import { localizedError, type LocalizedMessage } from "@/lib/i18n/errors";
 import type { Messages } from "@/lib/i18n/messages";
 import { bucketLabel } from "@/lib/i18n/reportLabels";
 
@@ -71,7 +71,7 @@ export function NewReportTypeDialog({
   const [name, setName] = useState("");
   const [template, setTemplate] = useState<ReportTypeTemplate>("blank");
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<LocalizedMessage | null>(null);
 
   const templateItems: ReadonlyArray<{ value: ReportTypeTemplate; label: string }> = [
     { value: "blank", label: t.conditions.newType.templateBlank },
@@ -93,7 +93,7 @@ export function NewReportTypeDialog({
       onCreated(created);
       onOpenChange(false);
     } catch (cause) {
-      setError(errorText(cause, t));
+      setError(localizedError(cause, (t) => t.conditions.failures.createType));
     } finally {
       setSaving(false);
     }
@@ -146,7 +146,7 @@ export function NewReportTypeDialog({
         {error ? (
           <Alert variant="destructive">
             <AlertTitle>{t.conditions.newType.createFailedTitle}</AlertTitle>
-            <AlertDescription>{error}</AlertDescription>
+            <AlertDescription>{error.resolve(t)}</AlertDescription>
           </Alert>
         ) : null}
 

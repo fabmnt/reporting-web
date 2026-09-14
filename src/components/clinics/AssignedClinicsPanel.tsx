@@ -34,7 +34,7 @@ import {
 } from "@/lib/clinicSheetColumns";
 import { parseSpreadsheetId } from "@/lib/googleSheets";
 import { useDocumentTitle, useI18n } from "@/lib/i18n/context";
-import { errorText } from "@/lib/i18n/errors";
+import { localizedError, localizedMessage, type LocalizedMessage } from "@/lib/i18n/errors";
 
 type AssignedClinicList = FunctionReturnType<typeof api.clinics.listAssigned>;
 type AssignedClinicView = AssignedClinicList["clinics"][number];
@@ -57,7 +57,7 @@ function ClinicConfigForm({
   onOpenChange: (open: boolean) => void;
   clinic: AssignedClinicView;
   pending: boolean;
-  error: string | null;
+  error: LocalizedMessage | null;
   onSubmit: (values: ClinicConfigFormValues) => Promise<void>;
   onCancel: () => void;
 }) {
@@ -66,7 +66,7 @@ function ClinicConfigForm({
     sheetInput: clinic.googleSheetId,
     sheetColumns: sheetColumnsToFormValues(clinic.sheetColumns),
   }));
-  const [validationError, setValidationError] = useState<string | null>(null);
+  const [validationError, setValidationError] = useState<LocalizedMessage | null>(null);
 
   async function handleSubmit(event: SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -74,7 +74,7 @@ function ClinicConfigForm({
 
     const googleSheetId = parseSpreadsheetId(values.sheetInput);
     if (googleSheetId === "") {
-      setValidationError(t.clinics.dialog.invalidSheet);
+      setValidationError(localizedMessage((t) => t.clinics.dialog.invalidSheet));
       return;
     }
 
@@ -109,10 +109,10 @@ function ClinicConfigForm({
           {error ? (
             <Alert variant="destructive">
               <AlertTitle>{t.clinics.dialog.saveFailedTitle}</AlertTitle>
-              <AlertDescription>{error}</AlertDescription>
+              <AlertDescription>{error.resolve(t)}</AlertDescription>
             </Alert>
           ) : null}
-          <FieldError>{validationError}</FieldError>
+          <FieldError>{validationError?.resolve(t)}</FieldError>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onCancel} disabled={pending}>
               {t.common.cancel}
@@ -137,7 +137,7 @@ export function AssignedClinicsPanel() {
 
   const [editingClinic, setEditingClinic] = useState<AssignedClinicView | null>(null);
   const [formSession, setFormSession] = useState(0);
-  const [formError, setFormError] = useState<string | null>(null);
+  const [formError, setFormError] = useState<LocalizedMessage | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
   function closeForm() {
@@ -164,7 +164,7 @@ export function AssignedClinicsPanel() {
       });
       closeForm();
     } catch (cause) {
-      setFormError(errorText(cause, t));
+      setFormError(localizedError(cause, (t) => t.clinics.dialog.saveFailed));
     } finally {
       setIsSaving(false);
     }

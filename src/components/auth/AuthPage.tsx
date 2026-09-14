@@ -16,7 +16,7 @@ import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { I18nProvider, useDocumentTitle, useI18n } from "@/lib/i18n/context";
-import { errorText } from "@/lib/i18n/errors";
+import { localizedError, type LocalizedMessage } from "@/lib/i18n/errors";
 
 import { ConvexAuthRoot } from "./ConvexAuthRoot";
 
@@ -26,7 +26,7 @@ function AuthForm({ mode }: { mode: AuthMode }) {
   const { signIn } = useAuthActions();
   const { isAuthenticated, isLoading } = useConvexAuth();
   const { t } = useI18n();
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<LocalizedMessage | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const isSignIn = mode === "signIn";
 
@@ -47,7 +47,7 @@ function AuthForm({ mode }: { mode: AuthMode }) {
     try {
       await signIn("password", formData);
     } catch (cause) {
-      setError(errorText(cause, t));
+      setError(localizedError(cause, (t) => t.app.auth.failed));
       setIsSubmitting(false);
     }
   }
@@ -96,7 +96,7 @@ function AuthForm({ mode }: { mode: AuthMode }) {
                 minLength={8}
                 required
               />
-              <FieldError>{error}</FieldError>
+              <FieldError>{error?.resolve(t)}</FieldError>
             </Field>
           </FieldGroup>
         </form>

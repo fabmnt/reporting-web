@@ -36,7 +36,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useDocumentTitle, useI18n } from "@/lib/i18n/context";
-import { errorText } from "@/lib/i18n/errors";
+import { localizedError, type LocalizedMessage } from "@/lib/i18n/errors";
 
 type StaffRole = "admin" | "operator";
 
@@ -52,8 +52,8 @@ export function AdminAccountsPanel() {
   const [pendingProfileId, setPendingProfileId] = useState<Id<"staffProfiles"> | null>(null);
   const [editingProfileId, setEditingProfileId] = useState<Id<"staffProfiles"> | null>(null);
   const [draftClinicIds, setDraftClinicIds] = useState<Id<"clinics">[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [assignmentError, setAssignmentError] = useState<string | null>(null);
+  const [error, setError] = useState<LocalizedMessage | null>(null);
+  const [assignmentError, setAssignmentError] = useState<LocalizedMessage | null>(null);
   const [isSavingAssignment, setIsSavingAssignment] = useState(false);
 
   async function updateRole(profileId: Id<"staffProfiles">, role: StaffRole) {
@@ -62,7 +62,7 @@ export function AdminAccountsPanel() {
     try {
       await setRole({ profileId, role });
     } catch (cause) {
-      setError(errorText(cause, t));
+      setError(localizedError(cause, (t) => t.admin.accounts.failures.role));
     } finally {
       setPendingProfileId(null);
     }
@@ -74,7 +74,7 @@ export function AdminAccountsPanel() {
     try {
       await setStatus({ profileId, status: isActive ? "active" : "disabled" });
     } catch (cause) {
-      setError(errorText(cause, t));
+      setError(localizedError(cause, (t) => t.admin.accounts.failures.status));
     } finally {
       setPendingProfileId(null);
     }
@@ -117,7 +117,7 @@ export function AdminAccountsPanel() {
       await setAssignedClinics({ profileId: editingProfileId, clinicIds: draftClinicIds });
       resetClinicAssignment();
     } catch (cause) {
-      setAssignmentError(errorText(cause, t));
+      setAssignmentError(localizedError(cause, (t) => t.admin.accounts.failures.assignment));
     } finally {
       setIsSavingAssignment(false);
     }
@@ -157,7 +157,7 @@ export function AdminAccountsPanel() {
       {error ? (
         <Alert variant="destructive">
           <AlertTitle>{t.admin.accounts.updateFailedTitle}</AlertTitle>
-          <AlertDescription>{error}</AlertDescription>
+          <AlertDescription>{error.resolve(t)}</AlertDescription>
         </Alert>
       ) : null}
 
@@ -326,7 +326,7 @@ export function AdminAccountsPanel() {
           {assignmentError ? (
             <Alert variant="destructive">
               <AlertTitle>{t.admin.accounts.assignment.failedTitle}</AlertTitle>
-              <AlertDescription>{assignmentError}</AlertDescription>
+              <AlertDescription>{assignmentError.resolve(t)}</AlertDescription>
             </Alert>
           ) : null}
           <DialogFooter>

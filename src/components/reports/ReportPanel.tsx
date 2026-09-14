@@ -36,7 +36,12 @@ import {
 } from "@/components/ui/table";
 import { todayIso } from "@/lib/dates";
 import { useDocumentTitle, useI18n } from "@/lib/i18n/context";
-import { errorText, sheetErrorText } from "@/lib/i18n/errors";
+import {
+  localizedError,
+  localizedMessage,
+  sheetErrorText,
+  type LocalizedMessage,
+} from "@/lib/i18n/errors";
 import type { Messages } from "@/lib/i18n/messages";
 import { bucketLabel, operationDescription, operationLabel } from "@/lib/i18n/reportLabels";
 import { cn } from "@/lib/utils";
@@ -359,7 +364,7 @@ export function ReportRunner() {
   const [dateRange, setDateRange] = useState({ startDate: todayIso(), endDate: todayIso() });
   const [verification, setVerification] = useState<"all" | "fbd" | "elg">("all");
   const [running, setRunning] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<LocalizedMessage | null>(null);
   const [result, setResult] = useState<CompletedRun | null>(null);
 
   useDocumentTitle(t.app.titles.report);
@@ -371,19 +376,19 @@ export function ReportRunner() {
 
   async function handleRun() {
     if ((assignment?.clinics.length ?? 0) === 0) {
-      setError(t.reports.outcomes.noAssignedClinics);
+      setError(localizedMessage((t) => t.reports.outcomes.noAssignedClinics));
       return;
     }
     if (selectedType === undefined) {
-      setError(t.reports.outcomes.noReportType);
+      setError(localizedMessage((t) => t.reports.outcomes.noReportType));
       return;
     }
     if (!dateRange.startDate || !dateRange.endDate) {
-      setError(t.reports.outcomes.pickDates);
+      setError(localizedMessage((t) => t.reports.outcomes.pickDates));
       return;
     }
     if (dateRange.startDate > dateRange.endDate) {
-      setError(t.reports.outcomes.invalidRange);
+      setError(localizedMessage((t) => t.reports.outcomes.invalidRange));
       return;
     }
     setRunning(true);
@@ -407,7 +412,7 @@ export function ReportRunner() {
         endDate: dateRange.endDate,
       });
     } catch (cause) {
-      setError(errorText(cause, t));
+      setError(localizedError(cause, (t) => t.reports.outcomes.failed));
     } finally {
       setRunning(false);
     }
@@ -424,7 +429,7 @@ export function ReportRunner() {
       {error ? (
         <Alert variant="destructive">
           <AlertTitle>{t.reports.failedTitle}</AlertTitle>
-          <AlertDescription>{error}</AlertDescription>
+          <AlertDescription>{error.resolve(t)}</AlertDescription>
         </Alert>
       ) : null}
 

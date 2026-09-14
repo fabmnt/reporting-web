@@ -26,6 +26,7 @@ export const errors = {
   CLINIC_NAME_REQUIRED: "Clinic name is required.",
   GOOGLE_SHEET_REQUIRED: "Google Sheet ID is required.",
   INVALID_DATE_RANGE: "The start date must be on or before the end date.",
+  INVALID_DATE_FORMAT: "Dates must use the YYYY-MM-DD format.",
   OPERATION_NOT_CONFIGURED: (label: string) => `No conditions are defined for "${label}" yet.`,
   OPERATION_NOT_SUPPORTED: (label: string) => `"${label}" does not support conditions yet.`,
   REPORT_TYPE_NAME_TAKEN: (name: string) => `You already have a report type named "${name}".`,

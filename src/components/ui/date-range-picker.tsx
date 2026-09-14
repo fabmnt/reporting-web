@@ -24,7 +24,9 @@ function toDateRange(value: DateRangeValue): DateRange {
   };
 }
 
-const DATE_FORMAT = "LLL dd, y";
+// "PP" is the long localized date, so each locale keeps its own order and
+// punctuation instead of the month-day order of a fixed pattern.
+const DATE_FORMAT = "PP";
 
 function formatRangeLabel(value: DateRangeValue, locale: Locale, emptyLabel: string): string {
   const dateLocale = DATE_LOCALES[locale];

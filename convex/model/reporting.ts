@@ -1,4 +1,3 @@
-import { ConvexError } from "convex/values";
 import type { Infer } from "convex/values";
 
 import type { Id } from "../_generated/dataModel";
@@ -156,10 +155,7 @@ export function columnLetterToIndex(column: string): number {
 export function tabsInDateRange(tabTitles: string[], startDate: string, endDate: string): string[] {
   const datePattern = /^\d{4}-\d{2}-\d{2}$/;
   if (!datePattern.test(startDate) || !datePattern.test(endDate)) {
-    throw new ConvexError({
-      code: "INVALID_ARGUMENT",
-      message: "Dates must use YYYY-MM-DD format.",
-    });
+    throw appError({ code: "INVALID_DATE_FORMAT" });
   }
   if (startDate > endDate) {
     throw appError({ code: "INVALID_DATE_RANGE" });

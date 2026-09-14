@@ -17,7 +17,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { I18nProvider, useI18n } from "@/lib/i18n/context";
-import { errorText } from "@/lib/i18n/errors";
+import { errorText, localizedError, type LocalizedMessage } from "@/lib/i18n/errors";
 import { normalizePath } from "@/lib/paths";
 
 import { AppHeader, type CurrentAccount } from "./AppHeader";
@@ -152,7 +152,7 @@ function AuthGate({
   const ensureProfile = useMutation(api.staffAccounts.ensureCurrentProfile);
   const account = useQuery(api.staffAccounts.current, isAuthenticated ? {} : "skip");
   const requestedProfile = useRef(false);
-  const [setupError, setSetupError] = useState<string | null>(null);
+  const [setupError, setSetupError] = useState<LocalizedMessage | null>(null);
   const [path, setPath] = useState(() => normalizePath(initialPath));
 
   useEffect(() => {
@@ -177,9 +177,9 @@ function AuthGate({
 
     requestedProfile.current = true;
     void ensureProfile({}).catch((cause: unknown) => {
-      setSetupError(errorText(cause, t));
+      setSetupError(localizedError(cause, (t) => t.app.states.accountSetupFailedFallback));
     });
-  }, [account, ensureProfile, isAuthenticated, t]);
+  }, [account, ensureProfile, isAuthenticated]);
 
   // The language stored on the profile wins over the device preference, unless
   // the user already picked one in this session.
@@ -205,7 +205,7 @@ function AuthGate({
       <Centered>
         <Alert variant="destructive" className="w-full max-w-md">
           <AlertTitle>{t.app.states.accountSetupFailed}</AlertTitle>
-          <AlertDescription>{setupError}</AlertDescription>
+          <AlertDescription>{setupError.resolve(t)}</AlertDescription>
         </Alert>
       </Centered>
     );
