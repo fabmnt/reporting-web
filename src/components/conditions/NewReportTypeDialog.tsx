@@ -76,7 +76,6 @@ export function NewReportTypeDialog({
   const templateItems: ReadonlyArray<{ value: ReportTypeTemplate; label: string }> = [
     { value: "blank", label: t.conditions.newType.templateBlank },
     { value: "pending-audit", label: t.conditions.newType.templatePendingAudit },
-    { value: "ready-to-upload", label: t.conditions.newType.templateReadyToUpload },
   ];
 
   async function handleCreate() {

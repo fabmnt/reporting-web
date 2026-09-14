@@ -12,11 +12,6 @@ export const operations = {
     description: "Rows waiting to be executed against carrier data.",
     buckets: {},
   },
-  "ready-to-upload": {
-    label: "Ready to upload",
-    description: "Rows verified and ready to upload.",
-    buckets: { ready: "Ready to upload", review: "Needs review" },
-  },
   "smilist-filters": {
     label: "Smilist filters",
     description: "Rebuild QA filter views for Smilist sheets.",

@@ -20,11 +20,7 @@ export const MAX_TYPE_DESCRIPTION_LENGTH = 200;
 
 // What the create dialog offers: start from one empty group, or copy the rules
 // of a built-in report as a working starting point.
-export const reportTypeTemplate = v.union(
-  v.literal("blank"),
-  v.literal("pending-audit"),
-  v.literal("ready-to-upload")
-);
+export const reportTypeTemplate = v.union(v.literal("blank"), v.literal("pending-audit"));
 export type ReportTypeTemplate = Infer<typeof reportTypeTemplate>;
 
 export function nextBucketKey(buckets: ReadonlyArray<ReportTypeBucket>): string {

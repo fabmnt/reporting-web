@@ -5,6 +5,7 @@ import type { QueryCtx } from "../../convex/_generated/server";
 import {
   assertBucketKeys,
   AUDIT_EXCLUDE_STATUS,
+  bucketCatalog,
   bucketCatalogFor,
   bucketKeysFor,
   cleanConditionSet,
@@ -106,25 +107,6 @@ describe("defaultConditionsFor", () => {
       },
     ]);
     expect(AUDIT_EXCLUDE_STATUS).toHaveLength(14);
-  });
-
-  it("reproduces the legacy ready to upload rule", () => {
-    const conditions = defaultConditionsFor("ready-to-upload");
-    const [ready, review] = conditions.buckets;
-
-    expect(conditions.buckets.map((item) => item.bucketKey)).toEqual(["ready", "review"]);
-    expect(ready?.catchAll).toBe(false);
-    expect(ready?.expression.filters).toEqual([
-      clause("L", "contains", ["DONE"]),
-      clause("uploadStatus", "notContains", ["UPLOADED", "DONE BY DR", "DONE BY DIVA"]),
-      clause("uploadStatus", "contains", ["EMPTY"]),
-      clause("updateStatus", "contains", ["DONE", "NOT FOUND"]),
-    ]);
-    expect(ready?.expression.groups).toEqual([]);
-    expect(review?.expression.filters).toEqual([
-      clause("L", "contains", ["DONE"]),
-      clause("uploadStatus", "notContains", ["UPLOADED", "DONE BY DR", "DONE BY DIVA", "EMPTY"]),
-    ]);
   });
 
   it("rejects report types without conditions", () => {
@@ -231,100 +213,46 @@ describe("evaluateConditionSet with the pending audit defaults", () => {
   });
 });
 
-describe("evaluateConditionSet with the ready to upload defaults", () => {
-  const conditions = defaultConditionsFor("ready-to-upload");
-
-  const cases: Array<{ name: string; row: RowValues; expected: string | null }> = [
-    {
-      name: "marks a DONE/DONE/EMPTY row ready",
-      row: { l: "DONE", updateStatus: "DONE", uploadStatus: "EMPTY" },
-      expected: "ready",
-    },
-    {
-      name: "marks an EMPTY row ready when the update status is NOT FOUND",
-      row: { l: "DONE", updateStatus: "NOT FOUND", uploadStatus: "EMPTY" },
-      expected: "ready",
-    },
-    {
-      name: "sends another upload status to review",
-      row: { l: "DONE", updateStatus: "DONE", uploadStatus: "UPLOAD INCOMPLETE" },
-      expected: "review",
-    },
-    {
-      name: "sends a row with an empty upload cell to review",
-      row: { l: "DONE", updateStatus: "WAITING", uploadStatus: "" },
-      expected: "review",
-    },
-    {
-      name: "drops an EMPTY row whose update status is not accepted",
-      row: { l: "DONE", updateStatus: "WAITING", uploadStatus: "EMPTY" },
-      expected: null,
-    },
-    {
-      name: "drops a terminal upload status before ready and review",
-      row: { l: "DONE", updateStatus: "DONE", uploadStatus: "UPLOADED" },
-      expected: null,
-    },
-    {
-      name: "drops NOT UPLOADED as terminal",
-      row: { l: "DONE", updateStatus: "DONE", uploadStatus: "NOT UPLOADED" },
-      expected: null,
-    },
-    {
-      name: "drops rows where column L is not done",
-      row: { l: "CHECK", updateStatus: "DONE", uploadStatus: "EMPTY" },
-      expected: null,
-    },
-  ];
-
-  it.each(cases)("$name", ({ row, expected }) => {
-    expect(evaluateConditionSet(sheetRow(row), COLUMNS, conditions)).toBe(expected);
-  });
-
-  it("drops rows that do not reach the mapped columns", () => {
-    const shortRow = Array.from({ length: COLUMNS.uploadStatus }, () => "DONE");
-    expect(evaluateConditionSet(shortRow, COLUMNS, conditions)).toBeNull();
-  });
-
+describe("evaluateConditionSet with several buckets", () => {
   it("assigns a row to the first matching bucket", () => {
     const set: ReportConditionSet = {
       buckets: [
-        { bucketKey: "ready", catchAll: false, expression: { filters: [], groups: [] } },
+        { bucketKey: "first", catchAll: false, expression: { filters: [], groups: [] } },
         {
-          bucketKey: "review",
+          bucketKey: "second",
           catchAll: false,
           expression: { filters: [clause("L", "contains", ["DONE"])], groups: [] },
         },
       ],
     };
-    expect(evaluateConditionSet(sheetRow({ l: "DONE" }), COLUMNS, set)).toBe("ready");
+    expect(evaluateConditionSet(sheetRow({ l: "DONE" }), COLUMNS, set)).toBe("first");
   });
 
   it("leaves catch all buckets out of the row length check", () => {
     const set: ReportConditionSet = {
       buckets: [
-        { bucketKey: "ready", catchAll: false, expression: { filters: [], groups: [] } },
-        { bucketKey: "review", catchAll: true, expression: { filters: [], groups: [] } },
+        { bucketKey: "first", catchAll: false, expression: { filters: [], groups: [] } },
+        { bucketKey: "second", catchAll: true, expression: { filters: [], groups: [] } },
       ],
     };
     // Catch all adds no column of its own, so a row without any of the columns
     // the other buckets read still matches it.
-    expect(evaluateConditionSet(["", ""], COLUMNS, set)).toBe("ready");
+    expect(evaluateConditionSet(["", ""], COLUMNS, set)).toBe("first");
   });
 
   it("drops a short row even when a later bucket catches all", () => {
     const set: ReportConditionSet = {
       buckets: [
         {
-          bucketKey: "ready",
+          bucketKey: "first",
           catchAll: false,
           expression: { filters: [clause("L", "contains", ["DONE"])], groups: [] },
         },
-        { bucketKey: "review", catchAll: true, expression: { filters: [], groups: [] } },
+        { bucketKey: "second", catchAll: true, expression: { filters: [], groups: [] } },
       ],
     };
     // The row does not reach column L, so it is dropped before any bucket is
-    // evaluated. The legacy ready report behaved the same way.
+    // evaluated.
     expect(evaluateConditionSet(["", ""], COLUMNS, set)).toBeNull();
   });
 });
@@ -669,49 +597,51 @@ describe("cleanConditionSet", () => {
 
 describe("assertBucketKeys", () => {
   it("accepts the catalog buckets and rejects anything else", () => {
+    const conditions = defaultConditionsFor("pending-audit");
+    const expected = bucketKeysFor("pending-audit");
+    expect(() => assertBucketKeys(conditions, expected, "pending-audit")).not.toThrow();
     expect(() =>
       assertBucketKeys(
-        defaultConditionsFor("ready-to-upload"),
-        bucketKeysFor("ready-to-upload"),
-        "ready-to-upload"
-      )
-    ).not.toThrow();
-    expect(() =>
-      assertBucketKeys(
-        defaultConditionsFor("ready-to-upload"),
-        bucketKeysFor("pending-audit"),
-        "ready-to-upload"
-      )
-    ).toThrow();
-    expect(() =>
-      assertBucketKeys(
-        defaultConditionsFor("pending-audit"),
-        bucketKeysFor("ready-to-upload"),
-        "ready-to-upload"
+        { buckets: [{ ...conditions.buckets[0]!, bucketKey: "other" }] },
+        expected,
+        "pending-audit"
       )
     ).toThrow();
   });
 
-  it("rejects unknown, repeated, or reordered buckets", () => {
-    const buckets = defaultConditionsFor("ready-to-upload").buckets;
-    const expected = bucketKeysFor("ready-to-upload");
+  it("rejects repeated or reordered buckets", () => {
+    const set: ReportConditionSet = {
+      buckets: [
+        { bucketKey: "first", catchAll: false, expression: { filters: [], groups: [] } },
+        { bucketKey: "second", catchAll: false, expression: { filters: [], groups: [] } },
+      ],
+    };
+    const expected = ["first", "second"];
     expect(() =>
-      assertBucketKeys({ buckets: [...buckets].reverse() }, expected, "ready-to-upload")
+      assertBucketKeys({ buckets: [...set.buckets].reverse() }, expected, "test")
     ).toThrow();
     expect(() =>
-      assertBucketKeys({ buckets: [...buckets, buckets[0]!] }, expected, "ready-to-upload")
+      assertBucketKeys({ buckets: [...set.buckets, set.buckets[0]!] }, expected, "test")
     ).toThrow();
   });
 });
 
-describe("bucketCatalogFor", () => {
-  it("marks the last bucket of a multi-bucket report as catch all capable", () => {
+describe("bucketCatalog", () => {
+  it("returns the single bucket of the pending audit report", () => {
     expect(bucketCatalogFor("pending-audit")).toEqual([
       { key: "audit", label: "Pending audit", canCatchAll: false },
     ]);
-    expect(bucketCatalogFor("ready-to-upload")).toEqual([
-      { key: "ready", label: "Ready to upload", canCatchAll: false },
-      { key: "review", label: "Needs review", canCatchAll: true },
+  });
+
+  it("marks the last bucket of a multi-bucket report as catch all capable", () => {
+    expect(
+      bucketCatalog([
+        { key: "first", label: "First" },
+        { key: "second", label: "Second" },
+      ])
+    ).toEqual([
+      { key: "first", label: "First", canCatchAll: false },
+      { key: "second", label: "Second", canCatchAll: true },
     ]);
   });
 });
@@ -719,7 +649,6 @@ describe("bucketCatalogFor", () => {
 describe("isImplementedOperation", () => {
   it("knows which report types have conditions", () => {
     expect(isImplementedOperation("pending-audit")).toBe(true);
-    expect(isImplementedOperation("ready-to-upload")).toBe(true);
     expect(isImplementedOperation("pending-execution")).toBe(false);
   });
 });
@@ -816,7 +745,11 @@ describe("resolveConditionsForClinics", () => {
           userId,
           operationKey: "pending-audit",
           clinicId: null,
-          conditions: defaultConditionsFor("ready-to-upload"),
+          conditions: {
+            buckets: [
+              { bucketKey: "other", catchAll: false, expression: { filters: [], groups: [] } },
+            ],
+          },
         },
       ]),
       userId,

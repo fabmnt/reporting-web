@@ -43,21 +43,18 @@ const REPORT_TYPES = {
       buckets: [{ key: "audit", label: "Pending audit" }],
     },
     {
-      source: "builtin",
-      key: "ready-to-upload",
-      label: "Ready to upload",
-      description: "Rows ready to upload and rows that need review.",
-      buckets: [
-        { key: "ready", label: "Ready to upload" },
-        { key: "review", label: "Needs review" },
-      ],
+      source: "custom",
+      key: "type-1",
+      label: "Late verifications",
+      description: "My own row rules.",
+      buckets: [{ key: "b1", label: "Group 1" }],
     },
   ],
 };
 
-// A pending-audit run: it has audit rows but no ready or review rows. Switching
-// the report type to "ready to upload" after the run would therefore show
-// "No matching rows" if the view read live control state.
+// A pending-audit run: it has audit rows but no rows for any other report type.
+// Switching the report type after the run would therefore show "No matching
+// rows" if the view read live control state.
 const PENDING_AUDIT_RUN = {
   reportRunId: null,
   assignedClinicCount: 1,
@@ -121,7 +118,7 @@ describe("ReportRunner", () => {
 
     // Switch the report type without running again.
     await user.click(screen.getByRole("combobox", { name: "Report type" }));
-    await user.click(await screen.findByRole("option", { name: "Ready to upload" }));
+    await user.click(await screen.findByRole("option", { name: "Late verifications" }));
 
     // The finished run still renders as it ran, not as the new control value.
     expect(auditHeading()).toBeVisible();

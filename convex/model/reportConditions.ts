@@ -82,7 +82,7 @@ export type ReportConditionSet = Infer<typeof reportConditionSet>;
 
 // Operations whose row rules are configurable. The other report types in
 // `reportOperationKey` do not have conditions yet.
-export const IMPLEMENTED_REPORT_OPERATIONS = ["pending-audit", "ready-to-upload"] as const;
+export const IMPLEMENTED_REPORT_OPERATIONS = ["pending-audit"] as const;
 export type ImplementedOperationKey = (typeof IMPLEMENTED_REPORT_OPERATIONS)[number];
 
 export function isImplementedOperation(key: string): key is ImplementedOperationKey {
@@ -96,10 +96,6 @@ export const REPORT_BUCKETS: Record<
   ReadonlyArray<{ key: string; label: string }>
 > = {
   "pending-audit": [{ key: "audit", label: "Pending audit" }],
-  "ready-to-upload": [
-    { key: "ready", label: "Ready to upload" },
-    { key: "review", label: "Needs review" },
-  ],
 };
 
 // ---------------------------------------------------------------------------
@@ -124,10 +120,6 @@ export const AUDIT_EXCLUDE_STATUS = [
   "WFL",
   "REVIEWED BY QA",
 ];
-
-// Old tool rule (get_rows_ready_to_upload_ts). Terminal upload statuses never
-// need action again, so they leave the report completely.
-const TERMINAL_UPLOAD_STATUS = ["UPLOADED", "DONE BY DR", "DONE BY DIVA"];
 
 // The conditions that reproduce the hardcoded rules. Built fresh on every call
 // so callers can edit the result without touching each other.
@@ -165,49 +157,6 @@ export function defaultConditionsFor(operationKey: ReportOperationKey): ReportCo
                 ],
               },
             ],
-          },
-        },
-      ],
-    };
-  }
-  if (operationKey === "ready-to-upload") {
-    return {
-      buckets: [
-        {
-          bucketKey: "ready",
-          catchAll: false,
-          expression: {
-            filters: [
-              { column: "L", operator: "contains", values: ["DONE"] },
-              {
-                column: "uploadStatus",
-                operator: "notContains",
-                values: [...TERMINAL_UPLOAD_STATUS],
-              },
-              { column: "uploadStatus", operator: "contains", values: ["EMPTY"] },
-              { column: "updateStatus", operator: "contains", values: ["DONE", "NOT FOUND"] },
-            ],
-            groups: [],
-          },
-        },
-        {
-          // The legacy rule drops rows with an empty upload status whose update
-          // status is not accepted, and rows with a terminal upload status,
-          // instead of sending them to review. The clauses below repeat those
-          // two exclusions so the default keeps behaving the same way. Catch
-          // all stays available for users who prefer the plain fallthrough.
-          bucketKey: "review",
-          catchAll: false,
-          expression: {
-            filters: [
-              { column: "L", operator: "contains", values: ["DONE"] },
-              {
-                column: "uploadStatus",
-                operator: "notContains",
-                values: [...TERMINAL_UPLOAD_STATUS, "EMPTY"],
-              },
-            ],
-            groups: [],
           },
         },
       ],

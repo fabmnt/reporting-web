@@ -12,11 +12,6 @@ export const operations = {
     description: "Filas que esperan ejecutarse contra los datos de la aseguradora.",
     buckets: {},
   },
-  "ready-to-upload": {
-    label: "Listo para subir",
-    description: "Filas verificadas y listas para subir.",
-    buckets: { ready: "Listo para subir", review: "Necesita revisión" },
-  },
   "smilist-filters": {
     label: "Filtros de Smilist",
     description: "Reconstruye las vistas de filtros de QA para las hojas de Smilist.",

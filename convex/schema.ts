@@ -13,7 +13,6 @@ export const staffLanguage = v.union(v.literal("en"), v.literal("es"));
 export const reportOperationKey = v.union(
   v.literal("pending-audit"),
   v.literal("pending-execution"),
-  v.literal("ready-to-upload"),
   v.literal("smilist-filters"),
   v.literal("luna-formulas"),
   v.literal("diva-formulas"),

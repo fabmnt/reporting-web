@@ -46,7 +46,7 @@ import type { Messages } from "@/lib/i18n/messages";
 import { bucketLabel, operationDescription, operationLabel } from "@/lib/i18n/reportLabels";
 import { cn } from "@/lib/utils";
 
-type BuiltinOperationKey = "pending-audit" | "ready-to-upload";
+type BuiltinOperationKey = "pending-audit";
 type ReportTypeSource = "builtin" | "custom";
 
 type RunnableType = {
@@ -109,8 +109,6 @@ const TONES: Record<
 // Row tone per built-in bucket key. Custom report types name their own groups,
 // so they stay neutral instead of guessing what a name means.
 const BUCKET_TONES: Record<string, RowTone> = {
-  ready: "success",
-  review: "warning",
   audit: "neutral",
 };
 

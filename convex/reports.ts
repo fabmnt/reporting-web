@@ -39,7 +39,7 @@ const reportRow = v.object({ rowNumber: v.number(), values: v.array(v.string()) 
 const reportRunTarget = v.union(
   v.object({
     source: v.literal("builtin"),
-    operationKey: v.union(v.literal("pending-audit"), v.literal("ready-to-upload")),
+    operationKey: v.literal("pending-audit"),
   }),
   v.object({ source: v.literal("custom"), reportTypeId: v.id("reportTypes") })
 );
@@ -196,8 +196,8 @@ export const recordReportRun = internalMutation({
   },
 });
 
-// v1: the two built-in row reports and the caller's own report types. The
-// execute operation needs carrier API data and comes later.
+// v1: the built-in pending audit row report and the caller's own report types.
+// The execute operation needs carrier API data and comes later.
 export const runSheetReport = action({
   args: {
     target: reportRunTarget,

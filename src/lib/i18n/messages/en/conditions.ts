@@ -51,7 +51,6 @@ export const conditions = {
     startingPoint: "Starting point",
     templateBlank: "Start empty",
     templatePendingAudit: "Copy pending audit rules",
-    templateReadyToUpload: "Copy ready to upload rules",
     copyNote: "Copying a built-in report starts you from its current rules.",
     createFailedTitle: "Could not create the report type",
     creating: "Creating",

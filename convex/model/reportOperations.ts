@@ -23,11 +23,6 @@ export const REPORT_OPERATIONS: ReadonlyArray<{
     description: "Rows waiting to be executed against carrier data.",
   },
   {
-    key: "ready-to-upload",
-    label: "Ready to upload",
-    description: "Rows verified and ready to upload.",
-  },
-  {
     key: "smilist-filters",
     label: "Smilist filters",
     description: "Rebuild QA filter views for Smilist sheets.",
