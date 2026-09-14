@@ -80,6 +80,7 @@ function AuthForm({ mode }: { mode: AuthMode }) {
                 id="email"
                 name="email"
                 type="email"
+                placeholder="you@example.com"
                 autoComplete="email"
                 aria-invalid={error !== null}
                 required
@@ -91,6 +92,7 @@ function AuthForm({ mode }: { mode: AuthMode }) {
                 id="password"
                 name="password"
                 type="password"
+                placeholder="••••••••"
                 autoComplete={isSignIn ? "current-password" : "new-password"}
                 aria-invalid={error !== null}
                 minLength={8}

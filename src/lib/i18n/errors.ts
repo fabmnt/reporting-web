@@ -15,6 +15,12 @@ function renderAppError(payload: AppErrorPayload, t: Messages): string | null {
   switch (payload.code) {
     case "UNAUTHENTICATED":
       return e.UNAUTHENTICATED;
+    case "INVALID_CREDENTIALS":
+      return e.INVALID_CREDENTIALS;
+    case "TOO_MANY_FAILED_ATTEMPTS":
+      return e.TOO_MANY_FAILED_ATTEMPTS;
+    case "ACCOUNT_ALREADY_EXISTS":
+      return e.ACCOUNT_ALREADY_EXISTS;
     case "ADMIN_REQUIRED":
       return e.ADMIN_REQUIRED;
     case "ACTIVE_STAFF_REQUIRED":

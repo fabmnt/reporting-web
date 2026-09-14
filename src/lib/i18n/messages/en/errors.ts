@@ -2,6 +2,9 @@
 // the backend sent with the code, already resolved by src/lib/i18n/errors.ts.
 export const errors = {
   UNAUTHENTICATED: "Sign in to continue.",
+  INVALID_CREDENTIALS: "Invalid email or password.",
+  TOO_MANY_FAILED_ATTEMPTS: "Too many failed attempts. Try again later.",
+  ACCOUNT_ALREADY_EXISTS: "An account with this email already exists.",
   ADMIN_REQUIRED: "Administrator access is required.",
   ACTIVE_STAFF_REQUIRED: "An active staff account is required.",
   OPERATOR_REQUIRED: "Operator access is required.",

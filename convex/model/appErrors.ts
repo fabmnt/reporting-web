@@ -6,6 +6,9 @@ import type { Infer } from "convex/values";
 // (a name, a count) travel beside the code.
 export type AppErrorPayload =
   | { code: "UNAUTHENTICATED" }
+  | { code: "INVALID_CREDENTIALS" }
+  | { code: "TOO_MANY_FAILED_ATTEMPTS" }
+  | { code: "ACCOUNT_ALREADY_EXISTS" }
   | { code: "ADMIN_REQUIRED" }
   | { code: "ACTIVE_STAFF_REQUIRED" }
   | { code: "OPERATOR_REQUIRED" }
