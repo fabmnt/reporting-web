@@ -18,7 +18,6 @@ pnpm-debug.log*
 .env.production
 .env.local
 .env.e2e
-convex/_generated/
 
 # macOS-specific files
 .DS_Store
