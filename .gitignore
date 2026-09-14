@@ -25,5 +25,8 @@ pnpm-debug.log*
 # jetbrains setting folder
 .idea/
 
+# vercel project link
+.vercel/
+
 # migration script output
 scripts/output/
