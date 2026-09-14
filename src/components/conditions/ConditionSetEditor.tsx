@@ -16,6 +16,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useI18n } from "@/lib/i18n/context";
 
 import { BucketEditor } from "./BucketEditor";
 
@@ -34,6 +35,7 @@ export function ConditionSetEditor({
   onChange: (conditions: ReportConditionSet) => void;
   disabled: boolean;
 }) {
+  const { t } = useI18n();
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const catalog = bucketCatalog(buckets);
   const index = Math.max(
@@ -52,14 +54,14 @@ export function ConditionSetEditor({
     <div className="flex flex-col gap-6">
       {catalog.length > 1 ? (
         <Field>
-          <FieldLabel>Row group</FieldLabel>
+          <FieldLabel>{t.conditions.rowGroup}</FieldLabel>
           <Select
             items={catalog.map((bucket) => ({ value: bucket.key, label: bucket.label }))}
             value={catalog[index]?.key ?? ""}
             onValueChange={(value) => setSelectedKey((value as string) ?? null)}
             disabled={disabled}
           >
-            <SelectTrigger aria-label="Row group" className="w-full">
+            <SelectTrigger aria-label={t.conditions.rowGroup} className="w-full">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>

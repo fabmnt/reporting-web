@@ -1,8 +1,9 @@
-import { ConvexError, v } from "convex/values";
+import { v } from "convex/values";
 
 import type { Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { mutation, query } from "./_generated/server";
+import { appError } from "./model/appErrors";
 import {
   assertBucketKeys,
   bucketCatalogFor,
@@ -80,10 +81,7 @@ async function assertClinicAssigned(
   if (clinicId === null) return;
   const assigned = await listProfileClinics(ctx, profile);
   if (!assigned.some((clinic) => clinic._id === clinicId)) {
-    throw new ConvexError({
-      code: "FORBIDDEN",
-      message: "This clinic is not assigned to you.",
-    });
+    throw appError({ code: "CLINIC_NOT_ASSIGNED" });
   }
 }
 
@@ -163,10 +161,7 @@ export const getMine = query({
   handler: async (ctx, args) => {
     const { userId, profile } = await requireOperator(ctx);
     if (!isImplementedOperation(args.operationKey)) {
-      throw new ConvexError({
-        code: "INVALID_OPERATION",
-        message: `"${args.operationKey}" does not support conditions yet.`,
-      });
+      throw appError({ code: "OPERATION_NOT_SUPPORTED", operationKey: args.operationKey });
     }
     const assigned = await listProfileClinics(ctx, profile);
     if (!assigned.some((clinic) => clinic._id === args.clinicId)) {
@@ -194,10 +189,7 @@ export const saveMine = mutation({
     const { userId, profile } = await requireOperator(ctx);
 
     if (!isImplementedOperation(args.operationKey)) {
-      throw new ConvexError({
-        code: "INVALID_OPERATION",
-        message: `"${args.operationKey}" does not support conditions yet.`,
-      });
+      throw appError({ code: "OPERATION_NOT_SUPPORTED", operationKey: args.operationKey });
     }
     assertBucketKeys(args.conditions, bucketKeysFor(args.operationKey), args.operationKey);
     await assertClinicAssigned(ctx, profile, args.clinicId);
@@ -231,10 +223,7 @@ export const resetMine = mutation({
     const { userId, profile } = await requireOperator(ctx);
 
     if (!isImplementedOperation(args.operationKey)) {
-      throw new ConvexError({
-        code: "INVALID_OPERATION",
-        message: `"${args.operationKey}" does not support conditions yet.`,
-      });
+      throw appError({ code: "OPERATION_NOT_SUPPORTED", operationKey: args.operationKey });
     }
     await assertClinicAssigned(ctx, profile, args.clinicId);
 

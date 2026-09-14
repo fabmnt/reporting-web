@@ -17,9 +17,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useI18n } from "@/lib/i18n/context";
 import {
-  CONDITION_COLUMN_ITEMS,
-  CONDITION_OPERATOR_ITEMS,
+  CONDITION_COLUMNS,
+  CONDITION_OPERATORS,
   operatorIsNegated,
   operatorNeedsValues,
 } from "@/lib/reportConditions";
@@ -41,24 +42,34 @@ export function ClauseEditor({
   onRemove: () => void;
   disabled: boolean;
 }) {
+  const { t } = useI18n();
+  const columnItems = CONDITION_COLUMNS.map((value) => ({
+    value,
+    label: t.conditions.columns[value],
+  }));
+  const operatorItems = CONDITION_OPERATORS.map((value) => ({
+    value,
+    label: t.conditions.operators[value],
+  }));
+
   return (
     <div className="flex flex-col gap-3 rounded-lg border bg-muted/20 p-3">
       <div className="flex items-end gap-2">
         <div className="grid flex-1 gap-3 sm:grid-cols-2">
           <Field>
-            <FieldLabel>Column</FieldLabel>
+            <FieldLabel>{t.conditions.clause.column}</FieldLabel>
             <Select
-              items={CONDITION_COLUMN_ITEMS}
+              items={columnItems}
               value={clause.column}
               onValueChange={(value) => onChange({ ...clause, column: value as ConditionColumn })}
               disabled={disabled}
             >
-              <SelectTrigger aria-label="Column" className="w-full">
+              <SelectTrigger aria-label={t.conditions.clause.column} className="w-full">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
                 <SelectGroup>
-                  {CONDITION_COLUMN_ITEMS.map((item) => (
+                  {columnItems.map((item) => (
                     <SelectItem key={item.value} value={item.value}>
                       {item.label}
                     </SelectItem>
@@ -69,21 +80,21 @@ export function ClauseEditor({
           </Field>
 
           <Field>
-            <FieldLabel>Operator</FieldLabel>
+            <FieldLabel>{t.conditions.clause.operator}</FieldLabel>
             <Select
-              items={CONDITION_OPERATOR_ITEMS}
+              items={operatorItems}
               value={clause.operator}
               onValueChange={(value) =>
                 onChange({ ...clause, operator: value as ConditionOperator })
               }
               disabled={disabled}
             >
-              <SelectTrigger aria-label="Operator" className="w-full">
+              <SelectTrigger aria-label={t.conditions.clause.operator} className="w-full">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
                 <SelectGroup>
-                  {CONDITION_OPERATOR_ITEMS.map((item) => (
+                  {operatorItems.map((item) => (
                     <SelectItem key={item.value} value={item.value}>
                       {item.label}
                     </SelectItem>
@@ -101,8 +112,8 @@ export function ClauseEditor({
           className="text-muted-foreground"
           onClick={onRemove}
           disabled={disabled}
-          aria-label="Remove condition"
-          title="Remove condition"
+          aria-label={t.conditions.clause.remove}
+          title={t.conditions.clause.remove}
         >
           <X aria-hidden="true" />
         </Button>
@@ -110,14 +121,14 @@ export function ClauseEditor({
 
       {operatorNeedsValues(clause.operator) ? (
         <MarkerListField
-          label="Values"
+          label={t.conditions.clause.values}
           values={clause.values}
           onChange={(values) => onChange({ ...clause, values })}
           disabled={disabled}
           emptyHint={
             operatorIsNegated(clause.operator)
-              ? "No values: this condition matches every row."
-              : "No values: this condition matches nothing."
+              ? t.conditions.clause.emptyNegated
+              : t.conditions.clause.emptyPositive
           }
         />
       ) : null}

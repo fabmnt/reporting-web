@@ -1,0 +1,66 @@
+export const app = {
+  brand: "Reporting Web",
+  skipToContent: "Ir al contenido",
+  signOut: "Cerrar sesión",
+  signedInAs: (name: string) => `Sesión iniciada como ${name}`,
+  roles: {
+    admin: "Administrador",
+    operator: "Operador",
+  },
+  nav: {
+    primary: "Principal",
+    reports: "Reportes",
+    clinics: "Clínicas",
+    configuration: "Configuración",
+    admin: "Administración",
+    adminSections: "Secciones de administración",
+    accounts: "Cuentas",
+  },
+  theme: {
+    light: "claro",
+    dark: "oscuro",
+    system: "del sistema (predeterminado del dispositivo)",
+    switchTo: (name: string) => `Cambiar al tema ${name}`,
+  },
+  language: {
+    switchTo: (name: string) => `Cambiar el idioma a ${name}`,
+  },
+  states: {
+    somethingWentWrong: "Algo salió mal",
+    accountSetupFailed: "Falló la configuración de la cuenta",
+    accountSetupFailedFallback: "Falló la configuración de la cuenta.",
+    awaitingApprovalTitle: "Cuenta pendiente de aprobación",
+    awaitingApprovalBody: (email: string) =>
+      `Un administrador debe habilitar ${email} antes de que puedas usar Reporting Web.`,
+    yourAccount: "tu cuenta",
+  },
+  notFound: {
+    title: "Página no encontrada",
+    description: "Esa página no existe.",
+  },
+  convex: {
+    notConnectedTitle: "Convex no está conectado",
+    notConnectedBefore: "Ejecuta",
+    notConnectedAfter: "antes de usar la autenticación.",
+  },
+  auth: {
+    email: "Correo electrónico",
+    password: "Contraseña",
+    signInTitle: "Iniciar sesión",
+    signUpTitle: "Crea tu cuenta",
+    signInDescription: "Usa tu cuenta de Reporting Web.",
+    signUpDescription: "Un administrador debe habilitar tu cuenta antes de que puedas usar la app.",
+    signIn: "Iniciar sesión",
+    createAccount: "Crear cuenta",
+    useExistingAccount: "Usar una cuenta existente",
+    failed: "Falló la autenticación.",
+  },
+  titles: {
+    report: "Ejecutar reporte | Reporting Web",
+    clinics: "Clínicas | Reporting Web",
+    configuration: "Configuración | Reporting Web",
+    accounts: "Cuentas | Reporting Web",
+    signIn: "Iniciar sesión | Reporting Web",
+    signUp: "Crear cuenta | Reporting Web",
+  },
+};

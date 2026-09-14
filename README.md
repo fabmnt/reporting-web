@@ -42,4 +42,5 @@ Convex is set up against a dev deployment. `CONVEX_DEPLOYMENT` and `CONVEX_URL` 
 - Tailwind via `@tailwindcss/vite` + `src/styles/global.css` (imports `shadcn/tailwind.css`, `tw-animate-css`, `@fontsource-variable/geist`).
 - shadcn config in `components.json` (base-nova, base, cssVariables, neutral). UI components in `src/components/ui/` use `@base-ui/react` primitives, not Radix.
 - Theming: class-based dark mode, follows the device preference by default with a light/dark/system toggle (`src/lib/theme.ts`, `src/components/theme/ThemeToggle.tsx`).
+- Languages: English and Spanish, resolved in the client (no locale in the URL). The device preference picks the first one; a signed-in user's choice is stored on `staffProfiles.language` and wins on every device. Catalogs live in `src/lib/i18n/messages/`, the provider and hooks in `src/lib/i18n/context.tsx`, and the switcher in `src/components/i18n/LanguageToggle.tsx`. Backend errors travel as codes (`convex/model/appErrors.ts`) and are rendered in the active language by `src/lib/i18n/errors.ts`.
 - `pnpm-workspace.yaml` allowBuilds: esbuild=true.

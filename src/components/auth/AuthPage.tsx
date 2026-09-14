@@ -1,6 +1,8 @@
 import { useAuthActions, useConvexAuth } from "@convex-dev/auth/react";
 import { useEffect, useState, type SyntheticEvent } from "react";
 
+import { LanguageToggle } from "@/components/i18n/LanguageToggle";
+import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -13,6 +15,8 @@ import {
 import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
+import { I18nProvider, useDocumentTitle, useI18n } from "@/lib/i18n/context";
+import { localizedError, type LocalizedMessage } from "@/lib/i18n/errors";
 
 import { ConvexAuthRoot } from "./ConvexAuthRoot";
 
@@ -21,9 +25,12 @@ type AuthMode = "signIn" | "signUp";
 function AuthForm({ mode }: { mode: AuthMode }) {
   const { signIn } = useAuthActions();
   const { isAuthenticated, isLoading } = useConvexAuth();
-  const [error, setError] = useState<string | null>(null);
+  const { t } = useI18n();
+  const [error, setError] = useState<LocalizedMessage | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const isSignIn = mode === "signIn";
+
+  useDocumentTitle(isSignIn ? t.app.titles.signIn : t.app.titles.signUp);
 
   useEffect(() => {
     if (isAuthenticated) window.location.replace("/");
@@ -40,7 +47,7 @@ function AuthForm({ mode }: { mode: AuthMode }) {
     try {
       await signIn("password", formData);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Authentication failed.");
+      setError(localizedError(cause, (t) => t.app.auth.failed));
       setIsSubmitting(false);
     }
   }
@@ -55,20 +62,20 @@ function AuthForm({ mode }: { mode: AuthMode }) {
           >
             R
           </span>
-          <span className="text-sm font-semibold tracking-tight">Reporting Web</span>
+          <span className="text-sm font-semibold tracking-tight">{t.app.brand}</span>
         </div>
-        <CardTitle className="text-lg">{isSignIn ? "Sign in" : "Create your account"}</CardTitle>
+        <CardTitle className="text-lg">
+          {isSignIn ? t.app.auth.signInTitle : t.app.auth.signUpTitle}
+        </CardTitle>
         <CardDescription>
-          {isSignIn
-            ? "Use your Reporting Web account."
-            : "An administrator must enable your account before you can use the app."}
+          {isSignIn ? t.app.auth.signInDescription : t.app.auth.signUpDescription}
         </CardDescription>
       </CardHeader>
       <CardContent>
         <form id="auth-form" className="flex flex-col gap-5" onSubmit={handleSubmit}>
           <FieldGroup>
             <Field data-invalid={error !== null}>
-              <FieldLabel htmlFor="email">Email</FieldLabel>
+              <FieldLabel htmlFor="email">{t.app.auth.email}</FieldLabel>
               <Input
                 id="email"
                 name="email"
@@ -79,7 +86,7 @@ function AuthForm({ mode }: { mode: AuthMode }) {
               />
             </Field>
             <Field data-invalid={error !== null}>
-              <FieldLabel htmlFor="password">Password</FieldLabel>
+              <FieldLabel htmlFor="password">{t.app.auth.password}</FieldLabel>
               <Input
                 id="password"
                 name="password"
@@ -89,7 +96,7 @@ function AuthForm({ mode }: { mode: AuthMode }) {
                 minLength={8}
                 required
               />
-              <FieldError>{error}</FieldError>
+              <FieldError>{error?.resolve(t)}</FieldError>
             </Field>
           </FieldGroup>
         </form>
@@ -97,13 +104,13 @@ function AuthForm({ mode }: { mode: AuthMode }) {
       <CardFooter className="flex flex-wrap justify-between gap-3">
         <Button form="auth-form" type="submit" size="lg" disabled={isSubmitting || isLoading}>
           {isSubmitting || isLoading ? <Spinner data-icon="inline-start" /> : null}
-          {isSignIn ? "Sign in" : "Create account"}
+          {isSignIn ? t.app.auth.signIn : t.app.auth.createAccount}
         </Button>
         <a
           className="text-sm text-muted-foreground underline underline-offset-4 hover:text-foreground"
           href={isSignIn ? "/sign-up" : "/sign-in"}
         >
-          {isSignIn ? "Create account" : "Use existing account"}
+          {isSignIn ? t.app.auth.createAccount : t.app.auth.useExistingAccount}
         </a>
       </CardFooter>
     </Card>
@@ -112,8 +119,18 @@ function AuthForm({ mode }: { mode: AuthMode }) {
 
 export function AuthPage({ convexUrl, mode }: { convexUrl?: string; mode: AuthMode }) {
   return (
-    <ConvexAuthRoot convexUrl={convexUrl}>
-      <AuthForm mode={mode} />
-    </ConvexAuthRoot>
+    <I18nProvider>
+      <ConvexAuthRoot convexUrl={convexUrl}>
+        {/* The theme and language controls share the island so a change applies
+            to the form without a page reload. */}
+        <div className="fixed top-[max(1rem,env(safe-area-inset-top))] right-[max(1rem,env(safe-area-inset-right))] z-50 flex items-center gap-1">
+          <LanguageToggle />
+          <ThemeToggle />
+        </div>
+        <main className="flex min-h-dvh items-center justify-center p-6">
+          <AuthForm mode={mode} />
+        </main>
+      </ConvexAuthRoot>
+    </I18nProvider>
   );
 }

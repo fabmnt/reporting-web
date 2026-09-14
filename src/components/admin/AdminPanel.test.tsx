@@ -2,9 +2,11 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { getFunctionName } from "convex/server";
 import { useMutation, useQuery } from "convex/react";
+import { ConvexError } from "convex/values";
 import { beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 
 import { NavigationContext } from "@/components/app/navigation";
+import { I18nProvider, useI18n } from "@/lib/i18n/context";
 
 import { api } from "../../../convex/_generated/api";
 import { AdminAccountsPanel } from "./AdminPanel";
@@ -68,6 +70,7 @@ const CLINICS = [
 ];
 
 const setAssignedClinics = vi.fn();
+const setStatus = vi.fn();
 
 const QUERY_NAMES = {
   current: nameOf(api.staffAccounts.current),
@@ -81,16 +84,44 @@ const MUTATION_NAMES = {
   setAssignedClinics: nameOf(api.staffAccounts.setAssignedClinics),
 };
 
+// Stands in for the header toggle, so a test can switch language while a panel
+// keeps an error on screen.
+function LanguageSwitch() {
+  const { setLocale } = useI18n();
+
+  return (
+    <button type="button" onClick={() => setLocale("es")}>
+      Español
+    </button>
+  );
+}
+
 function renderPanel() {
   return render(
-    <NavigationContext.Provider value={{ path: "/admin", navigate: vi.fn() }}>
-      <AdminAccountsPanel />
-    </NavigationContext.Provider>
+    <I18nProvider>
+      <NavigationContext.Provider value={{ path: "/admin", navigate: vi.fn() }}>
+        <AdminAccountsPanel />
+      </NavigationContext.Provider>
+    </I18nProvider>
+  );
+}
+
+function renderPanelWithLanguageSwitch() {
+  return render(
+    <I18nProvider>
+      <LanguageSwitch />
+      <NavigationContext.Provider value={{ path: "/admin", navigate: vi.fn() }}>
+        <AdminAccountsPanel />
+      </NavigationContext.Provider>
+    </I18nProvider>
   );
 }
 
 beforeEach(() => {
   vi.resetAllMocks();
+  // The environment does not always expose localStorage, and the i18n provider
+  // tolerates its absence the same way.
+  window.localStorage?.clear();
 
   useQueryMock.mockImplementation((reference: AnyFunctionReference) => {
     switch (nameOf(reference)) {
@@ -107,6 +138,8 @@ beforeEach(() => {
 
   useMutationMock.mockImplementation((reference: AnyFunctionReference) => {
     switch (nameOf(reference)) {
+      case MUTATION_NAMES.setStatus:
+        return setStatus;
       case MUTATION_NAMES.setAssignedClinics:
         return setAssignedClinics;
       default:
@@ -193,5 +226,31 @@ describe("AdminAccountsPanel", () => {
 
     expect(await within(dialog).findByText("Only active admins can assign clinics.")).toBeVisible();
     expect(screen.getByRole("dialog")).toBeInTheDocument();
+  });
+
+  it("falls back to the operation message when a rejection is not an Error", async () => {
+    const user = userEvent.setup();
+    setStatus.mockRejectedValue(undefined);
+    renderPanel();
+
+    const row = screen.getByRole("row", { name: /Bea/ });
+    await user.click(within(row).getByRole("switch"));
+
+    expect(await screen.findByText("Status update failed.")).toBeVisible();
+  });
+
+  it("shows a visible error in the language the user switches to", async () => {
+    const user = userEvent.setup();
+    setStatus.mockRejectedValue(new ConvexError({ code: "PROFILE_NOT_FOUND" }));
+    renderPanelWithLanguageSwitch();
+
+    const row = screen.getByRole("row", { name: /Bea/ });
+    await user.click(within(row).getByRole("switch"));
+
+    expect(await screen.findByText("Staff profile was not found.")).toBeVisible();
+
+    await user.click(screen.getByRole("button", { name: "Español" }));
+
+    expect(await screen.findByText("No se encontró el perfil del usuario.")).toBeVisible();
   });
 });

@@ -8,9 +8,27 @@ import Layout from "../layouts/Layout.astro";
     <link rel="canonical" href="/" />
   </Fragment>
   <main class="flex min-h-dvh items-center justify-center p-6">
-    <p class="text-sm text-muted-foreground">
-      Reports now live on the home page.
-      <a class="text-primary underline underline-offset-4" href="/">Go to reports</a>
+    <p class="text-sm text-muted-foreground" id="reports-moved">
+      <span data-language="en">Reports now live on the home page.</span>
+      <span data-language="es" hidden>Los reportes ahora están en la página de inicio.</span>
+      <a class="text-primary underline underline-offset-4" href="/">
+        <span data-language="en">Go to reports</span>
+        <span data-language="es" hidden>Ir a los reportes</span>
+      </a>
     </p>
   </main>
+  <script is:inline>
+    // This page only exists to redirect an old URL, so it picks its two
+    // sentences with the same language resolution as the rest of the site.
+    const stored = window.localStorage.getItem("reporting-web-language");
+    const supported = ["en", "es"];
+    const primary = (value) => (value ?? "").toLowerCase().split("-")[0];
+    const detected = (navigator.languages ?? [navigator.language])
+      .map(primary)
+      .find((value) => supported.includes(value));
+    const locale = supported.includes(stored) ? stored : (detected ?? "en");
+    for (const element of document.querySelectorAll("[data-language]")) {
+      element.hidden = element.dataset.language !== locale;
+    }
+  </script>
 </Layout>

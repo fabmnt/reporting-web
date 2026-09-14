@@ -1,8 +1,9 @@
-import { ConvexError, v } from "convex/values";
+import { v } from "convex/values";
 import type { Infer } from "convex/values";
 
 import type { Id } from "../_generated/dataModel";
 import type { QueryCtx } from "../_generated/server";
+import { appError } from "./appErrors";
 import type { ReportOperationKey } from "./reportOperations";
 
 type SheetRow = string[];
@@ -212,10 +213,7 @@ export function defaultConditionsFor(operationKey: ReportOperationKey): ReportCo
       ],
     };
   }
-  throw new ConvexError({
-    code: "INVALID_OPERATION",
-    message: `No conditions are defined for "${operationKey}" yet.`,
-  });
+  throw appError({ code: "OPERATION_NOT_CONFIGURED", operationKey });
 }
 
 export type BucketDefinition = { key: string; label: string };
@@ -260,12 +258,13 @@ export function bucketKeysMatch(
 export function assertBucketKeys(
   conditions: ReportConditionSet,
   expectedKeys: readonly string[],
-  scopeLabel: string
+  operationKey: string
 ): void {
   if (!bucketKeysMatch(conditions, expectedKeys)) {
-    throw new ConvexError({
-      code: "INVALID_CONFIG",
-      message: `Row groups for "${scopeLabel}" must be exactly ${expectedKeys.join(", ")}.`,
+    throw appError({
+      code: "BUCKET_KEYS_MISMATCH",
+      operationKey,
+      expected: expectedKeys.join(", "),
     });
   }
 }

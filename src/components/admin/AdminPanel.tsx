@@ -35,10 +35,13 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { useDocumentTitle, useI18n } from "@/lib/i18n/context";
+import { localizedError, type LocalizedMessage } from "@/lib/i18n/errors";
 
 type StaffRole = "admin" | "operator";
 
 export function AdminAccountsPanel() {
+  const { t } = useI18n();
   const setRole = useMutation(api.staffAccounts.setRole);
   const setStatus = useMutation(api.staffAccounts.setStatus);
   const setAssignedClinics = useMutation(api.staffAccounts.setAssignedClinics);
@@ -49,8 +52,8 @@ export function AdminAccountsPanel() {
   const [pendingProfileId, setPendingProfileId] = useState<Id<"staffProfiles"> | null>(null);
   const [editingProfileId, setEditingProfileId] = useState<Id<"staffProfiles"> | null>(null);
   const [draftClinicIds, setDraftClinicIds] = useState<Id<"clinics">[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [assignmentError, setAssignmentError] = useState<string | null>(null);
+  const [error, setError] = useState<LocalizedMessage | null>(null);
+  const [assignmentError, setAssignmentError] = useState<LocalizedMessage | null>(null);
   const [isSavingAssignment, setIsSavingAssignment] = useState(false);
 
   async function updateRole(profileId: Id<"staffProfiles">, role: StaffRole) {
@@ -59,7 +62,7 @@ export function AdminAccountsPanel() {
     try {
       await setRole({ profileId, role });
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Role update failed.");
+      setError(localizedError(cause, (t) => t.admin.accounts.failures.role));
     } finally {
       setPendingProfileId(null);
     }
@@ -71,7 +74,7 @@ export function AdminAccountsPanel() {
     try {
       await setStatus({ profileId, status: isActive ? "active" : "disabled" });
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Status update failed.");
+      setError(localizedError(cause, (t) => t.admin.accounts.failures.status));
     } finally {
       setPendingProfileId(null);
     }
@@ -114,17 +117,16 @@ export function AdminAccountsPanel() {
       await setAssignedClinics({ profileId: editingProfileId, clinicIds: draftClinicIds });
       resetClinicAssignment();
     } catch (cause) {
-      setAssignmentError(cause instanceof Error ? cause.message : "Clinic assignment failed.");
+      setAssignmentError(localizedError(cause, (t) => t.admin.accounts.failures.assignment));
     } finally {
       setIsSavingAssignment(false);
     }
   }
 
+  useDocumentTitle(t.app.titles.accounts);
+
   const header = (
-    <PageHeader
-      title="Accounts"
-      description="Enable new accounts and assign the minimum role each person needs."
-    />
+    <PageHeader title={t.admin.accounts.pageTitle} description={t.admin.accounts.pageDescription} />
   );
 
   if (current === undefined) return <Skeleton className="h-80 w-full" />;
@@ -135,8 +137,8 @@ export function AdminAccountsPanel() {
         {header}
         <AdminTabs />
         <Alert variant="destructive">
-          <AlertTitle>Administrator access required</AlertTitle>
-          <AlertDescription>Your account cannot manage other users.</AlertDescription>
+          <AlertTitle>{t.admin.accessDeniedTitle}</AlertTitle>
+          <AlertDescription>{t.admin.accounts.accessDeniedBody}</AlertDescription>
         </Alert>
       </div>
     );
@@ -154,16 +156,16 @@ export function AdminAccountsPanel() {
 
       {error ? (
         <Alert variant="destructive">
-          <AlertTitle>Update failed</AlertTitle>
-          <AlertDescription>{error}</AlertDescription>
+          <AlertTitle>{t.admin.accounts.updateFailedTitle}</AlertTitle>
+          <AlertDescription>{error.resolve(t)}</AlertDescription>
         </Alert>
       ) : null}
 
       <section className="flex flex-col gap-4">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <h2 className="font-heading text-base font-medium">Staff accounts</h2>
+          <h2 className="font-heading text-base font-medium">{t.admin.accounts.staffAccounts}</h2>
           <p className="text-xs text-muted-foreground">
-            Showing up to {managed?.limit ?? 100} accounts.
+            {t.admin.accounts.listing(managed?.limit ?? 100)}
           </p>
         </div>
 
@@ -175,10 +177,10 @@ export function AdminAccountsPanel() {
               <Table>
                 <TableHeader className="bg-muted/40">
                   <TableRow>
-                    <TableHead>Account</TableHead>
-                    <TableHead>Role</TableHead>
-                    <TableHead>Clinics</TableHead>
-                    <TableHead>Enabled</TableHead>
+                    <TableHead>{t.admin.accounts.table.account}</TableHead>
+                    <TableHead>{t.admin.accounts.table.role}</TableHead>
+                    <TableHead>{t.admin.accounts.table.clinics}</TableHead>
+                    <TableHead>{t.admin.accounts.table.enabled}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -186,21 +188,25 @@ export function AdminAccountsPanel() {
                     const isPending = pendingProfileId === account.profileId;
                     const assignedCount = account.assignedClinicIds.length;
                     const allClinicsAdmin =
-                      account.role === "admin" && assignedCount === 0 ? "All" : assignedCount;
+                      account.role === "admin" && assignedCount === 0
+                        ? t.admin.accounts.allClinics
+                        : assignedCount;
                     return (
                       <TableRow key={account.profileId}>
                         <TableCell>
                           <div className="flex flex-col gap-1">
                             <span>{account.displayName}</span>
                             <span className="text-xs text-muted-foreground">{account.email}</span>
-                            {account.isCurrentUser ? <Badge variant="outline">You</Badge> : null}
+                            {account.isCurrentUser ? (
+                              <Badge variant="outline">{t.common.you}</Badge>
+                            ) : null}
                           </div>
                         </TableCell>
                         <TableCell>
                           <Select
                             items={[
-                              { value: "admin", label: "Admin" },
-                              { value: "operator", label: "Operator" },
+                              { value: "admin", label: t.app.roles.admin },
+                              { value: "operator", label: t.app.roles.operator },
                             ]}
                             value={account.role}
                             onValueChange={(role) => {
@@ -208,13 +214,15 @@ export function AdminAccountsPanel() {
                             }}
                             disabled={account.isCurrentUser || isPending}
                           >
-                            <SelectTrigger aria-label={`Role for ${account.displayName}`}>
+                            <SelectTrigger
+                              aria-label={t.admin.accounts.roleFor(account.displayName)}
+                            >
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
                               <SelectGroup>
-                                <SelectItem value="admin">Admin</SelectItem>
-                                <SelectItem value="operator">Operator</SelectItem>
+                                <SelectItem value="admin">{t.app.roles.admin}</SelectItem>
+                                <SelectItem value="operator">{t.app.roles.operator}</SelectItem>
                               </SelectGroup>
                             </SelectContent>
                           </Select>
@@ -232,7 +240,7 @@ export function AdminAccountsPanel() {
                                 startClinicAssignment(account.profileId, account.assignedClinicIds)
                               }
                             >
-                              Assign
+                              {t.admin.accounts.assign}
                             </Button>
                           </div>
                         </TableCell>
@@ -250,7 +258,9 @@ export function AdminAccountsPanel() {
                               disabled={account.isCurrentUser || isPending}
                             />
                             <FieldLabel htmlFor={`status-${account.profileId}`}>
-                              {account.status === "active" ? "Enabled" : "Disabled"}
+                              {account.status === "active"
+                                ? t.admin.accounts.enabled
+                                : t.admin.accounts.disabled}
                             </FieldLabel>
                           </Field>
                         </TableCell>
@@ -279,12 +289,11 @@ export function AdminAccountsPanel() {
       >
         <DialogContent className="sm:max-w-lg" showCloseButton={!isSavingAssignment}>
           <DialogHeader>
-            <DialogTitle>Assign clinics</DialogTitle>
+            <DialogTitle>{t.admin.accounts.assignment.title}</DialogTitle>
             <DialogDescription>
               {editingAccount
-                ? `${editingAccount.displayName} runs reports only on the clinics you select.`
-                : "Choose which clinics this account can run reports on."}{" "}
-              Admins with no assignments run every active clinic.
+                ? t.admin.accounts.assignment.descriptionFor(editingAccount.displayName)
+                : t.admin.accounts.assignment.descriptionGeneric}
             </DialogDescription>
           </DialogHeader>
           <div className="flex max-h-72 flex-col gap-3 overflow-y-auto">
@@ -292,7 +301,7 @@ export function AdminAccountsPanel() {
               <Skeleton className="h-40 w-full" />
             ) : clinicDirectory.clinics.length === 0 ? (
               <p className="text-sm text-muted-foreground">
-                No clinics yet. Add clinics before assigning them.
+                {t.admin.accounts.assignment.noneAvailable}
               </p>
             ) : (
               clinicDirectory.clinics.map((clinic) => (
@@ -316,8 +325,8 @@ export function AdminAccountsPanel() {
           </div>
           {assignmentError ? (
             <Alert variant="destructive">
-              <AlertTitle>Could not assign clinics</AlertTitle>
-              <AlertDescription>{assignmentError}</AlertDescription>
+              <AlertTitle>{t.admin.accounts.assignment.failedTitle}</AlertTitle>
+              <AlertDescription>{assignmentError.resolve(t)}</AlertDescription>
             </Alert>
           ) : null}
           <DialogFooter>
@@ -326,10 +335,10 @@ export function AdminAccountsPanel() {
               onClick={cancelClinicAssignment}
               disabled={isSavingAssignment}
             >
-              Cancel
+              {t.common.cancel}
             </Button>
             <Button onClick={() => void saveClinicAssignment()} disabled={isSavingAssignment}>
-              Save clinics
+              {t.admin.accounts.assignment.save}
             </Button>
           </DialogFooter>
         </DialogContent>

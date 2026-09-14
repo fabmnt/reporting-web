@@ -1,6 +1,7 @@
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { CLINIC_SHEET_COLUMN_DEFAULTS, type SheetColumnFormValues } from "@/lib/clinicSheetColumns";
+import { useI18n } from "@/lib/i18n/context";
 
 export function SheetColumnFields({
   values,
@@ -11,6 +12,8 @@ export function SheetColumnFields({
   onChange: (values: SheetColumnFormValues) => void;
   disabled: boolean;
 }) {
+  const { t } = useI18n();
+
   function update<K extends keyof SheetColumnFormValues>(key: K, value: SheetColumnFormValues[K]) {
     onChange({ ...values, [key]: value });
   }
@@ -18,14 +21,14 @@ export function SheetColumnFields({
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-1">
-        <h3 className="text-sm font-medium">Sheet columns</h3>
-        <p className="text-xs text-muted-foreground">
-          Leave a field empty to use the global default shown in the placeholder.
-        </p>
+        <h3 className="text-sm font-medium">{t.clinics.sheetColumns.title}</h3>
+        <p className="text-xs text-muted-foreground">{t.clinics.sheetColumns.note}</p>
       </div>
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Field>
-          <FieldLabel htmlFor="column-update-status">Update status</FieldLabel>
+          <FieldLabel htmlFor="column-update-status">
+            {t.clinics.sheetColumns.updateStatus}
+          </FieldLabel>
           <Input
             id="column-update-status"
             value={values.updateStatus}
@@ -36,7 +39,9 @@ export function SheetColumnFields({
           />
         </Field>
         <Field>
-          <FieldLabel htmlFor="column-upload-status">Upload status</FieldLabel>
+          <FieldLabel htmlFor="column-upload-status">
+            {t.clinics.sheetColumns.uploadStatus}
+          </FieldLabel>
           <Input
             id="column-upload-status"
             value={values.uploadStatus}
@@ -47,7 +52,9 @@ export function SheetColumnFields({
           />
         </Field>
         <Field>
-          <FieldLabel htmlFor="column-verification-type">Verification type</FieldLabel>
+          <FieldLabel htmlFor="column-verification-type">
+            {t.clinics.sheetColumns.verificationType}
+          </FieldLabel>
           <Input
             id="column-verification-type"
             value={values.verificationType}
@@ -58,7 +65,7 @@ export function SheetColumnFields({
           />
         </Field>
         <Field>
-          <FieldLabel htmlFor="column-files-urls">Files URLs</FieldLabel>
+          <FieldLabel htmlFor="column-files-urls">{t.clinics.sheetColumns.fileUrl}</FieldLabel>
           <Input
             id="column-files-urls"
             value={values.fileUrl}

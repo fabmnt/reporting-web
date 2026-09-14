@@ -4,6 +4,8 @@ import { useState } from "react";
 import { describe, expect, it } from "vitest";
 
 import type { ConditionBucket, ConditionClause } from "../../../convex/model/reportConditions";
+import { I18nProvider } from "@/lib/i18n/context";
+
 import { BucketEditor } from "./BucketEditor";
 
 function clause(values: string[]): ConditionClause {
@@ -25,7 +27,11 @@ function Harness() {
 describe("BucketEditor", () => {
   it("keeps an uncommitted draft with its clause when a middle one is removed", async () => {
     const user = userEvent.setup();
-    render(<Harness />);
+    render(
+      <I18nProvider>
+        <Harness />
+      </I18nProvider>
+    );
 
     const inputs = screen.getAllByRole("textbox", { name: "Values" });
     expect(inputs).toHaveLength(3);

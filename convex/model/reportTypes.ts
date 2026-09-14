@@ -1,8 +1,9 @@
-import { ConvexError, v } from "convex/values";
+import { v } from "convex/values";
 import type { Infer } from "convex/values";
 
 import type { Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
+import { appError } from "./appErrors";
 import {
   bucketCatalog,
   defaultConditionsFor,
@@ -78,7 +79,7 @@ export function reportTypeTemplateFor(template: ReportTypeTemplate): {
 export function cleanTypeName(name: string): string {
   const cleaned = name.trim().slice(0, MAX_TYPE_NAME_LENGTH);
   if (cleaned === "") {
-    throw new ConvexError({ code: "INVALID_CONFIG", message: "The report type needs a name." });
+    throw appError({ code: "REPORT_TYPE_NAME_REQUIRED" });
   }
   return cleaned;
 }
@@ -89,26 +90,17 @@ export function cleanTypeDescription(description: string): string {
 
 export function cleanTypeBuckets(buckets: ReadonlyArray<ReportTypeBucket>): ReportTypeBucket[] {
   if (buckets.length === 0) {
-    throw new ConvexError({
-      code: "INVALID_CONFIG",
-      message: "A report type needs at least one row group.",
-    });
+    throw appError({ code: "REPORT_TYPE_GROUP_REQUIRED" });
   }
   if (buckets.length > MAX_BUCKETS_PER_TYPE) {
-    throw new ConvexError({
-      code: "INVALID_CONFIG",
-      message: `A report type supports up to ${MAX_BUCKETS_PER_TYPE} row groups.`,
-    });
+    throw appError({ code: "REPORT_TYPE_GROUP_LIMIT", limit: MAX_BUCKETS_PER_TYPE });
   }
   const seen = new Set<string>();
   const cleaned: ReportTypeBucket[] = [];
   for (const bucket of buckets) {
     const key = bucket.key.trim();
     if (key === "" || seen.has(key)) {
-      throw new ConvexError({
-        code: "INVALID_CONFIG",
-        message: "Row group keys must be unique and non-empty.",
-      });
+      throw appError({ code: "REPORT_TYPE_GROUP_KEYS" });
     }
     seen.add(key);
     cleaned.push({ key, label: bucket.label.trim().slice(0, MAX_TYPE_NAME_LENGTH) || key });
@@ -136,7 +128,7 @@ export async function loadOwnedReportType(
 ): Promise<ReportTypeDoc> {
   const row = await ctx.db.get("reportTypes", reportTypeId);
   if (row === null || row.userId !== userId) {
-    throw new ConvexError({ code: "NOT_FOUND", message: "This report type does not exist." });
+    throw appError({ code: "REPORT_TYPE_NOT_FOUND" });
   }
   return row;
 }

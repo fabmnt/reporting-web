@@ -5,7 +5,7 @@ import { useId, useState } from "react";
 
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
-import type { ReportConditionSet } from "../../../convex/model/reportConditions";
+import { REPORT_BUCKETS, type ReportConditionSet } from "../../../convex/model/reportConditions";
 import {
   MAX_TYPE_NAME_LENGTH,
   type ReportTypeBucket,
@@ -32,12 +32,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
-
-const TEMPLATE_ITEMS: ReadonlyArray<{ value: ReportTypeTemplate; label: string }> = [
-  { value: "blank", label: "Start empty" },
-  { value: "pending-audit", label: "Copy pending audit rules" },
-  { value: "ready-to-upload", label: "Copy ready to upload rules" },
-];
+import { useI18n } from "@/lib/i18n/context";
+import { localizedError, type LocalizedMessage } from "@/lib/i18n/errors";
+import type { Messages } from "@/lib/i18n/messages";
+import { bucketLabel } from "@/lib/i18n/reportLabels";
 
 export type CreatedReportType = {
   reportTypeId: Id<"reportTypes">;
@@ -46,6 +44,15 @@ export type CreatedReportType = {
   buckets: ReportTypeBucket[];
   conditions: ReportConditionSet;
 };
+
+// The buckets of a template are stored with the new type, so they are created
+// with the labels of the language the user is working in.
+function templateBucketLabels(t: Messages, template: ReportTypeTemplate): string[] {
+  if (template === "blank") return [t.conditions.editor.group(0)];
+  return REPORT_BUCKETS[template].map((bucket) =>
+    bucketLabel(t, template, bucket.key, bucket.label)
+  );
+}
 
 export function NewReportTypeDialog({
   open,
@@ -58,24 +65,35 @@ export function NewReportTypeDialog({
   onCreated: (created: CreatedReportType) => void;
   disabled: boolean;
 }) {
+  const { t } = useI18n();
   const createMine = useMutation(api.reportTypes.createMine);
   const nameInputId = useId();
   const [name, setName] = useState("");
   const [template, setTemplate] = useState<ReportTypeTemplate>("blank");
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<LocalizedMessage | null>(null);
+
+  const templateItems: ReadonlyArray<{ value: ReportTypeTemplate; label: string }> = [
+    { value: "blank", label: t.conditions.newType.templateBlank },
+    { value: "pending-audit", label: t.conditions.newType.templatePendingAudit },
+    { value: "ready-to-upload", label: t.conditions.newType.templateReadyToUpload },
+  ];
 
   async function handleCreate() {
     setSaving(true);
     setError(null);
     try {
-      const created = await createMine({ name, template });
+      const created = await createMine({
+        name,
+        template,
+        bucketLabels: templateBucketLabels(t, template),
+      });
       setName("");
       setTemplate("blank");
       onCreated(created);
       onOpenChange(false);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Creating the report type failed.");
+      setError(localizedError(cause, (t) => t.conditions.failures.createType));
     } finally {
       setSaving(false);
     }
@@ -85,38 +103,36 @@ export function NewReportTypeDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>New report type</DialogTitle>
-          <DialogDescription>
-            Build your own row rules on top of the same clinic sheets. Only you can see and run it.
-          </DialogDescription>
+          <DialogTitle>{t.conditions.newType.title}</DialogTitle>
+          <DialogDescription>{t.conditions.newType.description}</DialogDescription>
         </DialogHeader>
 
         <Field>
-          <FieldLabel htmlFor={nameInputId}>Name</FieldLabel>
+          <FieldLabel htmlFor={nameInputId}>{t.conditions.newType.name}</FieldLabel>
           <Input
             id={nameInputId}
             value={name}
             onChange={(event) => setName(event.target.value)}
-            placeholder="Late verifications"
+            placeholder={t.conditions.newType.namePlaceholder}
             maxLength={MAX_TYPE_NAME_LENGTH}
             disabled={saving}
           />
         </Field>
 
         <Field>
-          <FieldLabel>Starting point</FieldLabel>
+          <FieldLabel>{t.conditions.newType.startingPoint}</FieldLabel>
           <Select
-            items={TEMPLATE_ITEMS}
+            items={templateItems}
             value={template}
             onValueChange={(value) => setTemplate((value as ReportTypeTemplate) ?? "blank")}
             disabled={saving}
           >
-            <SelectTrigger aria-label="Starting point" className="w-full">
+            <SelectTrigger aria-label={t.conditions.newType.startingPoint} className="w-full">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
               <SelectGroup>
-                {TEMPLATE_ITEMS.map((item) => (
+                {templateItems.map((item) => (
                   <SelectItem key={item.value} value={item.value}>
                     {item.label}
                   </SelectItem>
@@ -124,15 +140,13 @@ export function NewReportTypeDialog({
               </SelectGroup>
             </SelectContent>
           </Select>
-          <p className="text-xs text-muted-foreground">
-            Copying a built-in report starts you from its current rules.
-          </p>
+          <p className="text-xs text-muted-foreground">{t.conditions.newType.copyNote}</p>
         </Field>
 
         {error ? (
           <Alert variant="destructive">
-            <AlertTitle>Could not create the report type</AlertTitle>
-            <AlertDescription>{error}</AlertDescription>
+            <AlertTitle>{t.conditions.newType.createFailedTitle}</AlertTitle>
+            <AlertDescription>{error.resolve(t)}</AlertDescription>
           </Alert>
         ) : null}
 
@@ -143,7 +157,7 @@ export function NewReportTypeDialog({
             onClick={() => onOpenChange(false)}
             disabled={saving}
           >
-            Cancel
+            {t.common.cancel}
           </Button>
           <Button
             type="button"
@@ -153,10 +167,10 @@ export function NewReportTypeDialog({
             {saving ? (
               <>
                 <Spinner data-icon="inline-start" />
-                Creating
+                {t.conditions.newType.creating}
               </>
             ) : (
-              "Create report type"
+              t.conditions.newType.create
             )}
           </Button>
         </DialogFooter>

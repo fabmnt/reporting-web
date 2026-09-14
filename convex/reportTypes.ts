@@ -1,8 +1,9 @@
-import { ConvexError, v } from "convex/values";
+import { v } from "convex/values";
 
 import type { Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
 import { mutation, query } from "./_generated/server";
+import { appError } from "./model/appErrors";
 import {
   bucketCatalogFor,
   cleanConditionSet,
@@ -55,10 +56,7 @@ async function assertNameAvailable(
     (row) => row._id !== exceptId && row.name.toLowerCase() === name.toLowerCase()
   );
   if (taken) {
-    throw new ConvexError({
-      code: "INVALID_CONFIG",
-      message: `You already have a report type named "${name}".`,
-    });
+    throw appError({ code: "REPORT_TYPE_NAME_TAKEN", name });
   }
 }
 
@@ -147,14 +145,30 @@ export const getMine = query({
 });
 
 export const createMine = mutation({
-  args: { name: v.string(), template: reportTypeTemplate },
+  args: {
+    name: v.string(),
+    template: reportTypeTemplate,
+    // Labels of the template's row groups in the caller's language. The keys
+    // stay the template's, only the text changes.
+    bucketLabels: v.optional(v.array(v.string())),
+  },
   returns: reportTypeView,
   handler: async (ctx, args) => {
     const { userId } = await requireOperator(ctx);
     const name = cleanTypeName(args.name);
     await assertNameAvailable(ctx, userId, name, null);
 
-    const { buckets, conditions } = reportTypeTemplateFor(args.template);
+    const template = reportTypeTemplateFor(args.template);
+    const buckets =
+      args.bucketLabels === undefined
+        ? template.buckets
+        : cleanTypeBuckets(
+            template.buckets.map((bucket, index) => ({
+              key: bucket.key,
+              label: args.bucketLabels?.[index] ?? bucket.label,
+            }))
+          );
+    const conditions = template.conditions;
     const now = Date.now();
     const reportTypeId = await ctx.db.insert("reportTypes", {
       userId,

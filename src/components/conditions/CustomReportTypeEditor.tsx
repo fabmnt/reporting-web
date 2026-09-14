@@ -6,7 +6,6 @@ import { useId } from "react";
 import type { ReportConditionSet } from "../../../convex/model/reportConditions";
 import {
   conditionsForBuckets,
-  defaultBucketLabel,
   MAX_BUCKETS_PER_TYPE,
   MAX_TYPE_DESCRIPTION_LENGTH,
   MAX_TYPE_NAME_LENGTH,
@@ -17,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
+import { useI18n } from "@/lib/i18n/context";
 
 import { ConditionSetEditor } from "./ConditionSetEditor";
 
@@ -41,6 +41,7 @@ export function CustomReportTypeEditor({
   onChange: (draft: CustomReportTypeDraft) => void;
   disabled: boolean;
 }) {
+  const { t } = useI18n();
   const nameInputId = useId();
   const descriptionInputId = useId();
   const groupInputIdBase = useId();
@@ -73,14 +74,19 @@ export function CustomReportTypeEditor({
   const addBucket = () =>
     updateBuckets([
       ...draft.buckets,
-      { key: nextBucketKey(draft.buckets), label: defaultBucketLabel(draft.buckets.length) },
+      {
+        key: nextBucketKey(draft.buckets),
+        // The label is stored with the type, so it starts in the language the
+        // user is working in.
+        label: t.conditions.editor.group(draft.buckets.length),
+      },
     ]);
 
   return (
     <div className="flex flex-col gap-6">
       <div className="grid gap-4 sm:grid-cols-2">
         <Field>
-          <FieldLabel htmlFor={nameInputId}>Name</FieldLabel>
+          <FieldLabel htmlFor={nameInputId}>{t.conditions.editor.name}</FieldLabel>
           <Input
             id={nameInputId}
             value={draft.name}
@@ -90,7 +96,7 @@ export function CustomReportTypeEditor({
           />
         </Field>
         <Field>
-          <FieldLabel htmlFor={descriptionInputId}>Description</FieldLabel>
+          <FieldLabel htmlFor={descriptionInputId}>{t.conditions.editor.description}</FieldLabel>
           <Input
             id={descriptionInputId}
             value={draft.description}
@@ -105,18 +111,15 @@ export function CustomReportTypeEditor({
 
       <section className="flex flex-col gap-3">
         <div className="flex flex-col gap-1">
-          <h3 className="text-sm font-medium">Row groups</h3>
-          <p className="text-xs text-muted-foreground">
-            A row lands in the first group that matches it. Only the last group of a multi-group
-            type can catch all.
-          </p>
+          <h3 className="text-sm font-medium">{t.conditions.editor.rowGroups}</h3>
+          <p className="text-xs text-muted-foreground">{t.conditions.editor.rowGroupsNote}</p>
         </div>
         {draft.buckets.map((bucket, index) => {
           const groupInputId = `${groupInputIdBase}-${bucket.key}`;
           return (
             <div key={bucket.key} className="flex items-end gap-2">
               <Field className="flex-1">
-                <FieldLabel htmlFor={groupInputId}>Group {index + 1}</FieldLabel>
+                <FieldLabel htmlFor={groupInputId}>{t.conditions.editor.group(index)}</FieldLabel>
                 <Input
                   id={groupInputId}
                   value={bucket.label}
@@ -132,8 +135,8 @@ export function CustomReportTypeEditor({
                 className="text-muted-foreground"
                 onClick={() => moveBucket(index, -1)}
                 disabled={disabled || index === 0}
-                aria-label={`Move group ${index + 1} up`}
-                title={`Move group ${index + 1} up`}
+                aria-label={t.conditions.editor.moveUp(index)}
+                title={t.conditions.editor.moveUp(index)}
               >
                 <ArrowUp aria-hidden="true" />
               </Button>
@@ -144,8 +147,8 @@ export function CustomReportTypeEditor({
                 className="text-muted-foreground"
                 onClick={() => moveBucket(index, 1)}
                 disabled={disabled || index === draft.buckets.length - 1}
-                aria-label={`Move group ${index + 1} down`}
-                title={`Move group ${index + 1} down`}
+                aria-label={t.conditions.editor.moveDown(index)}
+                title={t.conditions.editor.moveDown(index)}
               >
                 <ArrowDown aria-hidden="true" />
               </Button>
@@ -156,8 +159,8 @@ export function CustomReportTypeEditor({
                 className="text-muted-foreground"
                 onClick={() => removeBucket(index)}
                 disabled={disabled || draft.buckets.length === 1}
-                aria-label={`Remove group ${index + 1}`}
-                title={`Remove group ${index + 1}`}
+                aria-label={t.conditions.editor.removeGroup(index)}
+                title={t.conditions.editor.removeGroup(index)}
               >
                 <Trash2 aria-hidden="true" />
               </Button>
@@ -172,7 +175,7 @@ export function CustomReportTypeEditor({
           disabled={disabled || draft.buckets.length >= MAX_BUCKETS_PER_TYPE}
         >
           <Plus data-icon="inline-start" aria-hidden="true" />
-          Add row group
+          {t.conditions.editor.addRowGroup}
         </Button>
       </section>
 

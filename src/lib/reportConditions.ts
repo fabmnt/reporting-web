@@ -5,24 +5,25 @@ import {
   type ConditionOperator,
 } from "../../convex/model/reportConditions";
 
-export const CONDITION_COLUMN_ITEMS: ReadonlyArray<{ value: ConditionColumn; label: string }> = [
-  { value: "L", label: "Execution (column L)" },
-  { value: "M", label: "Message (column M)" },
-  { value: "updateStatus", label: "Update status" },
-  { value: "uploadStatus", label: "Upload status" },
-  { value: "verificationType", label: "Verification type" },
-  { value: "fileUrl", label: "File URL" },
+// Options of the condition editor, in the order they are offered. The labels
+// live in the i18n catalog, keyed by these values.
+export const CONDITION_COLUMNS: ReadonlyArray<ConditionColumn> = [
+  "L",
+  "M",
+  "updateStatus",
+  "uploadStatus",
+  "verificationType",
+  "fileUrl",
 ];
 
-export const CONDITION_OPERATOR_ITEMS: ReadonlyArray<{ value: ConditionOperator; label: string }> =
-  [
-    { value: "contains", label: "Contains any of" },
-    { value: "notContains", label: "Does not contain any of" },
-    { value: "equals", label: "Is one of" },
-    { value: "notEquals", label: "Is not one of" },
-    { value: "isEmpty", label: "Is empty" },
-    { value: "isNotEmpty", label: "Is not empty" },
-  ];
+export const CONDITION_OPERATORS: ReadonlyArray<ConditionOperator> = [
+  "contains",
+  "notContains",
+  "equals",
+  "notEquals",
+  "isEmpty",
+  "isNotEmpty",
+];
 
 // Empty and non-empty operators read the whole cell, so values are ignored.
 export function operatorNeedsValues(operator: ConditionOperator): boolean {

@@ -1,11 +1,15 @@
 import { useAuthActions } from "@convex-dev/auth/react";
 import type { FunctionReturnType } from "convex/server";
+import { useMutation } from "convex/react";
 import { LogOut } from "lucide-react";
 
 import { api } from "../../../convex/_generated/api";
+import { LanguageToggle } from "@/components/i18n/LanguageToggle";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { useI18n } from "@/lib/i18n/context";
+import type { Locale } from "@/lib/i18n/locales";
 import { isActivePath } from "@/lib/paths";
 import { cn } from "@/lib/utils";
 
@@ -29,19 +33,27 @@ function initialsFor(account: CurrentAccount): string {
 export function AppHeader({ account }: { account: CurrentAccount }) {
   const { signOut } = useAuthActions();
   const { path } = useNavigation();
+  const { t } = useI18n();
+  const setLanguage = useMutation(api.staffAccounts.setLanguage);
   const canAdmin = account.role === "admin" && account.status === "active";
   const canConfigureClinics =
     account.status === "active" && (account.role === "admin" || account.role === "operator");
   const navItems = [
-    { href: REPORT_PATH, label: "Reports" },
-    ...(canConfigureClinics ? [{ href: CLINICS_PATH, label: "Clinics" }] : []),
-    ...(canConfigureClinics ? [{ href: CONFIGURATION_PATH, label: "Configuration" }] : []),
-    ...(canAdmin ? [{ href: ADMIN_PATH, label: "Admin" }] : []),
+    { href: REPORT_PATH, label: t.app.nav.reports },
+    ...(canConfigureClinics ? [{ href: CLINICS_PATH, label: t.app.nav.clinics }] : []),
+    ...(canConfigureClinics ? [{ href: CONFIGURATION_PATH, label: t.app.nav.configuration }] : []),
+    ...(canAdmin ? [{ href: ADMIN_PATH, label: t.app.nav.admin }] : []),
   ];
 
   async function handleSignOut() {
     await signOut();
     window.location.replace("/sign-in");
+  }
+
+  // The choice already applied on this device, so a failed save only means the
+  // next device will not start in it.
+  function rememberLanguage(locale: Locale) {
+    void setLanguage({ language: locale }).catch(() => undefined);
   }
 
   return (
@@ -57,11 +69,11 @@ export function AppHeader({ account }: { account: CurrentAccount }) {
           >
             R
           </span>
-          <span className="hidden sm:inline">Reporting Web</span>
-          <span className="sr-only sm:hidden">Reporting Web</span>
+          <span className="hidden sm:inline">{t.app.brand}</span>
+          <span className="sr-only sm:hidden">{t.app.brand}</span>
         </AppLink>
 
-        <nav aria-label="Primary" className="flex items-stretch self-stretch">
+        <nav aria-label={t.app.nav.primary} className="flex items-stretch self-stretch">
           {navItems.map((item) => {
             const active = isActivePath(item.href, path);
             return (
@@ -83,6 +95,7 @@ export function AppHeader({ account }: { account: CurrentAccount }) {
         </nav>
 
         <div className="ml-auto flex items-center gap-1 sm:gap-2">
+          <LanguageToggle onSelected={rememberLanguage} />
           <ThemeToggle />
           <span
             aria-hidden="true"
@@ -93,18 +106,18 @@ export function AppHeader({ account }: { account: CurrentAccount }) {
           <span className="hidden max-w-40 truncate text-sm text-muted-foreground sm:inline">
             {account.displayName}
           </span>
-          <span className="sr-only sm:hidden">Signed in as {account.displayName}</span>
+          <span className="sr-only sm:hidden">{t.app.signedInAs(account.displayName)}</span>
           {canAdmin ? (
             <Badge variant="secondary" className="hidden sm:inline-flex">
-              {account.role}
+              {t.app.roles.admin}
             </Badge>
           ) : null}
           <Button
             variant="ghost"
             size="icon"
             onClick={() => void handleSignOut()}
-            aria-label="Sign out"
-            title="Sign out"
+            aria-label={t.app.signOut}
+            title={t.app.signOut}
           >
             <LogOut />
           </Button>
