@@ -2,6 +2,7 @@ import { useAuthActions } from "@convex-dev/auth/react";
 import type { FunctionReturnType } from "convex/server";
 import { useMutation } from "convex/react";
 import { LogOut } from "lucide-react";
+import { useEffect, useRef } from "react";
 
 import { api } from "../../../convex/_generated/api";
 import { LanguageToggle } from "@/components/i18n/LanguageToggle";
@@ -13,6 +14,7 @@ import type { Locale } from "@/lib/i18n/locales";
 import { isActivePath } from "@/lib/paths";
 import { cn } from "@/lib/utils";
 
+import { AccountMenu } from "./AccountMenu";
 import { AppLink, useNavigation } from "./navigation";
 
 export type CurrentAccount = NonNullable<FunctionReturnType<typeof api.staffAccounts.current>>;
@@ -35,6 +37,7 @@ export function AppHeader({ account }: { account: CurrentAccount }) {
   const { path } = useNavigation();
   const { t } = useI18n();
   const setLanguage = useMutation(api.staffAccounts.setLanguage);
+  const navRef = useRef<HTMLElement | null>(null);
   const canAdmin = account.role === "admin" && account.status === "active";
   const canConfigureClinics =
     account.status === "active" && (account.role === "admin" || account.role === "operator");
@@ -44,6 +47,14 @@ export function AppHeader({ account }: { account: CurrentAccount }) {
     ...(canConfigureClinics ? [{ href: CONFIGURATION_PATH, label: t.app.nav.configuration }] : []),
     ...(canAdmin ? [{ href: ADMIN_PATH, label: t.app.nav.admin }] : []),
   ];
+
+  // The nav scrolls sideways on narrow screens, so the current page has to be
+  // brought back into view instead of staying off the edge.
+  useEffect(() => {
+    navRef.current
+      ?.querySelector('[aria-current="page"]')
+      ?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }, [path]);
 
   async function handleSignOut() {
     await signOut();
@@ -73,7 +84,11 @@ export function AppHeader({ account }: { account: CurrentAccount }) {
           <span className="sr-only sm:hidden">{t.app.brand}</span>
         </AppLink>
 
-        <nav aria-label={t.app.nav.primary} className="flex items-stretch self-stretch">
+        <nav
+          ref={navRef}
+          aria-label={t.app.nav.primary}
+          className="flex min-w-0 flex-1 items-stretch self-stretch overflow-x-auto overscroll-x-contain [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        >
           {navItems.map((item) => {
             const active = isActivePath(item.href, path);
             return (
@@ -82,7 +97,7 @@ export function AppHeader({ account }: { account: CurrentAccount }) {
                 href={item.href}
                 aria-current={active ? "page" : undefined}
                 className={cn(
-                  "relative flex items-center px-2 text-sm font-medium transition-colors sm:px-3",
+                  "relative flex items-center px-2 text-sm font-medium whitespace-nowrap transition-colors sm:px-3",
                   active
                     ? "text-foreground after:absolute after:inset-x-2 after:bottom-0 after:h-0.5 after:rounded-t-full after:bg-primary"
                     : "text-muted-foreground hover:text-foreground"
@@ -94,33 +109,40 @@ export function AppHeader({ account }: { account: CurrentAccount }) {
           })}
         </nav>
 
-        <div className="ml-auto flex items-center gap-1 sm:gap-2">
-          <LanguageToggle onSelected={rememberLanguage} />
-          <ThemeToggle />
-          <span
-            aria-hidden="true"
-            className="grid size-7 shrink-0 place-items-center rounded-full bg-muted text-xs font-medium text-muted-foreground"
-          >
-            {initialsFor(account)}
-          </span>
-          <span className="hidden max-w-40 truncate text-sm text-muted-foreground sm:inline">
-            {account.displayName}
-          </span>
-          <span className="sr-only sm:hidden">{t.app.signedInAs(account.displayName)}</span>
-          {canAdmin ? (
-            <Badge variant="secondary" className="hidden sm:inline-flex">
-              {t.app.roles.admin}
-            </Badge>
-          ) : null}
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => void handleSignOut()}
-            aria-label={t.app.signOut}
-            title={t.app.signOut}
-          >
-            <LogOut />
-          </Button>
+        <div className="flex shrink-0 items-center gap-1 sm:gap-2">
+          <div className="hidden items-center gap-1 md:flex md:gap-2">
+            <LanguageToggle onSelected={rememberLanguage} />
+            <ThemeToggle />
+            <span
+              aria-hidden="true"
+              className="grid size-7 shrink-0 place-items-center rounded-full bg-muted text-xs font-medium text-muted-foreground"
+            >
+              {initialsFor(account)}
+            </span>
+            <span className="hidden max-w-40 truncate text-sm text-muted-foreground lg:inline">
+              {account.displayName}
+            </span>
+            <span className="sr-only lg:hidden">{t.app.signedInAs(account.displayName)}</span>
+            {canAdmin ? (
+              <Badge variant="secondary" className="hidden lg:inline-flex">
+                {t.app.roles.admin}
+              </Badge>
+            ) : null}
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => void handleSignOut()}
+              aria-label={t.app.signOut}
+              title={t.app.signOut}
+            >
+              <LogOut />
+            </Button>
+          </div>
+          <AccountMenu
+            account={account}
+            onLanguageSelected={rememberLanguage}
+            onSignOut={() => void handleSignOut()}
+          />
         </div>
       </div>
     </header>

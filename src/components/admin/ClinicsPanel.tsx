@@ -6,6 +6,7 @@ import { useState, type SyntheticEvent } from "react";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { AdminTabs } from "@/components/app/AdminTabs";
+import { DataCard, DataCardList, DataCardRow, DataTableFrame } from "@/components/app/DataCard";
 import { PageHeader } from "@/components/app/PageHeader";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
@@ -93,6 +94,70 @@ const EMPTY_CLIENT_FORM: ClientFormValues = {
   name: "",
   isActive: true,
 };
+
+/** Shared by the client table and the narrow-screen cards. */
+function ClientActions({
+  client,
+  disabled,
+  onEdit,
+  onDelete,
+}: {
+  client: ClientView;
+  disabled: boolean;
+  onEdit: (client: ClientView) => void;
+  onDelete: (client: ClientView) => void;
+}) {
+  const { t } = useI18n();
+
+  return (
+    <div className="flex gap-2">
+      <Button variant="outline" size="sm" disabled={disabled} onClick={() => onEdit(client)}>
+        {t.common.edit}
+      </Button>
+      <Button
+        variant="ghost"
+        size="sm"
+        className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+        disabled={disabled}
+        onClick={() => onDelete(client)}
+      >
+        {t.common.delete}
+      </Button>
+    </div>
+  );
+}
+
+/** Shared by the clinic table and the narrow-screen cards. */
+function ClinicActions({
+  clinic,
+  disabled,
+  onEdit,
+  onDelete,
+}: {
+  clinic: ClinicView;
+  disabled: boolean;
+  onEdit: (clinic: ClinicView) => void;
+  onDelete: (clinic: ClinicView) => void;
+}) {
+  const { t } = useI18n();
+
+  return (
+    <div className="flex gap-2">
+      <Button variant="outline" size="sm" disabled={disabled} onClick={() => onEdit(clinic)}>
+        {t.common.edit}
+      </Button>
+      <Button
+        variant="ghost"
+        size="sm"
+        className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+        disabled={disabled}
+        onClick={() => onDelete(clinic)}
+      >
+        {t.common.delete}
+      </Button>
+    </div>
+  );
+}
 
 /**
  * Shared confirmation for irreversible actions. Stays open while the request
@@ -302,7 +367,7 @@ function ClinicForm({
                 : t.admin.clinics.clinicForm.createDescription}
             </DialogDescription>
           </DialogHeader>
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid grid-cols-2 gap-3 md:gap-4">
             <Field>
               <FieldLabel htmlFor="clinic-name">{t.admin.clinics.clinicForm.name}</FieldLabel>
               <Input
@@ -341,7 +406,7 @@ function ClinicForm({
                 </SelectContent>
               </Select>
             </Field>
-            <Field className="md:col-span-2">
+            <Field className="col-span-2">
               <FieldLabel htmlFor="clinic-sheet">
                 {t.admin.clinics.clinicForm.sheetLabel}
               </FieldLabel>
@@ -528,6 +593,16 @@ export function AdminClinicsPanel() {
     }
   }
 
+  function requestClinicDelete(clinic: ClinicView) {
+    setClinicDeleteError(null);
+    setClinicToDelete(clinic);
+  }
+
+  function requestClientDelete(client: ClientView) {
+    setClientDeleteError(null);
+    setClientToDelete(client);
+  }
+
   async function confirmClinicDelete() {
     if (clinicToDelete === null) return;
 
@@ -624,60 +699,70 @@ export function AdminClinicsPanel() {
         ) : clients.length === 0 ? (
           <p className="text-sm text-muted-foreground">{t.admin.clinics.noClients}</p>
         ) : (
-          <div className="overflow-hidden rounded-lg border">
-            <Table>
-              <TableHeader className="bg-muted/40">
-                <TableRow>
-                  <TableHead>{t.admin.clinics.clientTable.client}</TableHead>
-                  <TableHead>{t.admin.clinics.clientTable.key}</TableHead>
-                  <TableHead>{t.admin.clinics.clientTable.status}</TableHead>
-                  <TableHead>{t.common.actions}</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {clients.map((client) => {
-                  const isPending = pendingClientId === client.clientId;
-                  return (
-                    <TableRow key={client.clientId}>
-                      <TableCell>{client.name}</TableCell>
-                      <TableCell className="font-mono text-xs text-muted-foreground">
-                        {client.key}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={client.isActive ? "secondary" : "outline"}>
-                          {client.isActive ? t.common.active : t.common.inactive}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex gap-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
+          <>
+            <DataTableFrame>
+              <Table>
+                <TableHeader className="bg-muted/40">
+                  <TableRow>
+                    <TableHead>{t.admin.clinics.clientTable.client}</TableHead>
+                    <TableHead>{t.admin.clinics.clientTable.key}</TableHead>
+                    <TableHead>{t.admin.clinics.clientTable.status}</TableHead>
+                    <TableHead>{t.common.actions}</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {clients.map((client) => {
+                    const isPending = pendingClientId === client.clientId;
+                    return (
+                      <TableRow key={client.clientId}>
+                        <TableCell>{client.name}</TableCell>
+                        <TableCell className="font-mono text-xs text-muted-foreground">
+                          {client.key}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={client.isActive ? "secondary" : "outline"}>
+                            {client.isActive ? t.common.active : t.common.inactive}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <ClientActions
+                            client={client}
                             disabled={isPending}
-                            onClick={() => openEditClient(client)}
-                          >
-                            {t.common.edit}
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-                            disabled={isPending}
-                            onClick={() => {
-                              setClientDeleteError(null);
-                              setClientToDelete(client);
-                            }}
-                          >
-                            {t.common.delete}
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </div>
+                            onEdit={openEditClient}
+                            onDelete={requestClientDelete}
+                          />
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </DataTableFrame>
+
+            <DataCardList>
+              {clients.map((client) => (
+                <DataCard
+                  key={client.clientId}
+                  title={client.name}
+                  subtitle={client.key}
+                  badge={
+                    <Badge variant={client.isActive ? "secondary" : "outline"}>
+                      {client.isActive ? t.common.active : t.common.inactive}
+                    </Badge>
+                  }
+                >
+                  <DataCardRow>
+                    <ClientActions
+                      client={client}
+                      disabled={pendingClientId === client.clientId}
+                      onEdit={openEditClient}
+                      onDelete={requestClientDelete}
+                    />
+                  </DataCardRow>
+                </DataCard>
+              ))}
+            </DataCardList>
+          </>
         )}
 
         {clientsData?.hasMore ? (
@@ -698,73 +783,103 @@ export function AdminClinicsPanel() {
         ) : clinicsData.clinics.length === 0 ? (
           <p className="text-sm text-muted-foreground">{t.admin.clinics.noClinics}</p>
         ) : (
-          <div className="overflow-hidden rounded-lg border">
-            <Table>
-              <TableHeader className="bg-muted/40">
-                <TableRow>
-                  <TableHead>{t.admin.clinics.clinicTable.clinic}</TableHead>
-                  <TableHead>{t.admin.clinics.clinicTable.client}</TableHead>
-                  <TableHead>{t.admin.clinics.clinicTable.googleSheet}</TableHead>
-                  <TableHead>{t.admin.clinics.clinicTable.columns}</TableHead>
-                  <TableHead>{t.admin.clinics.clinicTable.status}</TableHead>
-                  <TableHead>{t.common.actions}</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {clinicsData.clinics.map((clinic) => {
-                  const isPending = pendingClinicId === clinic.clinicId;
-                  return (
-                    <TableRow key={clinic.clinicId}>
-                      <TableCell>
-                        <div className="flex flex-col gap-1">
-                          <span>{clinic.name}</span>
-                          {clinic.externalClinicId ? (
-                            <span className="text-xs text-muted-foreground">
-                              {t.clinics.externalId(clinic.externalClinicId)}
-                            </span>
-                          ) : null}
-                        </div>
-                      </TableCell>
-                      <TableCell>{clinic.clientName}</TableCell>
-                      <TableCell className="font-mono text-xs">{clinic.googleSheetId}</TableCell>
-                      <TableCell className="font-mono text-xs">
-                        {formatSheetColumnSummary(clinic.sheetColumns)}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={clinic.isActive ? "secondary" : "outline"}>
-                          {clinic.isActive ? t.common.active : t.common.inactive}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex gap-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
+          <>
+            <DataTableFrame>
+              <Table>
+                <TableHeader className="bg-muted/40">
+                  <TableRow>
+                    <TableHead>{t.admin.clinics.clinicTable.clinic}</TableHead>
+                    <TableHead>{t.admin.clinics.clinicTable.client}</TableHead>
+                    <TableHead>{t.admin.clinics.clinicTable.googleSheet}</TableHead>
+                    <TableHead>{t.admin.clinics.clinicTable.columns}</TableHead>
+                    <TableHead>{t.admin.clinics.clinicTable.status}</TableHead>
+                    <TableHead>{t.common.actions}</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {clinicsData.clinics.map((clinic) => {
+                    const isPending = pendingClinicId === clinic.clinicId;
+                    return (
+                      <TableRow key={clinic.clinicId}>
+                        <TableCell>
+                          <div className="flex flex-col gap-1">
+                            <span>{clinic.name}</span>
+                            {clinic.externalClinicId ? (
+                              <span className="text-xs text-muted-foreground">
+                                {t.clinics.externalId(clinic.externalClinicId)}
+                              </span>
+                            ) : null}
+                          </div>
+                        </TableCell>
+                        <TableCell>{clinic.clientName}</TableCell>
+                        <TableCell
+                          className="max-w-48 truncate font-mono text-xs"
+                          title={clinic.googleSheetId}
+                        >
+                          {clinic.googleSheetId}
+                        </TableCell>
+                        <TableCell className="font-mono text-xs">
+                          {formatSheetColumnSummary(clinic.sheetColumns)}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={clinic.isActive ? "secondary" : "outline"}>
+                            {clinic.isActive ? t.common.active : t.common.inactive}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <ClinicActions
+                            clinic={clinic}
                             disabled={isPending}
-                            onClick={() => openEdit(clinic)}
-                          >
-                            {t.common.edit}
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-                            disabled={isPending}
-                            onClick={() => {
-                              setClinicDeleteError(null);
-                              setClinicToDelete(clinic);
-                            }}
-                          >
-                            {t.common.delete}
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </div>
+                            onEdit={openEdit}
+                            onDelete={requestClinicDelete}
+                          />
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </DataTableFrame>
+
+            <DataCardList>
+              {clinicsData.clinics.map((clinic) => (
+                <DataCard
+                  key={clinic.clinicId}
+                  title={clinic.name}
+                  subtitle={
+                    clinic.externalClinicId
+                      ? t.clinics.externalId(clinic.externalClinicId)
+                      : undefined
+                  }
+                  badge={
+                    <Badge variant={clinic.isActive ? "secondary" : "outline"}>
+                      {clinic.isActive ? t.common.active : t.common.inactive}
+                    </Badge>
+                  }
+                >
+                  <DataCardRow label={t.admin.clinics.clinicTable.client}>
+                    <span className="truncate">{clinic.clientName}</span>
+                  </DataCardRow>
+                  <DataCardRow label={t.admin.clinics.clinicTable.googleSheet}>
+                    <span className="truncate font-mono text-xs">{clinic.googleSheetId}</span>
+                  </DataCardRow>
+                  <DataCardRow label={t.admin.clinics.clinicTable.columns}>
+                    <span className="truncate font-mono text-xs">
+                      {formatSheetColumnSummary(clinic.sheetColumns)}
+                    </span>
+                  </DataCardRow>
+                  <DataCardRow>
+                    <ClinicActions
+                      clinic={clinic}
+                      disabled={pendingClinicId === clinic.clinicId}
+                      onEdit={openEdit}
+                      onDelete={requestClinicDelete}
+                    />
+                  </DataCardRow>
+                </DataCard>
+              ))}
+            </DataCardList>
+          </>
         )}
 
         {clinicsData?.hasMore ? (
