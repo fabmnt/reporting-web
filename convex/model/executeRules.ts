@@ -47,9 +47,10 @@ const LOW_BKS_PERCENT = 50;
 // empty" is a status of its own and not an untouched row.
 const EMPTY_MARKER = "empty";
 
-// A finished row reads "done" or "done by" and then the person who ran it, so
-// the marker is the start of the cell and not the whole of it.
-const DONE_MARKER = "done";
+// A finished row reads "done", "done by diva" or "*done by dr", so the marker
+// is the word and not the whole cell. Requiring the word keeps "undone" and
+// "donezo" out, which a plain substring check would take for finished rows.
+const DONE_MARKER = /(?:^|[^a-z])done(?:[^a-z]|$)/;
 
 function cell(row: string[], index: number): string {
   return (row[index] ?? "").trim().toLowerCase();
@@ -98,7 +99,7 @@ export function isPendingToExecute(
     return true;
   }
 
-  if (!execution.startsWith(DONE_MARKER)) return false;
+  if (!DONE_MARKER.test(execution)) return false;
   if (cell(row, indexes.fileUrl) === EMPTY_MARKER) return true;
   return bksBelowThreshold(row, BKS_COLUMN_INDEX);
 }
