@@ -45,4 +45,6 @@ export const errors = {
     `No se encontraron pestañas entre ${startDate} y ${endDate}.`,
   SHEET_INVALID_COLUMN: (column: string) =>
     `Columna de hoja no válida "${column}". Usa letras como A, T o AB.`,
+  SHEET_RATE_LIMITED:
+    "Google limitó la velocidad de nuestras solicitudes. Espera un minuto e inténtalo de nuevo.",
 };

@@ -6,8 +6,8 @@ import { action, internalMutation, internalQuery } from "./_generated/server";
 import { internal } from "./_generated/api.js";
 import {
   appError,
-  appErrorPayloadOf,
   reportSheetError,
+  sheetErrorFrom,
   type ReportSheetError,
 } from "./model/appErrors";
 import type { ResolvedClinicSheetColumns } from "./model/clinicSheetColumns";
@@ -66,20 +66,6 @@ type SheetResultEntry = {
   bucketRows: BucketResultEntry[];
   error: ReportSheetError | null;
 };
-
-// A failure on one clinic's sheet. A bad column mapping is a configuration
-// error the user can fix from the app, so it keeps its code; everything else
-// (Google refusing the read, a missing tab) travels as text.
-function sheetErrorFrom(error: unknown): ReportSheetError {
-  const payload = appErrorPayloadOf(error);
-  if (payload !== null && payload.code === "INVALID_SHEET_COLUMN") {
-    return { code: "SHEET_INVALID_COLUMN", column: payload.column };
-  }
-  return {
-    code: "SHEET_FAILED",
-    message: error instanceof Error ? error.message : String(error),
-  };
-}
 
 type ClinicRunConfig = {
   clinicId: Id<"clinics">;
@@ -288,7 +274,7 @@ export const runSheetReport = action({
         tabTitle: string;
         headers: string[];
         values: string[][];
-        error: string | null;
+        error: ReportSheetError | null;
       }> = [];
       try {
         tabResults = await ctx.runAction(internal.sheets.readSheetTabsValues, {
@@ -322,7 +308,7 @@ export const runSheetReport = action({
             tabTitle: tabResult.tabTitle,
             headers: [],
             bucketRows: [],
-            error: { code: "SHEET_FAILED", message: tabResult.error },
+            error: tabResult.error,
           });
           continue;
         }

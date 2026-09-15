@@ -10,6 +10,7 @@
 
 import type * as auth from "../auth.js";
 import type * as clinics from "../clinics.js";
+import type * as googleApi from "../googleApi.js";
 import type * as googleSheets from "../googleSheets.js";
 import type * as http from "../http.js";
 import type * as migrations_dataCleanup from "../migrations/dataCleanup.js";
@@ -44,6 +45,7 @@ import type {
 declare const fullApi: ApiFromModules<{
   auth: typeof auth;
   clinics: typeof clinics;
+  googleApi: typeof googleApi;
   googleSheets: typeof googleSheets;
   http: typeof http;
   "migrations/dataCleanup": typeof migrations_dataCleanup;
@@ -96,4 +98,6 @@ export declare const internal: FilterApi<
   FunctionReference<any, "internal">
 >;
 
-export declare const components: {};
+export declare const components: {
+  rateLimiter: import("@convex-dev/rate-limiter/_generated/component.js").ComponentApi<"rateLimiter">;
+};

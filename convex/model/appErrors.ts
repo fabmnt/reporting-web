@@ -40,7 +40,8 @@ export type AppErrorPayload =
   | { code: "REPORT_TYPE_NAME_REQUIRED" }
   | { code: "REPORT_TYPE_GROUP_REQUIRED" }
   | { code: "REPORT_TYPE_GROUP_LIMIT"; limit: number }
-  | { code: "REPORT_TYPE_GROUP_KEYS" };
+  | { code: "REPORT_TYPE_GROUP_KEYS" }
+  | { code: "SHEET_RATE_LIMITED" };
 
 export type AppErrorCode = AppErrorPayload["code"];
 
@@ -60,11 +61,30 @@ export function appErrorPayloadOf(error: unknown): AppErrorPayload | null {
 
 // A report result carries one error per sheet. Failures raised by Google or by
 // a clinic's own configuration keep their text, because only the call that
-// failed knows what went wrong.
+// failed knows what went wrong. A rate limit keeps its code instead: the text
+// Google sends is not something to show an operator, and the recovery is the
+// same for every sheet.
 export const reportSheetError = v.union(
   v.object({ code: v.literal("SHEET_NO_TABS"), startDate: v.string(), endDate: v.string() }),
   v.object({ code: v.literal("SHEET_INVALID_COLUMN"), column: v.string() }),
+  v.object({ code: v.literal("SHEET_RATE_LIMITED") }),
   v.object({ code: v.literal("SHEET_FAILED"), message: v.string() })
 );
 
 export type ReportSheetError = Infer<typeof reportSheetError>;
+
+// Turns a caught error into the error a sheet reports, for the calls that keep
+// going after a failure instead of letting it reach the client.
+export function sheetErrorFrom(error: unknown): ReportSheetError {
+  const payload = appErrorPayloadOf(error);
+  if (payload !== null && payload.code === "INVALID_SHEET_COLUMN") {
+    return { code: "SHEET_INVALID_COLUMN", column: payload.column };
+  }
+  if (payload !== null && payload.code === "SHEET_RATE_LIMITED") {
+    return { code: "SHEET_RATE_LIMITED" };
+  }
+  return {
+    code: "SHEET_FAILED",
+    message: error instanceof Error ? error.message : String(error),
+  };
+}
