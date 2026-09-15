@@ -239,6 +239,26 @@ describe("AdminAccountsPanel", () => {
     expect(await screen.findByText("Status update failed.")).toBeVisible();
   });
 
+  it("keeps the status switches apart and names the card one", async () => {
+    const user = userEvent.setup();
+    setStatus.mockResolvedValue(null);
+    renderPanel();
+
+    // The table and the cards stay in the DOM together, so the two switches for
+    // one account cannot share an id.
+    const ids = screen.getAllByRole("switch").map((control) => control.id);
+    expect(ids.every((id) => id !== "")).toBe(true);
+    expect(new Set(ids).size).toBe(ids.length);
+
+    // The card labels the row with a <dt>, which does not name the switch, so
+    // the switch has to say which account it controls.
+    await user.click(screen.getByRole("switch", { name: "Account status for Bea" }));
+
+    await waitFor(() =>
+      expect(setStatus).toHaveBeenCalledWith({ profileId: "profile-2", status: "disabled" })
+    );
+  });
+
   it("shows a visible error in the language the user switches to", async () => {
     const user = userEvent.setup();
     setStatus.mockRejectedValue(new ConvexError({ code: "PROFILE_NOT_FOUND" }));

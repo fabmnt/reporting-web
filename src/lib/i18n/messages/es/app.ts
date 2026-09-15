@@ -25,6 +25,16 @@ export const app = {
   language: {
     switchTo: (name: string) => `Cambiar el idioma a ${name}`,
   },
+  account: {
+    menu: "Menú de la cuenta",
+    language: "Idioma",
+    theme: "Tema",
+    themes: {
+      light: "Claro",
+      dark: "Oscuro",
+      system: "Del sistema",
+    },
+  },
   states: {
     somethingWentWrong: "Algo salió mal",
     accountSetupFailed: "Falló la configuración de la cuenta",

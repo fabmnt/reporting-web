@@ -123,8 +123,10 @@ describe("AdminClinicsPanel", () => {
   it("lists the clients and clinics it reads", () => {
     renderPanel();
 
-    expect(screen.getByText("smilist")).toBeInTheDocument();
-    expect(screen.getByText("Downtown")).toBeInTheDocument();
+    // Each record is rendered twice: once in the table, once in the cards that
+    // replace it on narrow screens.
+    expect(screen.getAllByText("smilist")).toHaveLength(2);
+    expect(screen.getAllByText("Downtown")).toHaveLength(2);
   });
 
   it("closes the client dialog after a successful create", async () => {

@@ -24,7 +24,7 @@ export function SheetColumnFields({
         <h3 className="text-sm font-medium">{t.clinics.sheetColumns.title}</h3>
         <p className="text-xs text-muted-foreground">{t.clinics.sheetColumns.note}</p>
       </div>
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 md:gap-4 lg:grid-cols-4">
         <Field>
           <FieldLabel htmlFor="column-update-status">
             {t.clinics.sheetColumns.updateStatus}

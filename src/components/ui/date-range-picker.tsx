@@ -79,7 +79,12 @@ export function DateRangePicker({
         <CalendarIcon data-icon="inline-start" />
         <span>{formatRangeLabel(value, locale, t.common.pickDateRange)}</span>
       </PopoverTrigger>
-      <PopoverContent className="w-auto p-0" align="start">
+      {/* Two months stack on narrow screens, so the popup is capped and scrolls
+          instead of running past the bottom of the screen. */}
+      <PopoverContent
+        className="max-h-(--available-height) w-auto overflow-y-auto p-0"
+        align="start"
+      >
         <Calendar
           mode="range"
           locale={DATE_LOCALES[locale]}

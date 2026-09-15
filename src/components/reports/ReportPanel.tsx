@@ -7,6 +7,7 @@ import { useState } from "react";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 import type { ReportSheetError } from "../../../convex/model/appErrors";
+import { DataCard, DataCardList, DataCardRow, DataTableFrame } from "@/components/app/DataCard";
 import { PageHeader } from "@/components/app/PageHeader";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -184,7 +185,7 @@ function ResultTable({
           {count}
         </Badge>
       </div>
-      <div className="overflow-hidden rounded-lg border">
+      <DataTableFrame>
         <Table>
           <TableHeader className="bg-muted/40">
             <TableRow>
@@ -209,7 +210,24 @@ function ResultTable({
             ))}
           </TableBody>
         </Table>
-      </div>
+      </DataTableFrame>
+
+      <DataCardList>
+        {rows.map((row) => (
+          <DataCard
+            key={row.rowNumber}
+            title={
+              <span className="font-mono tabular-nums">{`${t.common.row} ${row.rowNumber}`}</span>
+            }
+          >
+            {columnIndexes.map((index) => (
+              <DataCardRow key={index} label={headers[index] || t.common.columnFallback(index)}>
+                <span className="truncate">{row.values[index] ?? ""}</span>
+              </DataCardRow>
+            ))}
+          </DataCard>
+        ))}
+      </DataCardList>
     </div>
   );
 }

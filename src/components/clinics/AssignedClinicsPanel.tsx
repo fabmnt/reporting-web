@@ -3,6 +3,7 @@ import { useMutation, useQuery } from "convex/react";
 import { useState, type SyntheticEvent } from "react";
 
 import { api } from "../../../convex/_generated/api";
+import { DataCard, DataCardList, DataCardRow, DataTableFrame } from "@/components/app/DataCard";
 import { SheetColumnFields } from "@/components/clinics/SheetColumnFields";
 import { PageHeader } from "@/components/app/PageHeader";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -197,45 +198,83 @@ export function AssignedClinicsPanel() {
       ) : assignedData.clinics.length === 0 ? (
         <p className="text-sm text-muted-foreground">{t.clinics.noneAssigned}</p>
       ) : (
-        <div className="overflow-hidden rounded-lg border">
-          <Table>
-            <TableHeader className="bg-muted/40">
-              <TableRow>
-                <TableHead>{t.clinics.table.clinic}</TableHead>
-                <TableHead>{t.clinics.table.client}</TableHead>
-                <TableHead>{t.clinics.table.googleSheet}</TableHead>
-                <TableHead>{t.clinics.table.columns}</TableHead>
-                <TableHead>{t.clinics.table.actions}</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {assignedData.clinics.map((clinic) => (
-                <TableRow key={clinic.clinicId}>
-                  <TableCell>
-                    <div className="flex flex-col gap-1">
-                      <span>{clinic.name}</span>
-                      {clinic.externalClinicId ? (
-                        <span className="text-xs text-muted-foreground">
-                          {t.clinics.externalId(clinic.externalClinicId)}
-                        </span>
-                      ) : null}
-                    </div>
-                  </TableCell>
-                  <TableCell>{clinic.clientName}</TableCell>
-                  <TableCell className="font-mono text-xs">{clinic.googleSheetId}</TableCell>
-                  <TableCell className="font-mono text-xs">
-                    {formatSheetColumnSummary(clinic.sheetColumns)}
-                  </TableCell>
-                  <TableCell>
-                    <Button variant="outline" size="sm" onClick={() => openEdit(clinic)}>
-                      {t.clinics.table.configure}
-                    </Button>
-                  </TableCell>
+        <>
+          <DataTableFrame>
+            <Table>
+              <TableHeader className="bg-muted/40">
+                <TableRow>
+                  <TableHead>{t.clinics.table.clinic}</TableHead>
+                  <TableHead>{t.clinics.table.client}</TableHead>
+                  <TableHead>{t.clinics.table.googleSheet}</TableHead>
+                  <TableHead>{t.clinics.table.columns}</TableHead>
+                  <TableHead>{t.clinics.table.actions}</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
+              </TableHeader>
+              <TableBody>
+                {assignedData.clinics.map((clinic) => (
+                  <TableRow key={clinic.clinicId}>
+                    <TableCell>
+                      <div className="flex flex-col gap-1">
+                        <span>{clinic.name}</span>
+                        {clinic.externalClinicId ? (
+                          <span className="text-xs text-muted-foreground">
+                            {t.clinics.externalId(clinic.externalClinicId)}
+                          </span>
+                        ) : null}
+                      </div>
+                    </TableCell>
+                    <TableCell>{clinic.clientName}</TableCell>
+                    <TableCell
+                      className="max-w-48 truncate font-mono text-xs"
+                      title={clinic.googleSheetId}
+                    >
+                      {clinic.googleSheetId}
+                    </TableCell>
+                    <TableCell className="font-mono text-xs">
+                      {formatSheetColumnSummary(clinic.sheetColumns)}
+                    </TableCell>
+                    <TableCell>
+                      <Button variant="outline" size="sm" onClick={() => openEdit(clinic)}>
+                        {t.clinics.table.configure}
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </DataTableFrame>
+
+          <DataCardList>
+            {assignedData.clinics.map((clinic) => (
+              <DataCard
+                key={clinic.clinicId}
+                title={clinic.name}
+                subtitle={
+                  clinic.externalClinicId
+                    ? t.clinics.externalId(clinic.externalClinicId)
+                    : undefined
+                }
+              >
+                <DataCardRow label={t.clinics.table.client}>
+                  <span className="truncate">{clinic.clientName}</span>
+                </DataCardRow>
+                <DataCardRow label={t.clinics.table.googleSheet}>
+                  <span className="truncate font-mono text-xs">{clinic.googleSheetId}</span>
+                </DataCardRow>
+                <DataCardRow label={t.clinics.table.columns}>
+                  <span className="truncate font-mono text-xs">
+                    {formatSheetColumnSummary(clinic.sheetColumns)}
+                  </span>
+                </DataCardRow>
+                <DataCardRow>
+                  <Button variant="outline" size="sm" onClick={() => openEdit(clinic)}>
+                    {t.clinics.table.configure}
+                  </Button>
+                </DataCardRow>
+              </DataCard>
+            ))}
+          </DataCardList>
+        </>
       )}
 
       {editingClinic !== null ? (

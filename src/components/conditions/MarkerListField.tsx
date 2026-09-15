@@ -50,9 +50,9 @@ export function MarkerListField({
               disabled={disabled}
               aria-label={t.conditions.markers.remove(value)}
               title={t.conditions.markers.remove(value)}
-              className="group inline-flex shrink-0 cursor-pointer items-center gap-1.5 rounded-full bg-secondary py-1 pr-1.5 pl-2.5 text-xs font-medium text-secondary-foreground transition-colors hover:bg-destructive/10 hover:text-destructive disabled:cursor-not-allowed disabled:opacity-40"
+              className="group inline-flex max-w-full shrink-0 cursor-pointer items-center gap-1.5 rounded-full bg-secondary py-1 pr-1.5 pl-2.5 text-xs font-medium text-secondary-foreground transition-colors hover:bg-destructive/10 hover:text-destructive disabled:cursor-not-allowed disabled:opacity-40"
             >
-              {value}
+              <span className="truncate">{value}</span>
               <X
                 className="size-3 shrink-0 text-muted-foreground transition-colors group-hover:text-destructive"
                 aria-hidden="true"
