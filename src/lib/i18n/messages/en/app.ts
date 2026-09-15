@@ -25,6 +25,16 @@ export const app = {
   language: {
     switchTo: (name: string) => `Switch to ${name}`,
   },
+  account: {
+    menu: "Account menu",
+    language: "Language",
+    theme: "Theme",
+    themes: {
+      light: "Light",
+      dark: "Dark",
+      system: "System",
+    },
+  },
   states: {
     somethingWentWrong: "Something went wrong",
     accountSetupFailed: "Account setup failed",

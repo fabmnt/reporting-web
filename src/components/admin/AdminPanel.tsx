@@ -1,9 +1,11 @@
+import type { FunctionReturnType } from "convex/server";
 import { useMutation, useQuery } from "convex/react";
 import { useState } from "react";
 
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { AdminTabs } from "@/components/app/AdminTabs";
+import { DataCard, DataCardList, DataCardRow, DataTableFrame } from "@/components/app/DataCard";
 import { PageHeader } from "@/components/app/PageHeader";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -40,6 +42,133 @@ import { useDocumentTitle, useI18n } from "@/lib/i18n/context";
 import { localizedError, type LocalizedMessage } from "@/lib/i18n/errors";
 
 type StaffRole = "admin" | "operator";
+
+type ManagedAccountView = FunctionReturnType<
+  typeof api.staffAccounts.listManaged
+>["accounts"][number];
+
+/** The account controls are shared by the table and the narrow-screen cards. */
+function RoleSelect({
+  account,
+  disabled,
+  onChange,
+}: {
+  account: ManagedAccountView;
+  disabled: boolean;
+  onChange: (profileId: Id<"staffProfiles">, role: StaffRole) => void;
+}) {
+  const { t } = useI18n();
+
+  return (
+    <Select
+      items={[
+        { value: "admin", label: t.app.roles.admin },
+        { value: "operator", label: t.app.roles.operator },
+      ]}
+      value={account.role}
+      onValueChange={(role) => {
+        if (role) onChange(account.profileId, role as StaffRole);
+      }}
+      disabled={disabled}
+    >
+      <SelectTrigger
+        aria-label={t.admin.accounts.roleFor(account.displayName)}
+        className="w-32 md:w-fit"
+      >
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectGroup>
+          <SelectItem value="admin">{t.app.roles.admin}</SelectItem>
+          <SelectItem value="operator">{t.app.roles.operator}</SelectItem>
+        </SelectGroup>
+      </SelectContent>
+    </Select>
+  );
+}
+
+function ClinicAssignment({
+  account,
+  disabled,
+  onAssign,
+}: {
+  account: ManagedAccountView;
+  disabled: boolean;
+  onAssign: (profileId: Id<"staffProfiles">, assignedClinicIds: Id<"clinics">[]) => void;
+}) {
+  const { t } = useI18n();
+
+  return (
+    <>
+      <Badge variant="secondary" className="tabular-nums">
+        {account.assignedClinicIds.length}
+      </Badge>
+      <Button
+        variant="outline"
+        size="sm"
+        disabled={disabled}
+        onClick={() => onAssign(account.profileId, account.assignedClinicIds)}
+      >
+        {t.admin.accounts.assign}
+      </Button>
+    </>
+  );
+}
+
+function PasswordLink({
+  account,
+  disabled,
+  onOpen,
+}: {
+  account: ManagedAccountView;
+  disabled: boolean;
+  onOpen: (profileId: Id<"staffProfiles">) => void;
+}) {
+  const { t } = useI18n();
+
+  return (
+    <Button
+      variant="outline"
+      size="sm"
+      disabled={disabled}
+      onClick={() => onOpen(account.profileId)}
+    >
+      {t.admin.accounts.passwordLink.action}
+    </Button>
+  );
+}
+
+function AccountStatus({
+  account,
+  disabled,
+  onChange,
+  showState = true,
+}: {
+  account: ManagedAccountView;
+  disabled: boolean;
+  onChange: (profileId: Id<"staffProfiles">, isActive: boolean) => void;
+  // The cards label the row already, so only the switch is needed there.
+  showState?: boolean;
+}) {
+  const { t } = useI18n();
+  const isActive = account.status === "active";
+
+  return (
+    <Field orientation="horizontal" data-disabled={disabled} className="justify-end">
+      <Switch
+        id={`status-${account.profileId}`}
+        checked={isActive}
+        onCheckedChange={(checked) => onChange(account.profileId, checked)}
+        disabled={disabled}
+      />
+      {showState ? (
+        <FieldLabel htmlFor={`status-${account.profileId}`}>
+          {isActive ? t.admin.accounts.enabled : t.admin.accounts.disabled}
+        </FieldLabel>
+      ) : null}
+    </Field>
+  );
+}
 
 export function AdminAccountsPanel() {
   const { t } = useI18n();
@@ -231,7 +360,7 @@ export function AdminAccountsPanel() {
           <Skeleton className="h-64 w-full" />
         ) : (
           <>
-            <div className="overflow-hidden rounded-lg border">
+            <DataTableFrame>
               <Table>
                 <TableHeader className="bg-muted/40">
                   <TableRow>
@@ -245,7 +374,7 @@ export function AdminAccountsPanel() {
                 <TableBody>
                   {managed.accounts.map((account) => {
                     const isPending = pendingProfileId === account.profileId;
-                    const assignedCount = account.assignedClinicIds.length;
+                    const locked = account.isCurrentUser || isPending;
                     return (
                       <TableRow key={account.profileId}>
                         <TableCell>
@@ -260,83 +389,82 @@ export function AdminAccountsPanel() {
                           </div>
                         </TableCell>
                         <TableCell>
-                          <Select
-                            items={[
-                              { value: "admin", label: t.app.roles.admin },
-                              { value: "operator", label: t.app.roles.operator },
-                            ]}
-                            value={account.role}
-                            onValueChange={(role) => {
-                              if (role) void updateRole(account.profileId, role as StaffRole);
-                            }}
-                            disabled={account.isCurrentUser || isPending}
-                          >
-                            <SelectTrigger
-                              aria-label={t.admin.accounts.roleFor(account.displayName)}
-                            >
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectGroup>
-                                <SelectItem value="admin">{t.app.roles.admin}</SelectItem>
-                                <SelectItem value="operator">{t.app.roles.operator}</SelectItem>
-                              </SelectGroup>
-                            </SelectContent>
-                          </Select>
+                          <RoleSelect account={account} disabled={locked} onChange={updateRole} />
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-2">
-                            <Badge variant="secondary" className="tabular-nums">
-                              {assignedCount}
-                            </Badge>
-                            <Button
-                              variant="outline"
-                              size="sm"
+                            <ClinicAssignment
+                              account={account}
                               disabled={isPending || isSavingAssignment}
-                              onClick={() =>
-                                startClinicAssignment(account.profileId, account.assignedClinicIds)
-                              }
-                            >
-                              {t.admin.accounts.assign}
-                            </Button>
+                              onAssign={startClinicAssignment}
+                            />
                           </div>
                         </TableCell>
                         <TableCell>
-                          <Button
-                            variant="outline"
-                            size="sm"
+                          <PasswordLink
+                            account={account}
                             disabled={isPending}
-                            onClick={() => openPasswordLink(account.profileId)}
-                          >
-                            {t.admin.accounts.passwordLink.action}
-                          </Button>
+                            onOpen={openPasswordLink}
+                          />
                         </TableCell>
                         <TableCell>
-                          <Field
-                            orientation="horizontal"
-                            data-disabled={account.isCurrentUser || isPending}
-                          >
-                            <Switch
-                              id={`status-${account.profileId}`}
-                              checked={account.status === "active"}
-                              onCheckedChange={(checked) =>
-                                void updateStatus(account.profileId, checked)
-                              }
-                              disabled={account.isCurrentUser || isPending}
-                            />
-                            <FieldLabel htmlFor={`status-${account.profileId}`}>
-                              {account.status === "active"
-                                ? t.admin.accounts.enabled
-                                : t.admin.accounts.disabled}
-                            </FieldLabel>
-                          </Field>
+                          <AccountStatus
+                            account={account}
+                            disabled={locked}
+                            onChange={updateStatus}
+                          />
                         </TableCell>
                       </TableRow>
                     );
                   })}
                 </TableBody>
               </Table>
-            </div>
+            </DataTableFrame>
+
+            <DataCardList>
+              {managed.accounts.map((account) => {
+                const isPending = pendingProfileId === account.profileId;
+                const locked = account.isCurrentUser || isPending;
+                return (
+                  <DataCard
+                    key={account.profileId}
+                    title={account.displayName}
+                    subtitle={account.username}
+                    badge={
+                      account.isCurrentUser ? (
+                        <Badge variant="outline">{t.common.you}</Badge>
+                      ) : undefined
+                    }
+                  >
+                    <DataCardRow label={t.admin.accounts.table.role}>
+                      <RoleSelect account={account} disabled={locked} onChange={updateRole} />
+                    </DataCardRow>
+                    <DataCardRow label={t.admin.accounts.table.clinics}>
+                      <ClinicAssignment
+                        account={account}
+                        disabled={isPending || isSavingAssignment}
+                        onAssign={startClinicAssignment}
+                      />
+                    </DataCardRow>
+                    <DataCardRow label={t.admin.accounts.table.password}>
+                      <PasswordLink
+                        account={account}
+                        disabled={isPending}
+                        onOpen={openPasswordLink}
+                      />
+                    </DataCardRow>
+                    <DataCardRow label={t.admin.accounts.table.enabled}>
+                      <AccountStatus
+                        account={account}
+                        disabled={locked}
+                        onChange={updateStatus}
+                        showState={false}
+                      />
+                    </DataCardRow>
+                  </DataCard>
+                );
+              })}
+            </DataCardList>
           </>
         )}
       </section>
