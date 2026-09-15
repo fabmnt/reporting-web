@@ -25,12 +25,12 @@ const INITIAL_BACKOFF_MS = 1_000;
 const JITTER_MS = 1_000;
 const MAX_RETRY_AFTER_MS = 60_000;
 
-// One action covers every clinic of a run, and every request in it can wait on
-// retries. Budgeting those waits per action keeps the action inside the runtime
-// limit, so a long outage reports the sheets that failed instead of losing the
-// whole run to a timeout. Pacing waits are deliberately not part of it: staying
-// under the quota is not optional.
-const RETRY_BUDGET_MS = 4 * 60_000;
+// Convex kills an action that runs past its runtime limit, which loses the whole
+// run and records nothing. Convex documents 10 minutes for Node actions and 30
+// for the default runtime, so one budget under both, covering every wait the
+// action makes, lets a run that cannot finish in time report the sheets it did
+// not read instead.
+const ACTION_BUDGET_MS = 8 * 60_000;
 
 const DETAIL_LIMIT = 300;
 
@@ -166,19 +166,23 @@ async function attemptGoogleRequest(request: GoogleRequest): Promise<GoogleAttem
 
 // Waits for the next slot in the shared Sheets budget. With `reserve` the
 // component never rejects: it deducts the token and answers with the wait, so
-// the bucket paces this app's requests instead of shedding them. The guard
-// below only fires if the limit ever gains a `maxReserved` cap, and failing the
-// sheet beats letting the request run over Google's quota.
-async function awaitSheetsSlot(ctx: ActionCtx): Promise<void> {
+// the bucket paces this app's requests instead of shedding them. Both guards
+// fail the sheet rather than sleep. The first covers a rejection, which needs a
+// `maxReserved` cap this config does not set. The second gives up on a wait that
+// would reach past the action deadline, because an action killed at the runtime
+// limit loses every other sheet of the run too.
+async function awaitSheetsSlot(ctx: ActionCtx, deadlineMs: number): Promise<void> {
   const status = await rateLimiter.limit(ctx, "googleSheetsRead", { reserve: true });
   if (!status.ok) throw appError({ code: "SHEET_RATE_LIMITED" });
-  if (status.retryAfter !== undefined) await sleep(status.retryAfter);
+  if (status.retryAfter === undefined) return;
+  if (Date.now() + status.retryAfter > deadlineMs) throw appError({ code: "SHEET_RATE_LIMITED" });
+  await sleep(status.retryAfter);
 }
 
 // Sends one Google request, retrying the failures Google expects callers to
 // retry. `failure` builds the error for a request that cannot be saved, so
-// each endpoint keeps its own wording, and `deadlineMs` gives up on the wait
-// instead of pushing the calling action past its runtime limit.
+// each endpoint keeps its own wording, and `deadlineMs` stops any wait that
+// would reach past the calling action's budget.
 async function sendGoogleRequest(
   request: GoogleRequest,
   options: {
@@ -222,10 +226,10 @@ function sheetsFailureMessage(failure: GoogleFailure): string {
   return `Google Sheets request failed with status ${failure.status}.${suffix}`;
 }
 
-// Absolute time by which the retry waits of one action have to stop. Call it
+// Absolute time by which every wait of one action has to be finished. Call it
 // once per action, before the requests that action makes.
-export function retryDeadline(): number {
-  return Date.now() + RETRY_BUDGET_MS;
+export function actionDeadline(): number {
+  return Date.now() + ACTION_BUDGET_MS;
 }
 
 // The token endpoint has its own quota, so it is retried but not paced.
@@ -243,7 +247,7 @@ export async function refreshAccessToken(): Promise<string> {
       }).toString(),
     },
     {
-      deadlineMs: retryDeadline(),
+      deadlineMs: actionDeadline(),
       failure: (failure) =>
         failure.quotaRejection
           ? new Error("Google rate limited the token refresh. Try again in a minute.")
@@ -273,7 +277,7 @@ export async function fetchSheetsJson(
       headers: { authorization: `Bearer ${token}` },
     },
     {
-      beforeAttempt: () => awaitSheetsSlot(ctx),
+      beforeAttempt: () => awaitSheetsSlot(ctx, deadlineMs),
       deadlineMs,
       failure: (failure) =>
         failure.quotaRejection

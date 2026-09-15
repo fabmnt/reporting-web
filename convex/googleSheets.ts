@@ -2,7 +2,7 @@ import { v } from "convex/values";
 
 import { action, query } from "./_generated/server";
 import { internal } from "./_generated/api.js";
-import { fetchSheetsJson, refreshAccessToken, retryDeadline } from "./googleApi";
+import { actionDeadline, fetchSheetsJson, refreshAccessToken } from "./googleApi";
 import { listProfileClinics } from "./model/reporting";
 import { requireOperator } from "./model/staff";
 
@@ -45,7 +45,7 @@ export const listSheetTabs = action({
       ctx,
       args.googleSheetId,
       token,
-      retryDeadline()
+      actionDeadline()
     )) as SheetsTabListResponse;
     const tabs = (data.sheets ?? [])
       .map((sheet) => sheet.properties?.title ?? "")
