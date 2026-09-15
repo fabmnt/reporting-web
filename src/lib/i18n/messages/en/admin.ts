@@ -11,6 +11,7 @@ export const admin = {
       account: "Account",
       role: "Role",
       clinics: "Clinics",
+      password: "Password",
       enabled: "Enabled",
     },
     roleFor: (name: string) => `Role for ${name}`,
@@ -21,6 +22,19 @@ export const admin = {
       role: "Role update failed.",
       status: "Status update failed.",
       assignment: "Clinic assignment failed.",
+      passwordLink: "Creating the password link failed.",
+    },
+    passwordLink: {
+      title: "Password link",
+      action: "Create link",
+      descriptionFor: (name: string) =>
+        `${name} uses this link to choose a password. It works once and expires after 7 days.`,
+      descriptionGeneric: "Choose a password through a one-shot link.",
+      create: "Create link",
+      ready: "Send this link now. It is shown only once.",
+      copy: "Copy link",
+      copied: "Copied",
+      failedTitle: "Could not create the link",
     },
     assignment: {
       title: "Assign clinics",

@@ -14,6 +14,8 @@ export const errors = {
   PROFILE_NOT_FOUND: "No se encontró el perfil del usuario.",
   CANNOT_CHANGE_OWN_ROLE: "No puedes cambiar tu propio rol.",
   CANNOT_DISABLE_SELF: "No puedes deshabilitar tu propia cuenta.",
+  PASSWORD_TOO_SHORT: "La contraseña debe tener al menos 8 caracteres.",
+  PASSWORD_SETUP_LINK_INVALID: "Este enlace ya no es válido. Pídele a un administrador uno nuevo.",
   SELECTED_CLINIC_NOT_FOUND: "No se encontró una de las clínicas seleccionadas.",
   CLIENT_NOT_FOUND: "No se encontró el cliente.",
   CLIENT_DISABLED: "Este cliente está deshabilitado.",

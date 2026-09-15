@@ -17,6 +17,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Field, FieldLabel } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -45,6 +46,7 @@ export function AdminAccountsPanel() {
   const setRole = useMutation(api.staffAccounts.setRole);
   const setStatus = useMutation(api.staffAccounts.setStatus);
   const setAssignedClinics = useMutation(api.staffAccounts.setAssignedClinics);
+  const createLink = useMutation(api.passwordSetup.createLink);
   const current = useQuery(api.staffAccounts.current, {});
   const canManage = current?.role === "admin" && current.status === "active";
   const managed = useQuery(api.staffAccounts.listManaged, canManage ? {} : "skip");
@@ -55,6 +57,11 @@ export function AdminAccountsPanel() {
   const [error, setError] = useState<LocalizedMessage | null>(null);
   const [assignmentError, setAssignmentError] = useState<LocalizedMessage | null>(null);
   const [isSavingAssignment, setIsSavingAssignment] = useState(false);
+  const [linkProfileId, setLinkProfileId] = useState<Id<"staffProfiles"> | null>(null);
+  const [generatedLink, setGeneratedLink] = useState<string | null>(null);
+  const [linkError, setLinkError] = useState<LocalizedMessage | null>(null);
+  const [isCreatingLink, setIsCreatingLink] = useState(false);
+  const [isLinkCopied, setIsLinkCopied] = useState(false);
 
   async function updateRole(profileId: Id<"staffProfiles">, role: StaffRole) {
     setError(null);
@@ -123,6 +130,53 @@ export function AdminAccountsPanel() {
     }
   }
 
+  function openPasswordLink(profileId: Id<"staffProfiles">) {
+    setError(null);
+    setLinkError(null);
+    setGeneratedLink(null);
+    setIsLinkCopied(false);
+    setLinkProfileId(profileId);
+  }
+
+  function closePasswordLink() {
+    if (isCreatingLink) return;
+    setLinkProfileId(null);
+    setGeneratedLink(null);
+    setLinkError(null);
+    setIsLinkCopied(false);
+  }
+
+  async function generatePasswordLink() {
+    if (linkProfileId === null || isCreatingLink) return;
+
+    setError(null);
+    setLinkError(null);
+    setIsLinkCopied(false);
+    setIsCreatingLink(true);
+    try {
+      const { token } = await createLink({ profileId: linkProfileId });
+      // The token is shown once. The client knows the origin, so the backend
+      // never has to guess its own address.
+      setGeneratedLink(`${window.location.origin}/set-password?token=${token}`);
+    } catch (cause) {
+      setLinkError(localizedError(cause, (t) => t.admin.accounts.failures.passwordLink));
+    } finally {
+      setIsCreatingLink(false);
+    }
+  }
+
+  async function copyPasswordLink() {
+    if (generatedLink === null) return;
+
+    try {
+      await navigator.clipboard.writeText(generatedLink);
+      setIsLinkCopied(true);
+    } catch {
+      // Browsers refuse clipboard access outside a secure context. The link
+      // stays selectable, so the admin can still copy it by hand.
+    }
+  }
+
   useDocumentTitle(t.app.titles.accounts);
 
   const header = (
@@ -147,6 +201,10 @@ export function AdminAccountsPanel() {
   const editingAccount =
     editingProfileId !== null
       ? (managed?.accounts.find((account) => account.profileId === editingProfileId) ?? null)
+      : null;
+  const linkAccount =
+    linkProfileId !== null
+      ? (managed?.accounts.find((account) => account.profileId === linkProfileId) ?? null)
       : null;
 
   return (
@@ -180,6 +238,7 @@ export function AdminAccountsPanel() {
                     <TableHead>{t.admin.accounts.table.account}</TableHead>
                     <TableHead>{t.admin.accounts.table.role}</TableHead>
                     <TableHead>{t.admin.accounts.table.clinics}</TableHead>
+                    <TableHead>{t.admin.accounts.table.password}</TableHead>
                     <TableHead>{t.admin.accounts.table.enabled}</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -241,6 +300,16 @@ export function AdminAccountsPanel() {
                               {t.admin.accounts.assign}
                             </Button>
                           </div>
+                        </TableCell>
+                        <TableCell>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={isPending}
+                            onClick={() => openPasswordLink(account.profileId)}
+                          >
+                            {t.admin.accounts.passwordLink.action}
+                          </Button>
                         </TableCell>
                         <TableCell>
                           <Field
@@ -337,6 +406,64 @@ export function AdminAccountsPanel() {
             </Button>
             <Button onClick={() => void saveClinicAssignment()} disabled={isSavingAssignment}>
               {t.admin.accounts.assignment.save}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={linkProfileId !== null}
+        onOpenChange={(open, eventDetails) => {
+          if (open) return;
+          // The dialog owns an in-flight mutation that returns the only copy of
+          // the link, so dismissing it early would lose that link.
+          if (isCreatingLink) {
+            eventDetails.cancel();
+            return;
+          }
+          closePasswordLink();
+        }}
+      >
+        <DialogContent className="sm:max-w-lg" showCloseButton={!isCreatingLink}>
+          <DialogHeader>
+            <DialogTitle>{t.admin.accounts.passwordLink.title}</DialogTitle>
+            <DialogDescription>
+              {linkAccount
+                ? t.admin.accounts.passwordLink.descriptionFor(linkAccount.displayName)
+                : t.admin.accounts.passwordLink.descriptionGeneric}
+            </DialogDescription>
+          </DialogHeader>
+          {generatedLink === null ? null : (
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center gap-2">
+                <Input
+                  readOnly
+                  value={generatedLink}
+                  aria-label={t.admin.accounts.passwordLink.title}
+                  className="font-mono text-xs"
+                  onFocus={(event) => event.currentTarget.select()}
+                />
+                <Button variant="outline" size="sm" onClick={() => void copyPasswordLink()}>
+                  {isLinkCopied
+                    ? t.admin.accounts.passwordLink.copied
+                    : t.admin.accounts.passwordLink.copy}
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">{t.admin.accounts.passwordLink.ready}</p>
+            </div>
+          )}
+          {linkError ? (
+            <Alert variant="destructive">
+              <AlertTitle>{t.admin.accounts.passwordLink.failedTitle}</AlertTitle>
+              <AlertDescription>{linkError.resolve(t)}</AlertDescription>
+            </Alert>
+          ) : null}
+          <DialogFooter>
+            <Button variant="outline" onClick={closePasswordLink} disabled={isCreatingLink}>
+              {generatedLink === null ? t.common.cancel : t.common.close}
+            </Button>
+            <Button onClick={() => void generatePasswordLink()} disabled={isCreatingLink}>
+              {t.admin.accounts.passwordLink.create}
             </Button>
           </DialogFooter>
         </DialogContent>

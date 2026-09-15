@@ -4,22 +4,15 @@ import { convexAuth, type ConvexCredentialsConfig } from "@convex-dev/auth/serve
 import type { Value } from "convex/values";
 
 import { appError } from "./model/appErrors";
+import { usernameFromInput } from "./model/usernames";
 
 // The Password provider identifies an account by the string its `profile`
 // callback puts in `email`, and stores that string on the library-owned
 // `users.email` field. It never checks that the value looks like an address,
 // so this app keeps the username there.
-const USERNAME_PATTERN = /^[a-z0-9][a-z0-9._-]{2,31}$/;
-
 function usernameFrom(params: Record<string, Value | undefined>): string {
   const value = params.username;
-  const username = typeof value === "string" ? value.trim().toLowerCase() : "";
-
-  if (!USERNAME_PATTERN.test(username)) {
-    throw appError({ code: "INVALID_USERNAME" });
-  }
-
-  return username;
+  return usernameFromInput(typeof value === "string" ? value : "");
 }
 
 // The Password provider reports failed credentials by throwing plain errors

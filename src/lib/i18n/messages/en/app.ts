@@ -54,6 +54,16 @@ export const app = {
     createAccount: "Create account",
     useExistingAccount: "Use existing account",
     failed: "Authentication failed.",
+    setPasswordTitle: "Choose your password",
+    setPasswordDescription: "Set a password you do not use anywhere else.",
+    newPassword: "New password",
+    confirmPassword: "Confirm password",
+    passwordMismatch: "The two passwords do not match.",
+    setPassword: "Set password and sign in",
+    setPasswordFailed: "Setting the password failed.",
+    linkMissing: "This link is incomplete. Ask an administrator for a new one.",
+    checkingLink: "Checking the link",
+    passwordHint: "At least 8 characters.",
   },
   titles: {
     report: "Run report | Reporting Web",
@@ -62,5 +72,6 @@ export const app = {
     accounts: "Accounts | Reporting Web",
     signIn: "Sign in | Reporting Web",
     signUp: "Create account | Reporting Web",
+    setPassword: "Set password | Reporting Web",
   },
 };

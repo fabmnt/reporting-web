@@ -54,6 +54,16 @@ export const app = {
     createAccount: "Crear cuenta",
     useExistingAccount: "Usar una cuenta existente",
     failed: "Falló la autenticación.",
+    setPasswordTitle: "Elige tu contraseña",
+    setPasswordDescription: "Define una contraseña que no uses en ningún otro lugar.",
+    newPassword: "Contraseña nueva",
+    confirmPassword: "Confirmar contraseña",
+    passwordMismatch: "Las dos contraseñas no coinciden.",
+    setPassword: "Definir contraseña e iniciar sesión",
+    setPasswordFailed: "No se pudo definir la contraseña.",
+    linkMissing: "Este enlace está incompleto. Pídele uno nuevo a un administrador.",
+    checkingLink: "Verificando el enlace",
+    passwordHint: "Al menos 8 caracteres.",
   },
   titles: {
     report: "Ejecutar reporte | Reporting Web",
@@ -62,5 +72,6 @@ export const app = {
     accounts: "Cuentas | Reporting Web",
     signIn: "Iniciar sesión | Reporting Web",
     signUp: "Crear cuenta | Reporting Web",
+    setPassword: "Definir contraseña | Reporting Web",
   },
 };

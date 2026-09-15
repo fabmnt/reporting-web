@@ -38,6 +38,18 @@ export default defineSchema({
     language: v.optional(staffLanguage),
   }).index("by_userId", ["userId"]),
 
+  // One-shot links an administrator hands out so a person can choose their own
+  // password. Only the hash of the token is stored, and creating a new link
+  // deletes the previous one for that user.
+  passwordSetupLinks: defineTable({
+    userId: v.id("users"),
+    tokenHash: v.string(),
+    expiresAt: v.number(),
+    createdByUserId: v.id("users"),
+  })
+    .index("by_tokenHash", ["tokenHash"])
+    .index("by_userId", ["userId"]),
+
   clients: defineTable({
     key: v.string(),
     name: v.string(),
