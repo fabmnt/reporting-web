@@ -77,6 +77,14 @@ export function NewReportTypeDialog({
   const template: ReportTypeTemplate =
     source === BLANK ? BLANK : { fromReportTypeId: source as Id<"reportTypes"> };
 
+  // Names are unique per scope, so a personal type can share one with a
+  // built-in. The two then sit next to each other in the run form, which the
+  // note makes visible before the type exists.
+  const trimmedName = name.trim();
+  const nameTaken =
+    trimmedName !== "" &&
+    sources.some((item) => item.name.toLowerCase() === trimmedName.toLowerCase());
+
   async function handleCreate() {
     setSaving(true);
     setError(null);
@@ -118,6 +126,9 @@ export function NewReportTypeDialog({
             maxLength={MAX_TYPE_NAME_LENGTH}
             disabled={saving}
           />
+          {nameTaken ? (
+            <p className="text-xs text-muted-foreground">{t.conditions.newType.nameTakenNote}</p>
+          ) : null}
         </Field>
 
         <Field>

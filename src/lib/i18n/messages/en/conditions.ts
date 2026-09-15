@@ -36,6 +36,7 @@ export const conditions = {
     description: "Build row rules on top of the clinic sheets.",
     name: "Name",
     namePlaceholder: "Late verifications",
+    nameTakenNote: "Another report type already uses this name. Both appear in the run form.",
     startingPoint: "Starting point",
     templateBlank: "Start empty",
     templateCopyNote: "Copying starts you from the rules of the selected report type.",

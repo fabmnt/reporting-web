@@ -17,6 +17,8 @@ export const reports = {
   verificationAll: "All",
   includedClinics: "Included clinics",
   noAssignedClinics: "No clinics assigned yet. Ask an admin to assign clinics to your account.",
+  noReportTypes:
+    "No report types yet. Create one in Configuration, or ask an administrator to share a built-in.",
   run: "Run report",
   running: "Running report",
   failedTitle: "Report failed",

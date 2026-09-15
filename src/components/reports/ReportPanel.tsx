@@ -421,36 +421,40 @@ export function ReportRunner() {
 
             <Field>
               <FieldLabel>{t.reports.reportType}</FieldLabel>
-              <Select
-                items={types.map((item) => ({ value: item.reportTypeId, label: item.name }))}
-                value={selectedType?.reportTypeId ?? ""}
-                onValueChange={(value) => setTypeKey((value as string) ?? null)}
-                disabled={running}
-              >
-                <SelectTrigger aria-label={t.reports.reportType} className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectGroup>
-                    <SelectLabel>{t.reports.builtIn}</SelectLabel>
-                    {builtinTypes.map((item) => (
-                      <SelectItem key={item.reportTypeId} value={item.reportTypeId}>
-                        {item.name}
-                      </SelectItem>
-                    ))}
-                  </SelectGroup>
-                  {ownTypes.length > 0 ? (
+              {types.length === 0 ? (
+                <p className="text-sm text-muted-foreground">{t.reports.noReportTypes}</p>
+              ) : (
+                <Select
+                  items={types.map((item) => ({ value: item.reportTypeId, label: item.name }))}
+                  value={selectedType?.reportTypeId ?? ""}
+                  onValueChange={(value) => setTypeKey((value as string) ?? null)}
+                  disabled={running}
+                >
+                  <SelectTrigger aria-label={t.reports.reportType} className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
                     <SelectGroup>
-                      <SelectLabel>{t.reports.myReportTypes}</SelectLabel>
-                      {ownTypes.map((item) => (
+                      <SelectLabel>{t.reports.builtIn}</SelectLabel>
+                      {builtinTypes.map((item) => (
                         <SelectItem key={item.reportTypeId} value={item.reportTypeId}>
                           {item.name}
                         </SelectItem>
                       ))}
                     </SelectGroup>
-                  ) : null}
-                </SelectContent>
-              </Select>
+                    {ownTypes.length > 0 ? (
+                      <SelectGroup>
+                        <SelectLabel>{t.reports.myReportTypes}</SelectLabel>
+                        {ownTypes.map((item) => (
+                          <SelectItem key={item.reportTypeId} value={item.reportTypeId}>
+                            {item.name}
+                          </SelectItem>
+                        ))}
+                      </SelectGroup>
+                    ) : null}
+                  </SelectContent>
+                </Select>
+              )}
               {selectedType ? (
                 <p className="text-xs text-muted-foreground">{selectedType.description}</p>
               ) : null}

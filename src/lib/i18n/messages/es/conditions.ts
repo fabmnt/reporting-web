@@ -39,6 +39,8 @@ export const conditions = {
     description: "Crea reglas de filas sobre las hojas de las clínicas.",
     name: "Nombre",
     namePlaceholder: "Verificaciones tardías",
+    nameTakenNote:
+      "Otro tipo de reporte ya usa este nombre. Ambos aparecen en el formulario del reporte.",
     startingPoint: "Punto de partida",
     templateBlank: "Empezar vacío",
     templateCopyNote: "Copiar te inicia con las reglas del tipo de reporte seleccionado.",
