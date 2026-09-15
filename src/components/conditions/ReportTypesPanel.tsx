@@ -185,10 +185,12 @@ export function ReportTypesPanel({ scope }: { scope: ReportTypeScope }) {
       <NewReportTypeDialog
         scope={scope}
         // Copying takes the stored rules of another type, and a carrier report
-        // keeps none, so it is no starting point for a row report.
+        // keeps none, so it is no starting point for a row report. Its name
+        // still counts for the duplicate check below.
         sources={data.types
           .filter((item) => item.engine !== "execute")
           .map((item) => ({ reportTypeId: item.reportTypeId, name: item.name }))}
+        existingNames={data.types.map((item) => item.name)}
         open={creating}
         onOpenChange={setCreating}
         onCreated={handleCreated}

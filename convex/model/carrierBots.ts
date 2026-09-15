@@ -24,6 +24,45 @@ const MAX_PATTERN_LENGTH = 2_000;
 
 type JsPattern = { source: string; flags: string };
 
+/**
+ * Whether the pattern repeats a group that itself repeats or alternates. That
+ * shape backtracks without end on the wrong text, and JavaScript cannot
+ * interrupt a regular expression once it starts, so the whole action would stop
+ * answering. Real clinic data carries it: `(MA|MASSACHUSETTS)+`.
+ */
+function hasNestedQuantifier(pattern: string): boolean {
+  const groups: Array<{ repeats: boolean; alternates: boolean }> = [];
+
+  for (let index = 0; index < pattern.length; index += 1) {
+    const char = pattern[index];
+    if (char === "\\") {
+      index += 1;
+      continue;
+    }
+    if (char === "(") {
+      groups.push({ repeats: false, alternates: false });
+      continue;
+    }
+    if (char === ")") {
+      const group = groups.pop();
+      if (group === undefined) continue;
+      const next = pattern[index + 1];
+      if ((next === "*" || next === "+" || next === "{") && (group.repeats || group.alternates)) {
+        return true;
+      }
+      const parent = groups.at(-1);
+      if (parent !== undefined && (group.repeats || group.alternates)) parent.repeats = true;
+      continue;
+    }
+    const current = groups.at(-1);
+    if (current === undefined) continue;
+    if (char === "*" || char === "+" || char === "{") current.repeats = true;
+    if (char === "|") current.alternates = true;
+  }
+
+  return false;
+}
+
 // The API hands out Python patterns. The inline (?i) flag is not valid
 // JavaScript, and Python's re.match anchors at the start of the text while
 // RegExp.test searches anywhere, so both differences are folded away here.
@@ -31,6 +70,7 @@ function toJsPattern(pattern: string): JsPattern | null {
   const trimmed = pattern.trim();
   if (trimmed === "" || trimmed.length > MAX_PATTERN_LENGTH) return null;
   const body = trimmed.replace(/\(\?i\)/g, "");
+  if (hasNestedQuantifier(body)) return null;
   return { source: `^(?:${body})`, flags: trimmed.includes("(?i)") ? "i" : "" };
 }
 
@@ -53,21 +93,25 @@ export function isUsableCarrierBot(bot: CarrierBot): boolean {
 }
 
 // The bots that can take rows, in the order the API listed them. A bot whose
-// pattern does not compile is left out instead of failing the whole clinic,
-// and it says so in the logs: rows quietly missing from the results are harder
-// to explain than a line of output.
-export function usableCarrierMatchers(bots: CarrierBot[]): CarrierMatcher[] {
+// pattern this app will not run comes back separately, so the run can tell the
+// operator that its rows are missing instead of leaving a shorter list behind.
+export function carrierMatchers(bots: CarrierBot[]): {
+  matchers: CarrierMatcher[];
+  unsupported: CarrierBot[];
+} {
   const matchers: CarrierMatcher[] = [];
+  const unsupported: CarrierBot[] = [];
   for (const bot of bots) {
     if (!isUsableCarrierBot(bot)) continue;
     const matcher = carrierMatcher(bot);
     if (matcher === null) {
-      console.log(`Carrier pattern of ${bot.name} is not a pattern this app can run.`);
+      console.log(`Carrier pattern of ${bot.name} is not one this app can run.`);
+      unsupported.push(bot);
       continue;
     }
     matchers.push(matcher);
   }
-  return matchers;
+  return { matchers, unsupported };
 }
 
 // Every bot the clinic cannot run right now, which is what tells an operator

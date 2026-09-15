@@ -197,23 +197,40 @@ export const runSheetReport = action({
 
     const bucketLabels = new Map(config.buckets.map((bucket) => [bucket.key, bucket.label]));
 
-    const { tabsForClinic }: { tabsForClinic: Record<string, string[]> } = await ctx.runAction(
-      internal.sheets.planSheetTabs,
-      {
-        clinics: config.clinics.map((c) => ({
-          clinicId: c.clinicId,
-          googleSheetId: c.googleSheetId,
-        })),
-        startDate: args.startDate,
-        endDate: args.endDate,
-      }
-    );
+    const {
+      tabsForClinic,
+      errorsForClinic,
+    }: {
+      tabsForClinic: Record<string, string[]>;
+      errorsForClinic: Record<string, ReportSheetError>;
+    } = await ctx.runAction(internal.sheets.planSheetTabs, {
+      clinics: config.clinics.map((c) => ({
+        clinicId: c.clinicId,
+        googleSheetId: c.googleSheetId,
+      })),
+      startDate: args.startDate,
+      endDate: args.endDate,
+    });
 
     const sheets: ReportSheetResult[] = [];
 
     let succeededClinics = 0;
     let failedClinics = 0;
     for (const clinic of config.clinics) {
+      const planningError = errorsForClinic[clinic.clinicId];
+      if (planningError !== undefined) {
+        failedClinics += 1;
+        sheets.push({
+          clinicId: clinic.clinicId,
+          clinicName: clinic.name,
+          googleSheetId: clinic.googleSheetId,
+          tabTitle: "",
+          headers: [],
+          bucketRows: [],
+          error: planningError,
+        });
+        continue;
+      }
       const tabs = tabsForClinic[clinic.clinicId] ?? [];
       if (tabs.length === 0) {
         failedClinics += 1;

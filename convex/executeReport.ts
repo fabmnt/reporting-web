@@ -4,11 +4,7 @@ import type { ActionCtx } from "./_generated/server";
 import { fetchClinicBots, signInCarrierApi, type CarrierFailure } from "./carrierApi";
 import { actionDeadline } from "./googleApi";
 import { appError, sheetErrorFrom, type ReportSheetError } from "./model/appErrors";
-import {
-  inactiveCarrierBots,
-  usableCarrierMatchers,
-  type CarrierMatcher,
-} from "./model/carrierBots";
+import { carrierMatchers, inactiveCarrierBots, type CarrierMatcher } from "./model/carrierBots";
 import type { ResolvedClinicSheetColumns } from "./model/clinicSheetColumns";
 import {
   CARRIER_COLUMN_INDEX,
@@ -113,17 +109,20 @@ export async function runExecuteReport(
   const bucketKey = bucket?.key ?? "pending";
   const bucketLabel = bucket?.label ?? config.reportTypeName;
 
-  const { tabsForClinic }: { tabsForClinic: Record<string, string[]> } = await ctx.runAction(
-    internal.sheets.planSheetTabs,
-    {
-      clinics: config.clinics.map((clinic) => ({
-        clinicId: clinic.clinicId,
-        googleSheetId: clinic.googleSheetId,
-      })),
-      startDate: config.startDate,
-      endDate: config.endDate,
-    }
-  );
+  const {
+    tabsForClinic,
+    errorsForClinic,
+  }: {
+    tabsForClinic: Record<string, string[]>;
+    errorsForClinic: Record<string, ReportSheetError>;
+  } = await ctx.runAction(internal.sheets.planSheetTabs, {
+    clinics: config.clinics.map((clinic) => ({
+      clinicId: clinic.clinicId,
+      googleSheetId: clinic.googleSheetId,
+    })),
+    startDate: config.startDate,
+    endDate: config.endDate,
+  });
 
   const sheets: ReportSheetResult[] = [];
   const inactiveCarriers: InactiveCarriersEntry[] = [];
@@ -163,16 +162,22 @@ export async function runExecuteReport(
       continue;
     }
 
-    const brokenBots = inactiveCarrierBots(botsResult.value);
-    if (brokenBots.length > 0) {
+    const { matchers, unsupported } = carrierMatchers(botsResult.value);
+    // The card carries every bot of the clinic the report cannot use: the ones
+    // the API reports as not active, and the ones whose pattern this app will
+    // not run, whose rows would otherwise go missing without a word.
+    const unusableBots = [
+      ...inactiveCarrierBots(botsResult.value),
+      ...unsupported.map((bot) => ({ name: bot.name, status: bot.status, unsupported: true })),
+    ];
+    if (unusableBots.length > 0) {
       inactiveCarriers.push({
         clinicId: clinic.clinicId,
         clinicName: clinic.name,
-        bots: brokenBots,
+        bots: unusableBots,
       });
     }
 
-    const matchers = usableCarrierMatchers(botsResult.value);
     if (matchers.length === 0) {
       failClinic({ code: "SHEET_NO_CARRIER_BOTS" });
       continue;
@@ -198,6 +203,12 @@ export async function runExecuteReport(
       // A clinic with an unusable sheet-column mapping fails on its own
       // instead of stopping the run before the remaining clinics.
       failClinic(sheetErrorFrom(error));
+      continue;
+    }
+
+    const planningError = errorsForClinic[clinic.clinicId];
+    if (planningError !== undefined) {
+      failClinic(planningError);
       continue;
     }
 

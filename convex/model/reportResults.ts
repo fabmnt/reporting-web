@@ -33,11 +33,18 @@ export const reportSheetResult = v.object({
 });
 
 // A clinic with bots the report could not run. The operator reads it to know
-// why rows are missing from the results.
+// why rows are missing from the results. `unsupported` marks a bot whose
+// pattern this app will not run, which has no status to show.
 export const inactiveCarriersEntry = v.object({
   clinicId: v.id("clinics"),
   clinicName: v.string(),
-  bots: v.array(v.object({ name: v.string(), status: v.string() })),
+  bots: v.array(
+    v.object({
+      name: v.string(),
+      status: v.string(),
+      unsupported: v.optional(v.boolean()),
+    })
+  ),
 });
 
 export const reportRunResult = v.object({

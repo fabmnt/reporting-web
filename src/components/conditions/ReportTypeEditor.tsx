@@ -116,7 +116,11 @@ export function ReportTypeEditor({
         />
         <div className="flex flex-col gap-1">
           <FieldLabel htmlFor={verificationFilterId}>{t.conditions.verificationFilter}</FieldLabel>
-          <p className="text-xs text-muted-foreground">{t.conditions.verificationFilterNote}</p>
+          <p className="text-xs text-muted-foreground">
+            {engine === "execute"
+              ? t.conditions.verificationFilterExecuteNote
+              : t.conditions.verificationFilterNote}
+          </p>
         </div>
       </Field>
 

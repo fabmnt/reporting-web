@@ -2,7 +2,12 @@ import { v } from "convex/values";
 
 import { internalMutation } from "../_generated/server";
 import { PENDING_AUDIT_REPORT_TYPE, PENDING_EXECUTE_REPORT_TYPE } from "../model/reportTypeSeed";
-import { cleanTypeDraft, type ReportEngine, type ReportTypeDraft } from "../model/reportTypes";
+import {
+  cleanTypeDraft,
+  engineOf,
+  type ReportEngine,
+  type ReportTypeDraft,
+} from "../model/reportTypes";
 
 // Built-in report types are rows owned by the deployment, so a deployment
 // needs this once:
@@ -23,12 +28,24 @@ export const run = internalMutation({
       .query("reportTypes")
       .withIndex("by_ownerUserId", (query) => query.eq("ownerUserId", null))
       .collect();
-    const taken = new Set(existing.map((row) => row.name.toLowerCase()));
+    const takenByName = new Map(existing.map((row) => [row.name.toLowerCase(), engineOf(row)]));
 
     const inserted: string[] = [];
     for (const seed of SEEDS) {
       const draft = cleanTypeDraft(seed.draft);
-      if (taken.has(draft.name.toLowerCase())) continue;
+      const takenEngine = takenByName.get(draft.name.toLowerCase());
+      if (takenEngine !== undefined) {
+        // A name held by a type of the other engine means an administrator
+        // created one by hand, and skipping in silence would leave the
+        // deployment without the report this seed exists for.
+        if (takenEngine !== seed.engine) {
+          throw new Error(
+            `The built-in report type "${draft.name}" already exists as a ${takenEngine} report. ` +
+              `Rename it before seeding the ${seed.engine} one.`
+          );
+        }
+        continue;
+      }
 
       const now = Date.now();
       await ctx.db.insert("reportTypes", {

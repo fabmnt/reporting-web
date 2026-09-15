@@ -22,6 +22,8 @@ export const conditions = {
   verificationFilter: "Filtrar por tipo de verificación",
   verificationFilterNote:
     "Muestra el selector de verificación en el formulario del reporte. El valor elegido allí restringe todos los grupos de filas.",
+  verificationFilterExecuteNote:
+    "Muestra el selector de verificación en el formulario del reporte. El valor elegido allí restringe las filas que lee el reporte.",
   confirmDelete: "Confirmar eliminación",
   deleteType: "Eliminar tipo de reporte",
   saveType: "Guardar tipo de reporte",

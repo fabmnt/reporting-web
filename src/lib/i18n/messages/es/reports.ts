@@ -46,7 +46,8 @@ export const reports = {
   },
   inactiveCarriers: {
     title: "Carriers no activos",
-    note: "Las filas de estos carriers quedan fuera del reporte hasta que su bot vuelva a ejecutarse.",
+    note: "Bots que la API de carriers reporta como no activos. Un bot que no puede ejecutarse deja sus filas fuera del reporte; los demás sí aparecen para que un operador pueda trabajarlos.",
+    patternUnsupported: "Patrón que esta aplicación no puede ejecutar",
   },
   results: {
     title: "Resultados",

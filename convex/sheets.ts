@@ -41,25 +41,49 @@ export const planSheetTabs = internalAction({
   },
   returns: v.object({
     tabsForClinic: v.record(v.string(), v.array(v.string())),
+    // A spreadsheet the run could not read. The clinic it belongs to reports
+    // the error and every other clinic still returns its rows.
+    errorsForClinic: v.record(v.string(), reportSheetError),
   }),
   handler: async (ctx, args) => {
-    const token = await refreshAccessToken();
     // One deadline for the whole action, however many clinics it covers.
     const deadlineMs = actionDeadline();
     const tabsForClinic: Record<string, string[]> = {};
-    for (const clinic of args.clinics) {
-      const data = (await fetchSheetsJson(
-        ctx,
-        `${clinic.googleSheetId}?fields=${SHEET_TITLE_FIELDS}`,
-        token,
-        deadlineMs
-      )) as SheetsTabListResponse;
-      const titles = (data.sheets ?? [])
-        .map((sheet) => sheet.properties?.title ?? "")
-        .filter((title) => title !== "");
-      tabsForClinic[clinic.clinicId] = tabsInDateRange(titles, args.startDate, args.endDate);
+    const errorsForClinic: Record<string, ReportSheetError> = {};
+
+    let token: string | null = null;
+    try {
+      token = await refreshAccessToken();
+    } catch (error) {
+      // Every clinic needs the same token, so a token that cannot be obtained
+      // is the error of each of them instead of a failed action that records
+      // nothing.
+      const sheetError = sheetErrorFrom(error);
+      for (const clinic of args.clinics) {
+        errorsForClinic[clinic.clinicId] = sheetError;
+      }
+      return { tabsForClinic, errorsForClinic };
     }
-    return { tabsForClinic };
+
+    for (const clinic of args.clinics) {
+      try {
+        const data = (await fetchSheetsJson(
+          ctx,
+          `${clinic.googleSheetId}?fields=${SHEET_TITLE_FIELDS}`,
+          token,
+          deadlineMs
+        )) as SheetsTabListResponse;
+        const titles = (data.sheets ?? [])
+          .map((sheet) => sheet.properties?.title ?? "")
+          .filter((title) => title !== "");
+        tabsForClinic[clinic.clinicId] = tabsInDateRange(titles, args.startDate, args.endDate);
+      } catch (error) {
+        // A deleted, unshared or rate-limited spreadsheet fails on its own, so
+        // the clinics that can be read still return their rows.
+        errorsForClinic[clinic.clinicId] = sheetErrorFrom(error);
+      }
+    }
+    return { tabsForClinic, errorsForClinic };
   },
 });
 

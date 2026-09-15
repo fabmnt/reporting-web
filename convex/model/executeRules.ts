@@ -43,6 +43,14 @@ const WORKABLE_MESSAGE_MARKERS = new Set([
 
 const LOW_BKS_PERCENT = 50;
 
+// The sheet writes the empty sentinel as the whole cell, so a value like "not
+// empty" is a status of its own and not an untouched row.
+const EMPTY_MARKER = "empty";
+
+// A finished row reads "done" or "done by" and then the person who ran it, so
+// the marker is the start of the cell and not the whole of it.
+const DONE_MARKER = "done";
+
 function cell(row: string[], index: number): string {
   return (row[index] ?? "").trim().toLowerCase();
 }
@@ -76,7 +84,7 @@ export function isPendingToExecute(
   indexes: ExecuteColumnIndexes,
   filter: ExecuteVerificationFilter
 ): boolean {
-  if (!cell(row, indexes.updateStatus).includes("empty")) return false;
+  if (cell(row, indexes.updateStatus) !== EMPTY_MARKER) return false;
   if (!verificationMatches(cell(row, indexes.verification), filter)) return false;
 
   const execution = cell(row, EXECUTION_COLUMN_INDEX);
@@ -87,7 +95,7 @@ export function isPendingToExecute(
     return true;
   }
 
-  if (!execution.includes("done")) return false;
-  if (cell(row, indexes.fileUrl).includes("empty")) return true;
+  if (!execution.startsWith(DONE_MARKER)) return false;
+  if (cell(row, indexes.fileUrl) === EMPTY_MARKER) return true;
   return bksBelowThreshold(row, BKS_COLUMN_INDEX);
 }

@@ -19,6 +19,8 @@ export const conditions = {
   verificationFilter: "Filter by verification type",
   verificationFilterNote:
     "Shows the verification picker on the run form. The value chosen there narrows every row group.",
+  verificationFilterExecuteNote:
+    "Shows the verification picker on the run form. The value chosen there narrows the rows the report reads.",
   confirmDelete: "Confirm delete",
   deleteType: "Delete report type",
   saveType: "Save report type",

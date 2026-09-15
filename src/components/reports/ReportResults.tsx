@@ -41,12 +41,12 @@ export type SheetResult = {
   bucketRows: BucketResult[];
   error: ReportSheetError | null;
 };
-// Bots of one clinic that the carrier API reports as not active, so their rows
-// stay out of the run.
+// Bots of one clinic that the carrier API reports as not active, or whose
+// pattern this app will not run, so their rows never reach the report.
 export type InactiveCarriersSection = {
   clinicId: Id<"clinics">;
   clinicName: string;
-  bots: Array<{ name: string; status: string }>;
+  bots: Array<{ name: string; status: string; unsupported?: boolean }>;
 };
 export type ReportResult = {
   reportRunId: Id<"reportRuns"> | null;
@@ -403,7 +403,10 @@ export function InactiveCarriersCard({ carriers }: { carriers: InactiveCarriersS
             <ul className="flex flex-col gap-1 text-sm text-muted-foreground">
               {clinic.bots.map((bot) => (
                 <li key={bot.name}>
-                  {bot.name} <span aria-hidden="true">·</span> {bot.status}
+                  {bot.name} <span aria-hidden="true">·</span>{" "}
+                  {bot.unsupported === true
+                    ? t.reports.inactiveCarriers.patternUnsupported
+                    : bot.status}
                 </li>
               ))}
             </ul>

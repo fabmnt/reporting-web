@@ -53,6 +53,29 @@ function signInFailureOfStatus(status: number): CarrierFailure {
   return "unavailable";
 }
 
+// The API can accept a connection and then stop answering, which would hold
+// the action until Convex kills it and lose every clinic the run already read.
+// The request therefore expires with the action budget, and not only the wait
+// between attempts.
+async function fetchCarrier(
+  path: string,
+  init: RequestInit,
+  deadlineMs: number
+): Promise<CarrierResponse> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), Math.max(deadlineMs - Date.now(), 0));
+  try {
+    const response = await fetch(`${CARRIER_API_BASE}${path}`, {
+      ...init,
+      signal: controller.signal,
+    });
+    const text = await response.text();
+    return { status: response.status, text };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 // One carrier request, retried while the API or the connection fails. The wait
 // never reaches past the calling action's budget, because an action killed at
 // the runtime limit loses the clinics it already read.
@@ -63,14 +86,23 @@ async function sendCarrierRequest(
 ): Promise<CarrierResponse> {
   for (let attempt = 1; ; attempt += 1) {
     try {
-      const response = await fetch(`${CARRIER_API_BASE}${path}`, init);
-      const text = await response.text();
+      const response = await fetchCarrier(path, init, deadlineMs);
       if (response.status < 500 || attempt >= MAX_ATTEMPTS) {
-        return { status: response.status, text };
+        return response;
       }
     } catch (error) {
-      if (attempt >= MAX_ATTEMPTS) {
-        return { status: 0, text: error instanceof Error ? error.message : String(error) };
+      // The abort above means the budget ran out, so retrying would only spend
+      // what is left of the run.
+      const expired = Date.now() >= deadlineMs;
+      if (expired || attempt >= MAX_ATTEMPTS) {
+        return {
+          status: 0,
+          text: expired
+            ? "The carrier API did not answer in time."
+            : error instanceof Error
+              ? error.message
+              : String(error),
+        };
       }
     }
 
