@@ -2,7 +2,6 @@ export const app = {
   brand: "Reporting Web",
   skipToContent: "Ir al contenido",
   signOut: "Cerrar sesión",
-  signedInAs: (name: string) => `Sesión iniciada como ${name}`,
   roles: {
     admin: "Administrador",
     operator: "Operador",

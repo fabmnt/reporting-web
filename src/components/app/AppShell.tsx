@@ -21,6 +21,7 @@ import { errorText, localizedError, type LocalizedMessage } from "@/lib/i18n/err
 import { normalizePath } from "@/lib/paths";
 
 import { AppHeader, type CurrentAccount } from "./AppHeader";
+import { AppBottomNav } from "./AppNav";
 import { NavigationContext } from "./navigation";
 
 const SIGN_IN_PATH = "/sign-in";
@@ -138,9 +139,16 @@ function AppFrame({
         {t.app.skipToContent}
       </a>
       <AppHeader account={account} />
-      <main id="content" className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 sm:py-8" key={path}>
+      <main
+        id="content"
+        // The room under the content keeps the bottom nav of narrow screens
+        // from covering the last rows of the page.
+        className="mx-auto w-full max-w-6xl px-4 pt-6 pb-24 sm:px-6 sm:pt-8 md:pb-8"
+        key={path}
+      >
         {children}
       </main>
+      <AppBottomNav account={account} />
     </NavigationContext.Provider>
   );
 }

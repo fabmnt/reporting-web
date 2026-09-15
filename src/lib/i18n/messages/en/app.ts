@@ -2,7 +2,6 @@ export const app = {
   brand: "Reporting Web",
   skipToContent: "Skip to content",
   signOut: "Sign out",
-  signedInAs: (name: string) => `Signed in as ${name}`,
   roles: {
     admin: "Admin",
     operator: "Operator",
