@@ -43,9 +43,14 @@ export const reports = {
     copied: "Copied",
     copyFor: (label: string) => `Copy the row numbers of ${label}`,
   },
+  inactiveCarriers: {
+    title: "Carriers not active",
+    note: "Rows of these carriers stay out of the report until their bot runs again.",
+  },
   results: {
     title: "Results",
     rows: (count: number) => (count === 1 ? "1 row" : `${count} rows`),
+    carriers: "Carriers",
     noneProcessed: "No sheets were processed. Check your assigned clinics and the selected dates.",
     sheetError: "Sheet error",
     noMatchingRows: "No matching rows.",

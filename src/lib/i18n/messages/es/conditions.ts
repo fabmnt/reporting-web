@@ -17,6 +17,8 @@ export const conditions = {
     "Los cambios se aplican a todas las clínicas y a los reportes que ejecutes desde ahora.",
   firstMatchDescription: "Una fila entra en el primer grupo que coincide con ella.",
   dropDescription: "Las filas que no coinciden quedan fuera del reporte.",
+  executeNote:
+    "Este reporte lee sus reglas desde la aplicación y le pregunta a la API de Control Central qué bots tiene cada clínica, así que aquí no hay grupos ni reglas que configurar.",
   verificationFilter: "Filtrar por tipo de verificación",
   verificationFilterNote:
     "Muestra el selector de verificación en el formulario del reporte. El valor elegido allí restringe todos los grupos de filas.",

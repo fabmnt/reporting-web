@@ -46,4 +46,14 @@ export const errors = {
   SHEET_INVALID_COLUMN: (column: string) =>
     `Invalid sheet column "${column}". Use letters like A, T, or AB.`,
   SHEET_RATE_LIMITED: "Google rate limited our requests. Wait a minute and try again.",
+  CARRIER_SIGN_IN_REJECTED:
+    "The carrier API rejected the app credentials. Ask an administrator to check them.",
+  CARRIER_API_UNAVAILABLE: "The carrier API did not answer. Try again in a moment.",
+  SHEET_CARRIER_ID_MISSING:
+    "This clinic has no Control Central id, so its carriers cannot be read.",
+  SHEET_CARRIER_ACCESS_DENIED: "The carrier API gives the app no access to this clinic.",
+  SHEET_CARRIER_CLINIC_UNKNOWN: "The carrier API does not know this clinic.",
+  SHEET_CARRIER_UNAVAILABLE:
+    "The carrier API did not answer for this clinic. Try again in a moment.",
+  SHEET_NO_CARRIER_BOTS: "This clinic has no carrier bot the report can run.",
 };

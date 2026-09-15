@@ -9,7 +9,9 @@
  */
 
 import type * as auth from "../auth.js";
+import type * as carrierApi from "../carrierApi.js";
 import type * as clinics from "../clinics.js";
+import type * as executeReport from "../executeReport.js";
 import type * as googleApi from "../googleApi.js";
 import type * as googleSheets from "../googleSheets.js";
 import type * as http from "../http.js";
@@ -20,9 +22,12 @@ import type * as migrations_renameStaffAccount from "../migrations/renameStaffAc
 import type * as migrations_reportTypesCleanup from "../migrations/reportTypesCleanup.js";
 import type * as migrations_reportTypesSeed from "../migrations/reportTypesSeed.js";
 import type * as model_appErrors from "../model/appErrors.js";
+import type * as model_carrierBots from "../model/carrierBots.js";
 import type * as model_clients from "../model/clients.js";
 import type * as model_clinicSheetColumns from "../model/clinicSheetColumns.js";
+import type * as model_executeRules from "../model/executeRules.js";
 import type * as model_reportConditions from "../model/reportConditions.js";
+import type * as model_reportResults from "../model/reportResults.js";
 import type * as model_reportTypeSeed from "../model/reportTypeSeed.js";
 import type * as model_reportTypes from "../model/reportTypes.js";
 import type * as model_reporting from "../model/reporting.js";
@@ -44,7 +49,9 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   auth: typeof auth;
+  carrierApi: typeof carrierApi;
   clinics: typeof clinics;
+  executeReport: typeof executeReport;
   googleApi: typeof googleApi;
   googleSheets: typeof googleSheets;
   http: typeof http;
@@ -55,9 +62,12 @@ declare const fullApi: ApiFromModules<{
   "migrations/reportTypesCleanup": typeof migrations_reportTypesCleanup;
   "migrations/reportTypesSeed": typeof migrations_reportTypesSeed;
   "model/appErrors": typeof model_appErrors;
+  "model/carrierBots": typeof model_carrierBots;
   "model/clients": typeof model_clients;
   "model/clinicSheetColumns": typeof model_clinicSheetColumns;
+  "model/executeRules": typeof model_executeRules;
   "model/reportConditions": typeof model_reportConditions;
+  "model/reportResults": typeof model_reportResults;
   "model/reportTypeSeed": typeof model_reportTypeSeed;
   "model/reportTypes": typeof model_reportTypes;
   "model/reporting": typeof model_reporting;

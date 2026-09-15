@@ -4,7 +4,7 @@ import { v } from "convex/values";
 
 import { clinicSheetColumns } from "./model/clinicSheetColumns";
 import { reportConditionSet } from "./model/reportConditions";
-import { reportTypeBucket } from "./model/reportTypes";
+import { reportEngine, reportTypeBucket } from "./model/reportTypes";
 
 export const staffRole = v.union(v.literal("admin"), v.literal("operator"));
 export const staffStatus = v.union(v.literal("active"), v.literal("disabled"));
@@ -75,6 +75,8 @@ export default defineSchema({
     conditions: reportConditionSet,
     // Shows the verification-type picker on the run form.
     usesVerificationFilter: v.boolean(),
+    // Reports stored before this field existed are row reports.
+    engine: v.optional(reportEngine),
     createdAt: v.number(),
     updatedAt: v.number(),
   }).index("by_ownerUserId", ["ownerUserId"]),

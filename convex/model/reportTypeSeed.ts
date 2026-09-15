@@ -64,3 +64,23 @@ export const PENDING_AUDIT_REPORT_TYPE: ReportTypeDraft = {
     ],
   },
 };
+
+// The carrier report the deployment starts with. Its rules live in
+// model/executeRules and its bots come from the Control Central API, so it
+// stores no conditions: the one group below is only what the results name the
+// list of rows after.
+export const PENDING_EXECUTE_REPORT_TYPE: ReportTypeDraft = {
+  name: "Pending to execute",
+  description: "Rows a carrier bot of the clinic can still work on.",
+  usesVerificationFilter: true,
+  buckets: [{ key: "pending", label: "Pending to execute" }],
+  conditions: {
+    buckets: [
+      {
+        bucketKey: "pending",
+        catchAll: false,
+        expression: { filters: [], groups: [] },
+      },
+    ],
+  },
+};

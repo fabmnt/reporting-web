@@ -9,6 +9,7 @@ import {
   MAX_TYPE_DESCRIPTION_LENGTH,
   MAX_TYPE_NAME_LENGTH,
   nextBucketKey,
+  type ReportEngine,
   type ReportTypeBucket,
   type ReportTypeDraft,
 } from "../../../convex/model/reportTypes";
@@ -24,14 +25,18 @@ import { ConditionSetEditor } from "./ConditionSetEditor";
 /**
  * Name, row groups, and rules of one report type, personal or built-in. Bucket
  * keys stay stable while labels, order, and rules change, so saved conditions
- * keep pointing at the right group.
+ * keep pointing at the right group. A carrier report reads its rules from the
+ * app, so it only offers what can be changed: name, description, and whether
+ * the run form asks for a verification type.
  */
 export function ReportTypeEditor({
   draft,
+  engine,
   onChange,
   disabled,
 }: {
   draft: ReportTypeDraft;
+  engine: ReportEngine;
   onChange: (draft: ReportTypeDraft) => void;
   disabled: boolean;
 }) {
@@ -115,86 +120,92 @@ export function ReportTypeEditor({
         </div>
       </Field>
 
-      <Separator />
+      {engine === "execute" ? null : (
+        <>
+          <Separator />
 
-      <section className="flex flex-col gap-3">
-        <div className="flex flex-col gap-1">
-          <h3 className="text-sm font-medium">{t.conditions.editor.rowGroups}</h3>
-          <p className="text-xs text-muted-foreground">{t.conditions.editor.rowGroupsNote}</p>
-        </div>
-        {draft.buckets.map((bucket, index) => {
-          const groupInputId = `${groupInputIdBase}-${bucket.key}`;
-          return (
-            <div key={bucket.key} className="flex items-end gap-2">
-              <Field className="flex-1">
-                <FieldLabel htmlFor={groupInputId}>{t.conditions.editor.group(index)}</FieldLabel>
-                <Input
-                  id={groupInputId}
-                  value={bucket.label}
-                  onChange={(event) => renameBucket(index, event.target.value)}
-                  maxLength={MAX_TYPE_NAME_LENGTH}
-                  disabled={disabled}
-                />
-              </Field>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="text-muted-foreground"
-                onClick={() => moveBucket(index, -1)}
-                disabled={disabled || index === 0}
-                aria-label={t.conditions.editor.moveUp(index)}
-                title={t.conditions.editor.moveUp(index)}
-              >
-                <ArrowUp aria-hidden="true" />
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="text-muted-foreground"
-                onClick={() => moveBucket(index, 1)}
-                disabled={disabled || index === draft.buckets.length - 1}
-                aria-label={t.conditions.editor.moveDown(index)}
-                title={t.conditions.editor.moveDown(index)}
-              >
-                <ArrowDown aria-hidden="true" />
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="text-muted-foreground"
-                onClick={() => removeBucket(index)}
-                disabled={disabled || draft.buckets.length === 1}
-                aria-label={t.conditions.editor.removeGroup(index)}
-                title={t.conditions.editor.removeGroup(index)}
-              >
-                <Trash2 aria-hidden="true" />
-              </Button>
+          <section className="flex flex-col gap-3">
+            <div className="flex flex-col gap-1">
+              <h3 className="text-sm font-medium">{t.conditions.editor.rowGroups}</h3>
+              <p className="text-xs text-muted-foreground">{t.conditions.editor.rowGroupsNote}</p>
             </div>
-          );
-        })}
-        <Button
-          type="button"
-          variant="outline"
-          className="w-fit"
-          onClick={addBucket}
-          disabled={disabled || draft.buckets.length >= MAX_BUCKETS_PER_TYPE}
-        >
-          <Plus data-icon="inline-start" aria-hidden="true" />
-          {t.conditions.editor.addRowGroup}
-        </Button>
-      </section>
+            {draft.buckets.map((bucket, index) => {
+              const groupInputId = `${groupInputIdBase}-${bucket.key}`;
+              return (
+                <div key={bucket.key} className="flex items-end gap-2">
+                  <Field className="flex-1">
+                    <FieldLabel htmlFor={groupInputId}>
+                      {t.conditions.editor.group(index)}
+                    </FieldLabel>
+                    <Input
+                      id={groupInputId}
+                      value={bucket.label}
+                      onChange={(event) => renameBucket(index, event.target.value)}
+                      maxLength={MAX_TYPE_NAME_LENGTH}
+                      disabled={disabled}
+                    />
+                  </Field>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="text-muted-foreground"
+                    onClick={() => moveBucket(index, -1)}
+                    disabled={disabled || index === 0}
+                    aria-label={t.conditions.editor.moveUp(index)}
+                    title={t.conditions.editor.moveUp(index)}
+                  >
+                    <ArrowUp aria-hidden="true" />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="text-muted-foreground"
+                    onClick={() => moveBucket(index, 1)}
+                    disabled={disabled || index === draft.buckets.length - 1}
+                    aria-label={t.conditions.editor.moveDown(index)}
+                    title={t.conditions.editor.moveDown(index)}
+                  >
+                    <ArrowDown aria-hidden="true" />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="text-muted-foreground"
+                    onClick={() => removeBucket(index)}
+                    disabled={disabled || draft.buckets.length === 1}
+                    aria-label={t.conditions.editor.removeGroup(index)}
+                    title={t.conditions.editor.removeGroup(index)}
+                  >
+                    <Trash2 aria-hidden="true" />
+                  </Button>
+                </div>
+              );
+            })}
+            <Button
+              type="button"
+              variant="outline"
+              className="w-fit"
+              onClick={addBucket}
+              disabled={disabled || draft.buckets.length >= MAX_BUCKETS_PER_TYPE}
+            >
+              <Plus data-icon="inline-start" aria-hidden="true" />
+              {t.conditions.editor.addRowGroup}
+            </Button>
+          </section>
 
-      <Separator />
+          <Separator />
 
-      <ConditionSetEditor
-        buckets={draft.buckets}
-        conditions={draft.conditions}
-        onChange={(conditions) => onChange({ ...draft, conditions })}
-        disabled={disabled}
-      />
+          <ConditionSetEditor
+            buckets={draft.buckets}
+            conditions={draft.conditions}
+            onChange={(conditions) => onChange({ ...draft, conditions })}
+            disabled={disabled}
+          />
+        </>
+      )}
     </div>
   );
 }

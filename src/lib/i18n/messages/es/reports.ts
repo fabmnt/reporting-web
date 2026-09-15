@@ -44,9 +44,14 @@ export const reports = {
     copied: "Copiado",
     copyFor: (label: string) => `Copiar los números de fila de ${label}`,
   },
+  inactiveCarriers: {
+    title: "Carriers no activos",
+    note: "Las filas de estos carriers quedan fuera del reporte hasta que su bot vuelva a ejecutarse.",
+  },
   results: {
     title: "Resultados",
     rows: (count: number) => (count === 1 ? "1 fila" : `${count} filas`),
+    carriers: "Carriers",
     noneProcessed:
       "No se procesó ninguna hoja. Revisa tus clínicas asignadas y las fechas elegidas.",
     sheetError: "Error en la hoja",

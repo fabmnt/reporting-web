@@ -86,6 +86,10 @@ function renderAppError(payload: AppErrorPayload, t: Messages): string | null {
       return e.REPORT_TYPE_GROUP_KEYS;
     case "SHEET_RATE_LIMITED":
       return e.SHEET_RATE_LIMITED;
+    case "CARRIER_SIGN_IN_REJECTED":
+      return e.CARRIER_SIGN_IN_REJECTED;
+    case "CARRIER_API_UNAVAILABLE":
+      return e.CARRIER_API_UNAVAILABLE;
     default:
       return null;
   }
@@ -130,6 +134,16 @@ export function sheetErrorText(error: ReportSheetError, t: Messages): string {
       return t.errors.SHEET_INVALID_COLUMN(error.column);
     case "SHEET_RATE_LIMITED":
       return t.errors.SHEET_RATE_LIMITED;
+    case "SHEET_CARRIER_ID_MISSING":
+      return t.errors.SHEET_CARRIER_ID_MISSING;
+    case "SHEET_CARRIER_ACCESS_DENIED":
+      return t.errors.SHEET_CARRIER_ACCESS_DENIED;
+    case "SHEET_CARRIER_CLINIC_UNKNOWN":
+      return t.errors.SHEET_CARRIER_CLINIC_UNKNOWN;
+    case "SHEET_CARRIER_UNAVAILABLE":
+      return t.errors.SHEET_CARRIER_UNAVAILABLE;
+    case "SHEET_NO_CARRIER_BOTS":
+      return t.errors.SHEET_NO_CARRIER_BOTS;
     case "SHEET_FAILED":
       return error.message;
   }

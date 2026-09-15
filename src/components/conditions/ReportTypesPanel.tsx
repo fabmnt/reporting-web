@@ -184,7 +184,11 @@ export function ReportTypesPanel({ scope }: { scope: ReportTypeScope }) {
 
       <NewReportTypeDialog
         scope={scope}
-        sources={data.types.map((item) => ({ reportTypeId: item.reportTypeId, name: item.name }))}
+        // Copying takes the stored rules of another type, and a carrier report
+        // keeps none, so it is no starting point for a row report.
+        sources={data.types
+          .filter((item) => item.engine !== "execute")
+          .map((item) => ({ reportTypeId: item.reportTypeId, name: item.name }))}
         open={creating}
         onOpenChange={setCreating}
         onCreated={handleCreated}
@@ -266,9 +270,11 @@ export function ReportTypesPanel({ scope }: { scope: ReportTypeScope }) {
                 {draft?.name ?? ""}
               </h2>
               <CardDescription>
-                {draft !== undefined && draft.buckets.length > 1
-                  ? t.conditions.firstMatchDescription
-                  : t.conditions.dropDescription}
+                {selected?.engine === "execute"
+                  ? t.conditions.executeNote
+                  : draft !== undefined && draft.buckets.length > 1
+                    ? t.conditions.firstMatchDescription
+                    : t.conditions.dropDescription}
               </CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-6">
@@ -277,6 +283,7 @@ export function ReportTypesPanel({ scope }: { scope: ReportTypeScope }) {
               ) : (
                 <ReportTypeEditor
                   draft={draft}
+                  engine={selected?.engine ?? "rows"}
                   onChange={(next) => {
                     if (selectedKey === null) return;
                     setDrafts((previous) => ({ ...previous, [selectedKey]: next }));

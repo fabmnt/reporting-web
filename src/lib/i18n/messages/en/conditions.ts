@@ -14,6 +14,8 @@ export const conditions = {
   changesNote: "Changes apply to every clinic and to the reports you run from now on.",
   firstMatchDescription: "A row lands in the first group that matches it.",
   dropDescription: "Rows that do not match are left out of the report.",
+  executeNote:
+    "This report reads its rules from the app and asks the Control Central API which bots each clinic has, so there are no row groups or rules to set here.",
   verificationFilter: "Filter by verification type",
   verificationFilterNote:
     "Shows the verification picker on the run form. The value chosen there narrows every row group.",
