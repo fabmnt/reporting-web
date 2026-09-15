@@ -23,7 +23,7 @@ const CONFIGURATION_PATH = "/configuration";
 const ADMIN_PATH = "/admin";
 
 function initialsFor(account: CurrentAccount): string {
-  const source = account.displayName.trim() || account.email || "";
+  const source = account.displayName.trim() || account.username || "";
   const parts = source.split(/\s+/).filter(Boolean);
   if (parts.length === 0) return "?";
   if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();

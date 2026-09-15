@@ -1,15 +1,33 @@
 import { Password } from "@convex-dev/auth/providers/Password";
 import { type ConvexCredentialsUserConfig } from "@convex-dev/auth/providers/ConvexCredentials";
 import { convexAuth, type ConvexCredentialsConfig } from "@convex-dev/auth/server";
+import type { Value } from "convex/values";
 
 import { appError } from "./model/appErrors";
+
+// The Password provider identifies an account by the string its `profile`
+// callback puts in `email`, and stores that string on the library-owned
+// `users.email` field. It never checks that the value looks like an address,
+// so this app keeps the username there.
+const USERNAME_PATTERN = /^[a-z0-9][a-z0-9._-]{2,31}$/;
+
+function usernameFrom(params: Record<string, Value | undefined>): string {
+  const value = params.username;
+  const username = typeof value === "string" ? value.trim().toLowerCase() : "";
+
+  if (!USERNAME_PATTERN.test(username)) {
+    throw appError({ code: "INVALID_USERNAME" });
+  }
+
+  return username;
+}
 
 // The Password provider reports failed credentials by throwing plain errors
 // whose message is one of its internal result strings. Translate the known
 // ones into coded errors the client can localize; anything else is a real
 // fault and keeps its raw message.
 // "InvalidAccountId" and "InvalidSecret" collapse into one code so signing in
-// with a wrong email and a wrong password look the same to an attacker.
+// with a wrong username and a wrong password look the same to an attacker.
 function localizedCredentialError(cause: unknown): unknown {
   if (!(cause instanceof Error)) return cause;
   switch (cause.message) {
@@ -19,7 +37,7 @@ function localizedCredentialError(cause: unknown): unknown {
     case "TooManyFailedAttempts":
       return appError({ code: "TOO_MANY_FAILED_ATTEMPTS" });
     default:
-      // Sign-up against a taken email throws inside the store mutation, so
+      // Sign-up against a taken username throws inside the store mutation, so
       // the marker arrives embedded in a server error.
       return cause.message.includes("already exists")
         ? appError({ code: "ACCOUNT_ALREADY_EXISTS" })
@@ -35,7 +53,9 @@ type PasswordProvider = ConvexCredentialsConfig & {
   options: ConvexCredentialsUserConfig;
 };
 
-const password = Password() as PasswordProvider;
+const password = Password({
+  profile: (params) => ({ email: usernameFrom(params) }),
+}) as PasswordProvider;
 const passwordWithLocalizedErrors: PasswordProvider = {
   ...password,
   options: {

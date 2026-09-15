@@ -6,11 +6,15 @@ import { appError } from "./model/appErrors";
 import { getStaffProfile, requireAdmin, requireCurrentUserId } from "./model/staff";
 import { staffLanguage, staffRole, staffStatus } from "./schema";
 
+// The account identifier is the username. The Password provider keeps it in the
+// library-owned `users.email` field, so reads below go through that field and
+// expose it as `username` (see `convex/auth.ts`).
+
 const currentAccount = v.object({
   profileId: v.id("staffProfiles"),
   userId: v.id("users"),
   displayName: v.string(),
-  email: v.union(v.string(), v.null()),
+  username: v.union(v.string(), v.null()),
   role: staffRole,
   status: staffStatus,
   // null means the user has never picked a language, so the app follows the
@@ -56,7 +60,7 @@ export const ensureCurrentProfile = mutation({
         profileId: existingProfile._id,
         userId,
         displayName: existingProfile.displayName,
-        email: user.email ?? null,
+        username: user.email ?? null,
         role: existingProfile.role,
         status: existingProfile.status,
         language: existingProfile.language ?? null,
@@ -83,7 +87,7 @@ export const ensureCurrentProfile = mutation({
       profileId,
       userId,
       displayName,
-      email: user.email ?? null,
+      username: user.email ?? null,
       role,
       status,
       language: null,
@@ -107,7 +111,7 @@ export const current = query({
       profileId: profile._id,
       userId,
       displayName: profile.displayName,
-      email: user?.email ?? null,
+      username: user?.email ?? null,
       role: profile.role,
       status: profile.status,
       language: profile.language ?? null,
@@ -154,7 +158,7 @@ export const listManaged = query({
           profileId: profile._id,
           userId: profile.userId,
           displayName: profile.displayName,
-          email: user?.email ?? null,
+          username: user?.email ?? null,
           role: profile.role,
           status: profile.status,
           language: profile.language ?? null,

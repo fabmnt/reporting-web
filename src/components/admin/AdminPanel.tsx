@@ -196,7 +196,9 @@ export function AdminAccountsPanel() {
                         <TableCell>
                           <div className="flex flex-col gap-1">
                             <span>{account.displayName}</span>
-                            <span className="text-xs text-muted-foreground">{account.email}</span>
+                            <span className="text-xs text-muted-foreground">
+                              {account.username}
+                            </span>
                             {account.isCurrentUser ? (
                               <Badge variant="outline">{t.common.you}</Badge>
                             ) : null}

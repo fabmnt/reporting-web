@@ -2,9 +2,11 @@
 // the backend sent with the code, already resolved by src/lib/i18n/errors.ts.
 export const errors = {
   UNAUTHENTICATED: "Inicia sesión para continuar.",
-  INVALID_CREDENTIALS: "Correo o contraseña incorrectos.",
+  INVALID_CREDENTIALS: "Usuario o contraseña incorrectos.",
+  INVALID_USERNAME:
+    "El nombre de usuario debe tener entre 3 y 32 caracteres y usar solo letras, números, puntos, guiones o guiones bajos.",
   TOO_MANY_FAILED_ATTEMPTS: "Demasiados intentos fallidos. Inténtalo de nuevo más tarde.",
-  ACCOUNT_ALREADY_EXISTS: "Ya existe una cuenta con este correo electrónico.",
+  ACCOUNT_ALREADY_EXISTS: "Ese nombre de usuario ya está en uso.",
   ADMIN_REQUIRED: "Se requiere acceso de administrador.",
   ACTIVE_STAFF_REQUIRED: "Se requiere una cuenta de personal activa.",
   OPERATOR_REQUIRED: "Se requiere acceso de operador.",

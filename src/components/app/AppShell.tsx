@@ -90,7 +90,13 @@ function LoadingScreen() {
   );
 }
 
-function AwaitingApproval({ email, onSignOut }: { email: string | null; onSignOut: () => void }) {
+function AwaitingApproval({
+  username,
+  onSignOut,
+}: {
+  username: string | null;
+  onSignOut: () => void;
+}) {
   const { t } = useI18n();
 
   return (
@@ -98,7 +104,7 @@ function AwaitingApproval({ email, onSignOut }: { email: string | null; onSignOu
       <div className="w-full max-w-md rounded-xl bg-card p-6 ring-1 ring-foreground/10">
         <h1 className="font-heading text-lg font-medium">{t.app.states.awaitingApprovalTitle}</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          {t.app.states.awaitingApprovalBody(email ?? t.app.states.yourAccount)}
+          {t.app.states.awaitingApprovalBody(username ?? t.app.states.yourAccount)}
         </p>
         <div className="mt-4">
           <Button variant="outline" onClick={onSignOut}>
@@ -214,7 +220,7 @@ function AuthGate({
   if (account === undefined || account === null) return <LoadingScreen />;
 
   if (account.status === "disabled") {
-    return <AwaitingApproval email={account.email} onSignOut={() => void handleSignOut()} />;
+    return <AwaitingApproval username={account.username} onSignOut={() => void handleSignOut()} />;
   }
 
   return (

@@ -17,6 +17,8 @@ function renderAppError(payload: AppErrorPayload, t: Messages): string | null {
       return e.UNAUTHENTICATED;
     case "INVALID_CREDENTIALS":
       return e.INVALID_CREDENTIALS;
+    case "INVALID_USERNAME":
+      return e.INVALID_USERNAME;
     case "TOO_MANY_FAILED_ATTEMPTS":
       return e.TOO_MANY_FAILED_ATTEMPTS;
     case "ACCOUNT_ALREADY_EXISTS":

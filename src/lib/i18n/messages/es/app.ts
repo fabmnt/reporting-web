@@ -30,8 +30,8 @@ export const app = {
     accountSetupFailed: "Falló la configuración de la cuenta",
     accountSetupFailedFallback: "Falló la configuración de la cuenta.",
     awaitingApprovalTitle: "Cuenta pendiente de aprobación",
-    awaitingApprovalBody: (email: string) =>
-      `Un administrador debe habilitar ${email} antes de que puedas usar Reporting Web.`,
+    awaitingApprovalBody: (username: string) =>
+      `Un administrador debe habilitar ${username} antes de que puedas usar Reporting Web.`,
     yourAccount: "tu cuenta",
   },
   notFound: {
@@ -44,7 +44,7 @@ export const app = {
     notConnectedAfter: "antes de usar la autenticación.",
   },
   auth: {
-    email: "Correo electrónico",
+    username: "Nombre de usuario",
     password: "Contraseña",
     signInTitle: "Iniciar sesión",
     signUpTitle: "Crea tu cuenta",

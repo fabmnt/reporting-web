@@ -75,13 +75,15 @@ function AuthForm({ mode }: { mode: AuthMode }) {
         <form id="auth-form" className="flex flex-col gap-5" onSubmit={handleSubmit}>
           <FieldGroup>
             <Field data-invalid={error !== null}>
-              <FieldLabel htmlFor="email">{t.app.auth.email}</FieldLabel>
+              <FieldLabel htmlFor="username">{t.app.auth.username}</FieldLabel>
               <Input
-                id="email"
-                name="email"
-                type="email"
-                placeholder="you@example.com"
-                autoComplete="email"
+                id="username"
+                name="username"
+                type="text"
+                autoComplete="username"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
                 aria-invalid={error !== null}
                 required
               />

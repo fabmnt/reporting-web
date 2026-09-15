@@ -38,7 +38,7 @@ function deferred<T>(): Deferred<T> {
 const ADMIN_ACCOUNT = {
   profileId: "profile-1",
   displayName: "Fabian",
-  email: "fabian@example.com",
+  username: "fabian",
   role: "admin",
   status: "active",
   assignedClinicIds: [],
@@ -48,7 +48,7 @@ const ADMIN_ACCOUNT = {
 const OPERATOR_ACCOUNT = {
   profileId: "profile-2",
   displayName: "Bea",
-  email: "bea@example.com",
+  username: "bea",
   role: "operator",
   status: "active",
   assignedClinicIds: [],

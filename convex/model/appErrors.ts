@@ -7,6 +7,7 @@ import type { Infer } from "convex/values";
 export type AppErrorPayload =
   | { code: "UNAUTHENTICATED" }
   | { code: "INVALID_CREDENTIALS" }
+  | { code: "INVALID_USERNAME" }
   | { code: "TOO_MANY_FAILED_ATTEMPTS" }
   | { code: "ACCOUNT_ALREADY_EXISTS" }
   | { code: "ADMIN_REQUIRED" }
