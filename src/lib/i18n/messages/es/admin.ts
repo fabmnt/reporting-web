@@ -46,34 +46,23 @@ export const admin = {
       save: "Guardar clínicas",
     },
   },
-  clinics: {
-    pageTitle: "Clínicas",
-    accessDeniedBody: "Tu cuenta no puede gestionar clínicas.",
-    addClinic: "Añadir clínica",
-    clientsTitle: "Clientes",
-    clientsDescription:
-      "Organizaciones que poseen una o más clínicas, como una marca dental o una organización de soporte.",
+  clients: {
+    pageTitle: "Clientes",
+    accessDeniedBody: "Tu cuenta no puede gestionar clientes.",
     addClient: "Añadir cliente",
     noClients: "Aún no hay clientes. Crea el primero antes de añadir clínicas.",
-    clientTable: {
+    noMatches: "Ningún cliente coincide con estos filtros.",
+    filters: {
+      search: "Buscar clientes",
+      status: "Filtro de estado",
+    },
+    table: {
       client: "Cliente",
       key: "Clave",
       status: "Estado",
     },
-    clientsLimit: (limit: number) => `Mostrando los primeros ${limit} clientes.`,
-    allClinicsTitle: "Todas las clínicas",
-    allClinicsDescription:
-      "Cada clínica se asigna a una hoja de Google y a las columnas de estado que contiene.",
-    noClinics: "Aún no hay clínicas. Crea un cliente arriba y luego añade la primera clínica.",
-    clinicTable: {
-      clinic: "Clínica",
-      client: "Cliente",
-      googleSheet: "Hoja de Google",
-      columns: "Columnas",
-      status: "Estado",
-    },
-    clinicsLimit: (limit: number) => `Mostrando las primeras ${limit} clínicas.`,
-    clientForm: {
+    limit: (limit: number) => `Mostrando los primeros ${limit} clientes.`,
+    form: {
       editTitle: "Editar cliente",
       createTitle: "Nuevo cliente",
       description:
@@ -86,7 +75,39 @@ export const admin = {
       nameRequired: "El nombre del cliente es obligatorio.",
       saveFailed: "No se pudo guardar el cliente.",
     },
-    clinicForm: {
+    delete: {
+      clientTitle: "Eliminar cliente",
+      clientDescription: (name: string) =>
+        `¿Eliminar "${name}"? Esta acción no se puede deshacer. Solo se puede eliminar un cliente que no tenga clínicas.`,
+      deleteClient: "Eliminar cliente",
+      clientFailed: "No se pudo eliminar el cliente.",
+    },
+  },
+  clinics: {
+    pageTitle: "Clínicas",
+    accessDeniedBody: "Tu cuenta no puede gestionar clínicas.",
+    addClinic: "Añadir clínica",
+    allClinicsTitle: "Todas las clínicas",
+    allClinicsDescription:
+      "Cada clínica se asigna a una hoja de Google y a las columnas de estado que contiene.",
+    noClinics:
+      "Aún no hay clínicas. Crea un cliente en la pestaña Clientes y luego añade la primera clínica.",
+    noMatches: "Ninguna clínica coincide con estos filtros.",
+    filters: {
+      search: "Buscar clínicas",
+      client: "Filtro de cliente",
+      allClients: "Todos los clientes",
+      status: "Filtro de estado",
+    },
+    table: {
+      clinic: "Clínica",
+      client: "Cliente",
+      googleSheet: "Hoja de Google",
+      columns: "Columnas",
+      status: "Estado",
+    },
+    limit: (limit: number) => `Mostrando las primeras ${limit} clínicas.`,
+    form: {
       editTitle: "Editar clínica",
       createTitle: "Nueva clínica",
       editDescription: "Actualiza los datos de la clínica y las letras de columna de la hoja.",
@@ -107,17 +128,11 @@ export const admin = {
       saveFailed: "No se pudo guardar la clínica.",
     },
     delete: {
-      failedTitle: "Falló la eliminación",
       clinicTitle: "Eliminar clínica",
       clinicDescription: (name: string) =>
         `¿Eliminar "${name}"? También se eliminan sus columnas de hoja y cualquier asignación de esta clínica en las cuentas de personal. Esta acción no se puede deshacer.`,
-      clientTitle: "Eliminar cliente",
-      clientDescription: (name: string) =>
-        `¿Eliminar "${name}"? Esta acción no se puede deshacer. Solo se puede eliminar un cliente que no tenga clínicas.`,
       deleteClinic: "Eliminar clínica",
-      deleteClient: "Eliminar cliente",
       clinicFailed: "No se pudo eliminar la clínica.",
-      clientFailed: "No se pudo eliminar el cliente.",
     },
   },
   reportTypes: {

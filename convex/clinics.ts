@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 
 import type { Id } from "./_generated/dataModel";
-import type { MutationCtx } from "./_generated/server";
+import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { mutation, query } from "./_generated/server";
 import { appError, type AppErrorPayload } from "./model/appErrors";
 import { clientKeyFromName } from "./model/clients";
@@ -12,6 +12,13 @@ import { requireAdmin, requireOperator } from "./model/staff";
 const MAX_CLINICS = 500;
 const MAX_CLIENTS = 200;
 const MAX_STAFF_PROFILES = 500;
+// Mirrors the cap the assignment mutations and the report scope use, so a
+// self-service assignment cannot grow past what the reports can read.
+const MAX_ASSIGNED_CLINICS = 200;
+// The clinic picker shows what is still available, so its scan reads past the
+// first page of the table: filtering after a short cap would hide every clinic
+// that sits behind the pages of clinics the caller already has.
+const MAX_AVAILABLE_SCAN = 2000;
 
 const clientView = v.object({
   clientId: v.id("clients"),
@@ -40,6 +47,38 @@ const assignedClinicView = v.object({
   clientName: v.string(),
   sheetColumns: clinicSheetColumns,
 });
+
+// What the clinic pickers need: enough to tell two clinics of one client apart.
+const clinicChoiceView = v.object({
+  clinicId: v.id("clinics"),
+  name: v.string(),
+  externalClinicId: v.union(v.string(), v.null()),
+  clientName: v.string(),
+});
+
+/**
+ * Resolves the client of every clinic row once, so a list of clinics costs one
+ * client read per client instead of one per clinic.
+ */
+async function withClientNames<T extends { clientId: Id<"clients"> }>(
+  ctx: QueryCtx,
+  rows: T[]
+): Promise<Array<T & { clientName: string }>> {
+  const clientNameById = new Map<Id<"clients">, string>();
+  const named: Array<T & { clientName: string }> = [];
+
+  for (const row of rows) {
+    let clientName = clientNameById.get(row.clientId);
+    if (clientName === undefined) {
+      const client = await ctx.db.get("clients", row.clientId);
+      clientName = client?.name ?? "Unknown client";
+      clientNameById.set(row.clientId, clientName);
+    }
+    named.push({ ...row, clientName });
+  }
+
+  return named;
+}
 
 const clinicInputFields = {
   name: v.string(),
@@ -170,6 +209,25 @@ async function requireAssignedClinic(
   return clinic;
 }
 
+/**
+ * The assigned ids whose clinic still exists and is active. The list keeps the
+ * ids of clinics that were disabled or deleted since they were assigned, and
+ * the screens cannot show those, so only the usable ones hold room in the cap.
+ */
+async function usableClinicIds(
+  ctx: MutationCtx,
+  clinicIds: Id<"clinics">[]
+): Promise<Id<"clinics">[]> {
+  const usable: Id<"clinics">[] = [];
+  for (const clinicId of clinicIds) {
+    const clinic = await ctx.db.get("clinics", clinicId);
+    if (clinic !== null && clinic.isActive) {
+      usable.push(clinicId);
+    }
+  }
+  return usable;
+}
+
 export const listClients = query({
   args: {},
   returns: v.object({
@@ -283,32 +341,64 @@ export const list = query({
       .withIndex("by_clientId_and_name")
       .take(MAX_CLINICS + 1);
 
-    const clientNameById = new Map<Id<"clients">, string>();
-    const clinics = [];
-    for (const row of rows.slice(0, MAX_CLINICS)) {
-      let clientName = clientNameById.get(row.clientId);
-      if (clientName === undefined) {
-        const client = await ctx.db.get("clients", row.clientId);
-        clientName = client?.name ?? "Unknown client";
-        clientNameById.set(row.clientId, clientName);
-      }
-      clinics.push({
-        clinicId: row._id,
-        name: row.name,
-        googleSheetId: row.googleSheetId,
-        externalClinicId: row.externalClinicId ?? null,
-        isActive: row.isActive,
-        clientId: row.clientId,
-        clientName,
-        sheetColumns: row.sheetColumns ?? {},
-        qaGroupKeys: row.qaGroupKeys ?? [],
-      });
-    }
+    const named = await withClientNames(ctx, rows.slice(0, MAX_CLINICS));
+    const clinics = named.map((row) => ({
+      clinicId: row._id,
+      name: row.name,
+      googleSheetId: row.googleSheetId,
+      externalClinicId: row.externalClinicId ?? null,
+      isActive: row.isActive,
+      clientId: row.clientId,
+      clientName: row.clientName,
+      sheetColumns: row.sheetColumns ?? {},
+      qaGroupKeys: row.qaGroupKeys ?? [],
+    }));
     clinics.sort(
       (a, b) => a.clientName.localeCompare(b.clientName) || a.name.localeCompare(b.name)
     );
 
     return { clinics, limit: MAX_CLINICS, hasMore: rows.length > MAX_CLINICS };
+  },
+});
+
+/**
+ * The clinics the caller may still add to their own assignment: every active
+ * clinic that is not already assigned to them.
+ */
+export const listAvailable = query({
+  args: {},
+  returns: v.object({
+    clinics: v.array(clinicChoiceView),
+    limit: v.number(),
+    hasMore: v.boolean(),
+  }),
+  handler: async (ctx) => {
+    const { profile } = await requireOperator(ctx);
+    const assigned = new Set<string>(profile.assignedClinicIds ?? []);
+
+    const rows = await ctx.db
+      .query("clinics")
+      .withIndex("by_clientId_and_name")
+      .take(MAX_AVAILABLE_SCAN + 1);
+
+    const available = rows.filter((row) => row.isActive && !assigned.has(row._id));
+    const named = await withClientNames(ctx, available.slice(0, MAX_CLINICS));
+    const clinics = named
+      .map((row) => ({
+        clinicId: row._id,
+        name: row.name,
+        externalClinicId: row.externalClinicId ?? null,
+        clientName: row.clientName,
+      }))
+      .sort((a, b) => a.clientName.localeCompare(b.clientName) || a.name.localeCompare(b.name));
+
+    return {
+      clinics,
+      limit: MAX_CLINICS,
+      // Either the scan or the result cap left clinics out, so the picker says
+      // the list is not the whole directory.
+      hasMore: rows.length > MAX_AVAILABLE_SCAN || available.length > MAX_CLINICS,
+    };
   },
 });
 
@@ -319,30 +409,80 @@ export const listAssigned = query({
   }),
   handler: async (ctx) => {
     const { profile } = await requireOperator(ctx);
-    const assigned = await listProfileClinics(ctx, profile);
-    const clientNameById = new Map<string, string>();
+    const named = await withClientNames(ctx, await listProfileClinics(ctx, profile));
     const clinics = [];
 
-    for (const clinic of assigned) {
-      let clientName = clientNameById.get(clinic.clientId);
-      if (clientName === undefined) {
-        const client = await ctx.db.get("clients", clinic.clientId);
-        clientName = client?.name ?? "Unknown client";
-        clientNameById.set(clinic.clientId, clientName);
-      }
-
+    for (const clinic of named) {
       const row = await ctx.db.get("clinics", clinic._id);
       clinics.push({
         clinicId: clinic._id,
         name: clinic.name,
         googleSheetId: clinic.googleSheetId,
         externalClinicId: row?.externalClinicId ?? null,
-        clientName,
+        clientName: clinic.clientName,
         sheetColumns: row?.sheetColumns ?? {},
       });
     }
 
     return { clinics };
+  },
+});
+
+/**
+ * Adds one clinic to the caller's own assignment. Assignments are the only
+ * source of the report scope, so an operator can widen their own scope without
+ * an admin.
+ */
+export const addAssigned = mutation({
+  args: { clinicId: v.id("clinics") },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const { profile } = await requireOperator(ctx);
+    const assignedClinicIds = profile.assignedClinicIds ?? [];
+    if (assignedClinicIds.includes(args.clinicId)) {
+      return null;
+    }
+
+    const clinic = await ctx.db.get("clinics", args.clinicId);
+    if (clinic === null || !clinic.isActive) {
+      throw appError({ code: "CLINIC_NOT_FOUND" });
+    }
+
+    // A list that only looks full, because it holds clinics that were disabled
+    // or deleted since they were assigned, still takes another clinic. The ids
+    // that hold no room leave with the same write.
+    const assigned =
+      assignedClinicIds.length >= MAX_ASSIGNED_CLINICS
+        ? await usableClinicIds(ctx, assignedClinicIds)
+        : assignedClinicIds;
+    if (assigned.length >= MAX_ASSIGNED_CLINICS) {
+      throw appError({ code: "CLINIC_ASSIGNMENT_LIMIT", limit: MAX_ASSIGNED_CLINICS });
+    }
+
+    await ctx.db.patch("staffProfiles", profile._id, {
+      assignedClinicIds: [...assigned, args.clinicId],
+    });
+
+    return null;
+  },
+});
+
+/** Drops one clinic from the caller's own assignment. */
+export const removeAssigned = mutation({
+  args: { clinicId: v.id("clinics") },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const { profile } = await requireOperator(ctx);
+    const assignedClinicIds = profile.assignedClinicIds ?? [];
+    if (!assignedClinicIds.includes(args.clinicId)) {
+      return null;
+    }
+
+    await ctx.db.patch("staffProfiles", profile._id, {
+      assignedClinicIds: assignedClinicIds.filter((clinicId) => clinicId !== args.clinicId),
+    });
+
+    return null;
   },
 });
 

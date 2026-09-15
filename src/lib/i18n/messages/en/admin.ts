@@ -45,33 +45,23 @@ export const admin = {
       save: "Save clinics",
     },
   },
-  clinics: {
-    pageTitle: "Clinics",
-    accessDeniedBody: "Your account cannot manage clinics.",
-    addClinic: "Add clinic",
-    clientsTitle: "Clients",
-    clientsDescription:
-      "Organizations that own one or more clinics, like a dental brand or support organization.",
+  clients: {
+    pageTitle: "Clients",
+    accessDeniedBody: "Your account cannot manage clients.",
     addClient: "Add client",
     noClients: "No clients yet. Create the first one before adding clinics.",
-    clientTable: {
+    noMatches: "No clients match these filters.",
+    filters: {
+      search: "Search clients",
+      status: "Status filter",
+    },
+    table: {
       client: "Client",
       key: "Key",
       status: "Status",
     },
-    clientsLimit: (limit: number) => `Showing the first ${limit} clients.`,
-    allClinicsTitle: "All clinics",
-    allClinicsDescription: "Each clinic maps to one Google Sheet and the status columns inside it.",
-    noClinics: "No clinics yet. Create a client above, then add the first clinic.",
-    clinicTable: {
-      clinic: "Clinic",
-      client: "Client",
-      googleSheet: "Google Sheet",
-      columns: "Columns",
-      status: "Status",
-    },
-    clinicsLimit: (limit: number) => `Showing the first ${limit} clinics.`,
-    clientForm: {
+    limit: (limit: number) => `Showing the first ${limit} clients.`,
+    form: {
       editTitle: "Edit client",
       createTitle: "New client",
       description:
@@ -84,7 +74,37 @@ export const admin = {
       nameRequired: "Client name is required.",
       saveFailed: "Saving the client failed.",
     },
-    clinicForm: {
+    delete: {
+      clientTitle: "Delete client",
+      clientDescription: (name: string) =>
+        `Delete "${name}"? This cannot be undone. A client can only be deleted once it owns no clinics.`,
+      deleteClient: "Delete client",
+      clientFailed: "Deleting the client failed.",
+    },
+  },
+  clinics: {
+    pageTitle: "Clinics",
+    accessDeniedBody: "Your account cannot manage clinics.",
+    addClinic: "Add clinic",
+    allClinicsTitle: "All clinics",
+    allClinicsDescription: "Each clinic maps to one Google Sheet and the status columns inside it.",
+    noClinics: "No clinics yet. Create a client in the Clients tab, then add the first clinic.",
+    noMatches: "No clinics match these filters.",
+    filters: {
+      search: "Search clinics",
+      client: "Client filter",
+      allClients: "All clients",
+      status: "Status filter",
+    },
+    table: {
+      clinic: "Clinic",
+      client: "Client",
+      googleSheet: "Google Sheet",
+      columns: "Columns",
+      status: "Status",
+    },
+    limit: (limit: number) => `Showing the first ${limit} clinics.`,
+    form: {
       editTitle: "Edit clinic",
       createTitle: "New clinic",
       editDescription: "Update clinic details and sheet column letters.",
@@ -105,17 +125,11 @@ export const admin = {
       saveFailed: "Saving the clinic failed.",
     },
     delete: {
-      failedTitle: "Delete failed",
       clinicTitle: "Delete clinic",
       clinicDescription: (name: string) =>
         `Delete "${name}"? Its sheet column mappings and any clinic assignments on staff accounts are removed too. This cannot be undone.`,
-      clientTitle: "Delete client",
-      clientDescription: (name: string) =>
-        `Delete "${name}"? This cannot be undone. A client can only be deleted once it owns no clinics.`,
       deleteClinic: "Delete clinic",
-      deleteClient: "Delete client",
       clinicFailed: "Deleting the clinic failed.",
-      clientFailed: "Deleting the client failed.",
     },
   },
   reportTypes: {

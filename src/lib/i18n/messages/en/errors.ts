@@ -22,6 +22,8 @@ export const errors = {
   CLIENT_DISABLED: "This client is disabled.",
   CLINIC_NOT_FOUND: "Clinic was not found.",
   CLINIC_NOT_ASSIGNED: "This clinic is not assigned to you.",
+  CLINIC_ASSIGNMENT_LIMIT: (limit: number) =>
+    `You can work on up to ${limit} clinics. Remove one before adding another.`,
   INVALID_SHEET_COLUMN: (column: string) =>
     `Invalid sheet column "${column}". Use letters like A, T, or AB.`,
   CLINIC_NAME_TAKEN: "A clinic with this name already exists for this client.",

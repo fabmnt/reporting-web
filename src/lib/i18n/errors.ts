@@ -50,6 +50,8 @@ function renderAppError(payload: AppErrorPayload, t: Messages): string | null {
       return e.CLINIC_NOT_FOUND;
     case "CLINIC_NOT_ASSIGNED":
       return e.CLINIC_NOT_ASSIGNED;
+    case "CLINIC_ASSIGNMENT_LIMIT":
+      return e.CLINIC_ASSIGNMENT_LIMIT(payload.limit);
     case "INVALID_SHEET_COLUMN":
       return e.INVALID_SHEET_COLUMN(payload.column);
     case "CLINIC_NAME_TAKEN":

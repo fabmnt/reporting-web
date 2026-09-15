@@ -1,9 +1,22 @@
 export const clinics = {
   pageTitle: "Clínicas",
-  accessDeniedTitle: "Se requiere acceso de personal activo",
+  accessDeniedTitle: "Se requiere una cuenta de personal activa",
   accessDeniedBody: "Tu cuenta no puede configurar clínicas.",
-  noneAssigned:
-    "Aún no tienes clínicas asignadas. Pide a un administrador que te asigne clínicas antes de configurarlas.",
+  noneAssigned: "Aún no tienes clínicas asignadas. Añade las clínicas en las que trabajas.",
+  addClinic: "Añadir clínica",
+  addFailedTitle: "No se pudo añadir la clínica",
+  addFailed: "No se pudo añadir la clínica.",
+  removeFailedTitle: "No se pudo quitar la clínica",
+  removeFailed: "No se pudo quitar la clínica.",
+  addDialog: {
+    title: "Añadir clínicas",
+    description:
+      "Elige las clínicas en las que ejecutas reportes. Permanecen en tu cuenta hasta que las quites.",
+    search: "Buscar clínicas",
+    noneAvailable: "Todas las clínicas activas ya están en tu cuenta.",
+    noMatches: "Ninguna clínica coincide con esta búsqueda.",
+    limit: (limit: number) => `Mostrando las primeras ${limit} clínicas. Puede que falten algunas.`,
+  },
   table: {
     clinic: "Clínica",
     client: "Cliente",
