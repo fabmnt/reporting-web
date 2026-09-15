@@ -15,6 +15,7 @@ export const admin = {
       enabled: "Habilitada",
     },
     roleFor: (name: string) => `Rol de ${name}`,
+    statusFor: (name: string) => `Estado de la cuenta de ${name}`,
     assign: "Asignar",
     enabled: "Habilitada",
     disabled: "Deshabilitada",

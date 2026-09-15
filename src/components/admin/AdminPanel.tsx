@@ -1,6 +1,6 @@
 import type { FunctionReturnType } from "convex/server";
 import { useMutation, useQuery } from "convex/react";
-import { useState } from "react";
+import { useId, useState } from "react";
 
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
@@ -152,17 +152,22 @@ function AccountStatus({
 }) {
   const { t } = useI18n();
   const isActive = account.status === "active";
+  // The table and the cards are both in the DOM, so each switch needs its own id.
+  const switchId = useId();
 
   return (
     <Field orientation="horizontal" data-disabled={disabled} className="justify-end">
       <Switch
-        id={`status-${account.profileId}`}
+        id={switchId}
+        // The cards label the row with a plain <dt>, which does not name the
+        // switch, so the card variant carries the name itself.
+        aria-label={showState ? undefined : t.admin.accounts.statusFor(account.displayName)}
         checked={isActive}
         onCheckedChange={(checked) => onChange(account.profileId, checked)}
         disabled={disabled}
       />
       {showState ? (
-        <FieldLabel htmlFor={`status-${account.profileId}`}>
+        <FieldLabel htmlFor={switchId}>
           {isActive ? t.admin.accounts.enabled : t.admin.accounts.disabled}
         </FieldLabel>
       ) : null}
