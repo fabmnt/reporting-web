@@ -8,8 +8,10 @@ import {
   assertTypeNameAvailable,
   cleanTypeDraft,
   draftFromTemplate,
+  engineOf,
   loadBuiltinReportType,
   loadOwnedReportType,
+  reportEngine,
   reportTypeBucket,
   reportTypeTemplate,
   type ReportTypeDoc,
@@ -28,6 +30,7 @@ const reportTypeView = v.object({
   buckets: v.array(reportTypeBucket),
   conditions: reportConditionSet,
   usesVerificationFilter: v.boolean(),
+  engine: reportEngine,
 });
 
 const reportTypeDraftArgs = {
@@ -55,6 +58,7 @@ function viewOf(row: ReportTypeDoc) {
     buckets: row.buckets,
     conditions: row.conditions,
     usesVerificationFilter: row.usesVerificationFilter,
+    engine: engineOf(row),
   };
 }
 

@@ -43,9 +43,15 @@ export const reports = {
     copyFor: (label: string) => `Copiar los números de fila de ${label}`,
     copiedFor: (label: string) => `Se copiaron los números de fila de ${label}`,
   },
+  inactiveCarriers: {
+    title: "Carriers no activos",
+    note: "Bots que la API de carriers reporta como no activos. Un bot que no puede ejecutarse deja sus filas fuera del reporte; los demás sí aparecen para que un operador pueda trabajarlos.",
+    patternUnsupported: "Patrón que esta aplicación no puede ejecutar",
+  },
   results: {
     title: "Resultados",
     rows: (count: number) => (count === 1 ? "1 fila" : `${count} filas`),
+    carriers: "Carriers",
     noneProcessed:
       "No se procesó ninguna hoja. Revisa tus clínicas asignadas y las fechas elegidas.",
     sheetError: "Error en la hoja",

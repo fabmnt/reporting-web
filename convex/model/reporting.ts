@@ -19,6 +19,7 @@ export type ReportingClinicDoc = {
   clientId: Id<"clients">;
   name: string;
   googleSheetId: string;
+  externalClinicId: string | null;
   isActive: boolean;
   sheetColumns: ResolvedClinicSheetColumns;
   qaGroupKeys: string[];
@@ -34,6 +35,7 @@ function toReportingClinic(clinic: {
   clientId: Id<"clients">;
   name: string;
   googleSheetId: string;
+  externalClinicId?: string;
   isActive: boolean;
   sheetColumns?: Parameters<typeof resolveClinicSheetColumns>[0];
   qaGroupKeys?: string[];
@@ -43,6 +45,7 @@ function toReportingClinic(clinic: {
     clientId: clinic.clientId,
     name: clinic.name,
     googleSheetId: clinic.googleSheetId,
+    externalClinicId: clinic.externalClinicId ?? null,
     isActive: clinic.isActive,
     sheetColumns: resolveClinicSheetColumns(clinic.sheetColumns),
     qaGroupKeys: clinic.qaGroupKeys ?? [],
@@ -129,17 +132,25 @@ export function columnLetterToIndex(column: string): number {
   return index - 1;
 }
 
-// Sheet tab names are dates like "2026-09-03". Returns only the tabs inside
-// the requested range, sorted oldest first.
-export function tabsInDateRange(tabTitles: string[], startDate: string, endDate: string): string[] {
-  const datePattern = /^\d{4}-\d{2}-\d{2}$/;
-  if (!datePattern.test(startDate) || !datePattern.test(endDate)) {
+// Sheet tabs of a run are named as dates, and so is the range they fall in.
+const TAB_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
+// Validates a run's date range on its own, so a caller that reads many sheets
+// rejects a malformed range instead of reporting it once per sheet.
+export function assertReportDateRange(startDate: string, endDate: string): void {
+  if (!TAB_DATE_PATTERN.test(startDate) || !TAB_DATE_PATTERN.test(endDate)) {
     throw appError({ code: "INVALID_DATE_FORMAT" });
   }
   if (startDate > endDate) {
     throw appError({ code: "INVALID_DATE_RANGE" });
   }
+}
+
+// Sheet tab names are dates like "2026-09-03". Returns only the tabs inside
+// the requested range, sorted oldest first.
+export function tabsInDateRange(tabTitles: string[], startDate: string, endDate: string): string[] {
+  assertReportDateRange(startDate, endDate);
   return tabTitles
-    .filter((title) => datePattern.test(title) && title >= startDate && title <= endDate)
+    .filter((title) => TAB_DATE_PATTERN.test(title) && title >= startDate && title <= endDate)
     .sort();
 }

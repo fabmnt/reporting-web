@@ -49,4 +49,15 @@ export const errors = {
     `Columna de hoja no válida "${column}". Usa letras como A, T o AB.`,
   SHEET_RATE_LIMITED:
     "Google limitó la velocidad de nuestras solicitudes. Espera un minuto e inténtalo de nuevo.",
+  CARRIER_SIGN_IN_REJECTED:
+    "La API de carriers rechazó las credenciales de la aplicación. Pide a un administrador que las revise.",
+  CARRIER_API_UNAVAILABLE: "La API de carriers no respondió. Inténtalo de nuevo en un momento.",
+  SHEET_CARRIER_ID_MISSING:
+    "Esta clínica no tiene id de Control Central, así que no se pueden leer sus carriers.",
+  SHEET_CARRIER_ACCESS_DENIED: "La API de carriers no da acceso a la aplicación a esta clínica.",
+  SHEET_CARRIER_CLINIC_UNKNOWN: "La API de carriers no conoce esta clínica.",
+  SHEET_CARRIER_UNAVAILABLE:
+    "La API de carriers no respondió para esta clínica. Inténtalo de nuevo en un momento.",
+  SHEET_NO_CARRIER_BOTS:
+    "Esta clínica no tiene ningún bot de carriers que el reporte pueda ejecutar.",
 };
