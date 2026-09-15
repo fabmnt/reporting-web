@@ -93,11 +93,11 @@ export function AccountMenu({
       <DropdownMenuContent align="end" sideOffset={6} className="w-60">
         <DropdownMenuGroup>
           <DropdownMenuLabel className="flex flex-col gap-1 px-2 py-1.5">
-            <TruncatedText className="text-sm font-medium text-foreground">
+            <TruncatedText isPressOnly className="text-sm font-medium text-foreground">
               {account.displayName}
             </TruncatedText>
             <span className="flex items-center gap-1.5">
-              <TruncatedText className="text-xs font-normal">
+              <TruncatedText isPressOnly className="text-xs font-normal">
                 {account.username ?? ""}
               </TruncatedText>
               {canAdmin ? (

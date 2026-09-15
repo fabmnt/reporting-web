@@ -1,25 +1,49 @@
 "use client";
 
-import { useRef, useState, type MouseEvent } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent, type MouseEvent } from "react";
 
 import { cn } from "@/lib/utils";
 
 /**
- * One line of text that shows its full content on press. The cards of narrow
- * screens cut long values with the ellipsis, and a press is the only way to read
- * what is behind it. Only a clipped text takes the press: a text that already
- * fits lets it through, so the control behind keeps working.
+ * One line of text that shows its full content when the reader asks for it: a
+ * press on a phone, Enter or Space on a keyboard. The text becomes a control
+ * only where it is actually clipped, so a value that already fits adds no tab
+ * stop to the page.
+ *
+ * Pass isPressOnly for text inside a button, like the cells of a row card: a
+ * button must not hold a focusable descendant, so those reveal on press and
+ * their full text arrives with the row itself.
  */
-export function TruncatedText({ children, className }: { children: string; className?: string }) {
+export function TruncatedText({
+  children,
+  className,
+  isPressOnly = false,
+}: {
+  children: string;
+  className?: string;
+  isPressOnly?: boolean;
+}) {
   const element = useRef<HTMLSpanElement>(null);
   const [isExpanded, setIsExpanded] = useState(false);
+  const [isClipped, setIsClipped] = useState(false);
 
-  function handlePress(event: MouseEvent<HTMLSpanElement>) {
+  // Only a measurement knows whether the text is clipped. A window that gets
+  // resized afterwards can leave the answer behind, which costs at most a tab
+  // stop on a value that fits.
+  useEffect(() => {
+    const node = element.current;
+    if (node !== null) setIsClipped(node.scrollWidth > node.clientWidth);
+  }, [children]);
+
+  const isControl = !isPressOnly && (isClipped || isExpanded);
+
+  function toggle(event: MouseEvent<HTMLSpanElement> | KeyboardEvent<HTMLSpanElement>) {
     const node = element.current;
     if (node === null) return;
 
-    const isClipped = node.scrollWidth > node.clientWidth;
-    if (!isClipped && !isExpanded) return;
+    // A text that fits has nothing to reveal, so the press reaches whatever
+    // sits behind it.
+    if (!isExpanded && node.scrollWidth <= node.clientWidth) return;
 
     event.stopPropagation();
     setIsExpanded((expanded) => !expanded);
@@ -28,9 +52,17 @@ export function TruncatedText({ children, className }: { children: string; class
   return (
     <span
       ref={element}
-      onClick={handlePress}
+      onClick={toggle}
+      onKeyDown={(event) => {
+        if (event.key !== "Enter" && event.key !== " ") return;
+        event.preventDefault();
+        toggle(event);
+      }}
+      role={isControl ? "button" : undefined}
+      tabIndex={isControl ? 0 : undefined}
       className={cn(
-        "block",
+        "block outline-none",
+        isControl && "cursor-pointer focus-visible:ring-3 focus-visible:ring-ring",
         isExpanded ? "whitespace-normal wrap-anywhere" : "truncate",
         className
       )}

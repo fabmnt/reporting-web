@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/table";
 import { useI18n } from "@/lib/i18n/context";
 import { sheetErrorText } from "@/lib/i18n/errors";
+import { cn } from "@/lib/utils";
 
 export type ReportRow = { rowNumber: number; values: string[] };
 export type BucketResult = {
@@ -163,6 +164,12 @@ function ResultRowCard({
   );
 }
 
+// Opening the row shows its cells in full. The cells sit inside the button that
+// opens the row, where a focusable control is not allowed, so the row itself is
+// how a keyboard reads a clipped value.
+const ROW_OPEN_REVEAL =
+  "group-data-[panel-open]/row:whitespace-normal group-data-[panel-open]/row:wrap-anywhere";
+
 /**
  * Labelled cells of a row card. Spans keep the cells inside the trigger of the
  * collapsible, which only takes phrasing content.
@@ -177,10 +184,15 @@ function ResultRowCells({ cells }: { cells: RowCell[] }) {
           key={cell.column}
           className="grid grid-cols-[minmax(0,auto)_minmax(0,1fr)] items-center gap-3"
         >
-          <TruncatedText className="max-w-32 text-xs text-muted-foreground">
+          <TruncatedText
+            isPressOnly
+            className={cn("max-w-32 text-xs text-muted-foreground", ROW_OPEN_REVEAL)}
+          >
             {cell.label}
           </TruncatedText>
-          <TruncatedText className="min-w-0 text-right text-sm">{cell.value}</TruncatedText>
+          <TruncatedText isPressOnly className={cn("min-w-0 text-right text-sm", ROW_OPEN_REVEAL)}>
+            {cell.value}
+          </TruncatedText>
         </span>
       ))}
     </span>
