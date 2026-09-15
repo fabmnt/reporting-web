@@ -1,28 +1,20 @@
 import { describe, expect, it } from "vitest";
 
-import type { Id } from "../../convex/_generated/dataModel";
-import type { QueryCtx } from "../../convex/_generated/server";
 import {
-  assertBucketKeys,
-  AUDIT_EXCLUDE_STATUS,
-  bucketCatalog,
-  bucketCatalogFor,
-  bucketKeysFor,
   cleanConditionSet,
-  defaultConditionsFor,
   evaluateConditionSet,
   filterColumnsForBucket,
-  isImplementedOperation,
   MAX_CLAUSES_PER_SECTION,
   MAX_GROUPS_PER_EXPRESSION,
   MAX_MARKER_LENGTH,
   MAX_MARKERS_PER_RULE,
-  resolveConditionsForClinics,
   type ConditionClause,
   type ConditionColumnIndexes,
   type ConditionExpression,
   type ReportConditionSet,
 } from "../../convex/model/reportConditions";
+import { AUDIT_EXCLUDE_STATUS, PENDING_AUDIT_REPORT_TYPE } from "../../convex/model/reportTypeSeed";
+import { bucketCatalog } from "../../convex/model/reportTypes";
 
 import {
   expressionHasNoClauses,
@@ -30,6 +22,11 @@ import {
   operatorIsNegated,
   operatorNeedsValues,
 } from "./reportConditions";
+
+// The rules the seeded built-in report type carries. They used to be code
+// defaults; they are stored rows now, and these tests keep them reproducing the
+// legacy tool.
+const PENDING_AUDIT_CONDITIONS = PENDING_AUDIT_REPORT_TYPE.conditions;
 
 // Legacy sheet layout: L = 11, M = 12, then the column mapping of the test
 // clinic. L and M are fixed, the rest come from the clinic configuration.
@@ -83,11 +80,14 @@ function verificationFilters(filter: "all" | "fbd" | "elg"): ConditionClause[] {
   return filter === "all" ? [] : [clause("verificationType", "contains", [filter.toUpperCase()])];
 }
 
-describe("defaultConditionsFor", () => {
+describe("the seeded pending audit report type", () => {
   it("reproduces the legacy pending audit rule", () => {
-    const conditions = defaultConditionsFor("pending-audit");
+    const conditions = PENDING_AUDIT_CONDITIONS;
     const [bucket] = conditions.buckets;
 
+    expect(PENDING_AUDIT_REPORT_TYPE.name).toBe("Pending audit");
+    expect(PENDING_AUDIT_REPORT_TYPE.buckets).toEqual([{ key: "audit", label: "Pending audit" }]);
+    expect(PENDING_AUDIT_REPORT_TYPE.usesVerificationFilter).toBe(true);
     expect(conditions.buckets.map((item) => item.bucketKey)).toEqual(["audit"]);
     expect(bucket?.catchAll).toBe(false);
     expect(bucket?.expression.filters).toEqual([
@@ -109,14 +109,10 @@ describe("defaultConditionsFor", () => {
     ]);
     expect(AUDIT_EXCLUDE_STATUS).toHaveLength(14);
   });
-
-  it("rejects report types without conditions", () => {
-    expect(() => defaultConditionsFor("pending-execution")).toThrow(/pending-execution/);
-  });
 });
 
-describe("evaluateConditionSet with the pending audit defaults", () => {
-  const conditions = defaultConditionsFor("pending-audit");
+describe("evaluateConditionSet with the pending audit rules", () => {
+  const conditions = PENDING_AUDIT_CONDITIONS;
 
   const cases: Array<{
     name: string;
@@ -259,7 +255,7 @@ describe("evaluateConditionSet with several buckets", () => {
 });
 
 describe("filterColumnsForBucket", () => {
-  const conditions = defaultConditionsFor("pending-audit");
+  const conditions = PENDING_AUDIT_CONDITIONS;
   const [auditBucket] = conditions.buckets;
 
   it("returns the mapped columns of the pending audit rule in sheet order", () => {
@@ -629,40 +625,9 @@ describe("cleanConditionSet", () => {
   });
 });
 
-describe("assertBucketKeys", () => {
-  it("accepts the catalog buckets and rejects anything else", () => {
-    const conditions = defaultConditionsFor("pending-audit");
-    const expected = bucketKeysFor("pending-audit");
-    expect(() => assertBucketKeys(conditions, expected, "pending-audit")).not.toThrow();
-    expect(() =>
-      assertBucketKeys(
-        { buckets: [{ ...conditions.buckets[0]!, bucketKey: "other" }] },
-        expected,
-        "pending-audit"
-      )
-    ).toThrow();
-  });
-
-  it("rejects repeated or reordered buckets", () => {
-    const set: ReportConditionSet = {
-      buckets: [
-        { bucketKey: "first", catchAll: false, expression: { filters: [], groups: [] } },
-        { bucketKey: "second", catchAll: false, expression: { filters: [], groups: [] } },
-      ],
-    };
-    const expected = ["first", "second"];
-    expect(() =>
-      assertBucketKeys({ buckets: [...set.buckets].reverse() }, expected, "test")
-    ).toThrow();
-    expect(() =>
-      assertBucketKeys({ buckets: [...set.buckets, set.buckets[0]!] }, expected, "test")
-    ).toThrow();
-  });
-});
-
 describe("bucketCatalog", () => {
   it("returns the single bucket of the pending audit report", () => {
-    expect(bucketCatalogFor("pending-audit")).toEqual([
+    expect(bucketCatalog(PENDING_AUDIT_REPORT_TYPE.buckets)).toEqual([
       { key: "audit", label: "Pending audit", canCatchAll: false },
     ]);
   });
@@ -677,121 +642,6 @@ describe("bucketCatalog", () => {
       { key: "first", label: "First", canCatchAll: false },
       { key: "second", label: "Second", canCatchAll: true },
     ]);
-  });
-});
-
-describe("isImplementedOperation", () => {
-  it("knows which report types have conditions", () => {
-    expect(isImplementedOperation("pending-audit")).toBe(true);
-    expect(isImplementedOperation("pending-execution")).toBe(false);
-  });
-});
-
-type ConditionRow = {
-  userId: string;
-  operationKey: string;
-  clinicId: Id<"clinics"> | null;
-  conditions: ReportConditionSet;
-};
-
-type IndexQuery = {
-  eq: (field: string, value: unknown) => IndexQuery;
-  [Symbol.asyncIterator]: () => AsyncIterator<ConditionRow>;
-};
-
-// Minimal stand-in for the Convex query builder. The resolver only calls
-// eq().eq() and then iterates the result, and the tests hand it the rows of one
-// user and operation.
-function fakeCtx(rows: ConditionRow[]): QueryCtx {
-  const query: IndexQuery = {
-    eq: () => query,
-    async *[Symbol.asyncIterator]() {
-      for (const row of rows) yield row;
-    },
-  };
-  return {
-    db: {
-      query: () => ({
-        withIndex: (_index: string, range: (q: IndexQuery) => unknown) => {
-          range(query);
-          return query;
-        },
-      }),
-    },
-  } as unknown as QueryCtx;
-}
-
-describe("resolveConditionsForClinics", () => {
-  const userId = "user-1" as Id<"users">;
-  const clinicId = "clinic-1" as Id<"clinics">;
-
-  it("falls back to the code default when nothing is stored", async () => {
-    const resolved = await resolveConditionsForClinics(fakeCtx([]), userId, "pending-audit");
-
-    expect(resolved.defaultIsCustom).toBe(false);
-    expect(resolved.defaultConditions).toEqual(defaultConditionsFor("pending-audit"));
-    expect(resolved.byClinicId.size).toBe(0);
-  });
-
-  it("returns the stored default and the clinic override", async () => {
-    const customDefault = defaultConditionsFor("pending-audit");
-    const override: ReportConditionSet = {
-      buckets: [
-        {
-          ...customDefault.buckets[0]!,
-          expression: { filters: [], groups: [] },
-        },
-      ],
-    };
-    const resolved = await resolveConditionsForClinics(
-      fakeCtx([
-        { userId, operationKey: "pending-audit", clinicId: null, conditions: customDefault },
-        { userId, operationKey: "pending-audit", clinicId, conditions: override },
-      ]),
-      userId,
-      "pending-audit"
-    );
-
-    expect(resolved.defaultIsCustom).toBe(true);
-    expect(resolved.defaultConditions).toEqual(customDefault);
-    expect(resolved.byClinicId.get(clinicId)).toEqual(override);
-  });
-
-  it("considers every stored row, past any fixed cap", async () => {
-    const rows: ConditionRow[] = Array.from({ length: 600 }, (_, index) => ({
-      userId,
-      operationKey: "pending-audit",
-      clinicId: `clinic-${index}` as Id<"clinics">,
-      conditions: defaultConditionsFor("pending-audit"),
-    }));
-    const lastClinicId = "clinic-599" as Id<"clinics">;
-
-    const resolved = await resolveConditionsForClinics(fakeCtx(rows), userId, "pending-audit");
-
-    expect(resolved.byClinicId.size).toBe(600);
-    expect(resolved.byClinicId.get(lastClinicId)).toBeDefined();
-  });
-
-  it("skips a stored row whose buckets do not match the catalog", async () => {
-    const resolved = await resolveConditionsForClinics(
-      fakeCtx([
-        {
-          userId,
-          operationKey: "pending-audit",
-          clinicId: null,
-          conditions: {
-            buckets: [
-              { bucketKey: "other", catchAll: false, expression: { filters: [], groups: [] } },
-            ],
-          },
-        },
-      ]),
-      userId,
-      "pending-audit"
-    );
-
-    expect(resolved.defaultIsCustom).toBe(false);
-    expect(resolved.defaultConditions).toEqual(defaultConditionsFor("pending-audit"));
   });
 });
 

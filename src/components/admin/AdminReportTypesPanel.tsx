@@ -3,41 +3,45 @@
 import { useQuery } from "convex/react";
 
 import { api } from "../../../convex/_generated/api";
+import { AdminTabs } from "@/components/app/AdminTabs";
 import { PageHeader } from "@/components/app/PageHeader";
+import { ReportTypesPanel } from "@/components/conditions/ReportTypesPanel";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useDocumentTitle, useI18n } from "@/lib/i18n/context";
 
-import { ReportTypesPanel } from "./ReportTypesPanel";
-
-export function ConditionsPanel() {
+export function AdminReportTypesPanel() {
   const { t } = useI18n();
   const current = useQuery(api.staffAccounts.current, {});
-  const canConfigure =
-    current?.status === "active" && (current.role === "admin" || current.role === "operator");
+  const canManage = current?.role === "admin" && current.status === "active";
 
-  useDocumentTitle(t.app.titles.configuration);
+  useDocumentTitle(t.app.titles.adminReportTypes);
 
   const header = (
-    <PageHeader title={t.conditions.pageTitle} description={t.conditions.pageDescription} />
+    <PageHeader
+      title={t.admin.reportTypes.pageTitle}
+      description={t.admin.reportTypes.pageDescription}
+    />
   );
 
   if (current === undefined) {
     return (
       <div className="flex flex-col gap-6">
         {header}
+        <AdminTabs />
         <Skeleton className="h-80 w-full" />
       </div>
     );
   }
 
-  if (!canConfigure) {
+  if (!canManage) {
     return (
       <div className="flex flex-col gap-6">
         {header}
+        <AdminTabs />
         <Alert variant="destructive">
-          <AlertTitle>{t.conditions.accessDeniedTitle}</AlertTitle>
-          <AlertDescription>{t.conditions.accessDeniedBody}</AlertDescription>
+          <AlertTitle>{t.admin.accessDeniedTitle}</AlertTitle>
+          <AlertDescription>{t.admin.reportTypes.accessDeniedBody}</AlertDescription>
         </Alert>
       </div>
     );
@@ -46,7 +50,8 @@ export function ConditionsPanel() {
   return (
     <div className="flex flex-col gap-6">
       {header}
-      <ReportTypesPanel scope="mine" />
+      <AdminTabs />
+      <ReportTypesPanel scope="builtin" />
     </div>
   );
 }

@@ -1,15 +1,10 @@
 import { v } from "convex/values";
 import type { Infer } from "convex/values";
 
-import type { Id } from "../_generated/dataModel";
+import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 import { appError } from "./appErrors";
-import {
-  bucketCatalog,
-  defaultConditionsFor,
-  REPORT_BUCKETS,
-  type ReportConditionSet,
-} from "./reportConditions";
+import { cleanConditionSet, type ReportConditionSet } from "./reportConditions";
 
 export const reportTypeBucket = v.object({ key: v.string(), label: v.string() });
 export type ReportTypeBucket = Infer<typeof reportTypeBucket>;
@@ -18,9 +13,23 @@ export const MAX_BUCKETS_PER_TYPE = 5;
 export const MAX_TYPE_NAME_LENGTH = 60;
 export const MAX_TYPE_DESCRIPTION_LENGTH = 200;
 
-// What the create dialog offers: start from one empty group, or copy the rules
-// of a built-in report as a working starting point.
-export const reportTypeTemplate = v.union(v.literal("blank"), v.literal("pending-audit"));
+export type ReportTypeDoc = Doc<"reportTypes">;
+
+// Everything an administrator or an owner edits about a report type.
+export type ReportTypeDraft = {
+  name: string;
+  description: string;
+  buckets: ReportTypeBucket[];
+  conditions: ReportConditionSet;
+  usesVerificationFilter: boolean;
+};
+
+// What the create dialog offers: one empty group, or a copy of the rules of a
+// report type the caller can run.
+export const reportTypeTemplate = v.union(
+  v.literal("blank"),
+  v.object({ fromReportTypeId: v.id("reportTypes") })
+);
 export type ReportTypeTemplate = Infer<typeof reportTypeTemplate>;
 
 export function nextBucketKey(buckets: ReadonlyArray<ReportTypeBucket>): string {
@@ -35,6 +44,20 @@ export function nextBucketKey(buckets: ReadonlyArray<ReportTypeBucket>): string 
 
 export function defaultBucketLabel(index: number): string {
   return `Group ${index + 1}`;
+}
+
+type BucketDefinition = { key: string; label: string };
+
+// Only the last bucket of a multi-bucket report can catch all rows no earlier
+// bucket took.
+export function bucketCatalog(
+  definitions: ReadonlyArray<BucketDefinition>
+): Array<{ key: string; label: string; canCatchAll: boolean }> {
+  return definitions.map((bucket, index) => ({
+    key: bucket.key,
+    label: bucket.label,
+    canCatchAll: definitions.length > 1 && index === definitions.length - 1,
+  }));
 }
 
 // Keeps a condition set aligned with its bucket list: expressions for removed
@@ -55,20 +78,6 @@ export function conditionsForBuckets(
         expression: existing?.expression ?? { filters: [], groups: [] },
       };
     }),
-  };
-}
-
-export function reportTypeTemplateFor(template: ReportTypeTemplate): {
-  buckets: ReportTypeBucket[];
-  conditions: ReportConditionSet;
-} {
-  if (template === "blank") {
-    const buckets: ReportTypeBucket[] = [{ key: "b1", label: defaultBucketLabel(0) }];
-    return { buckets, conditions: conditionsForBuckets(buckets, { buckets: [] }) };
-  }
-  return {
-    buckets: REPORT_BUCKETS[template].map((bucket) => ({ key: bucket.key, label: bucket.label })),
-    conditions: defaultConditionsFor(template),
   };
 }
 
@@ -104,27 +113,115 @@ export function cleanTypeBuckets(buckets: ReadonlyArray<ReportTypeBucket>): Repo
   return cleaned;
 }
 
-export type ReportTypeDoc = {
-  _id: Id<"reportTypes">;
-  userId: Id<"users">;
-  name: string;
-  description: string;
-  buckets: ReportTypeBucket[];
-  conditions: ReportConditionSet;
-  createdAt: number;
-  updatedAt: number;
-};
+// The only validation path a stored definition goes through: buckets are
+// authoritative, so the rules are rebuilt around them.
+export function cleanTypeDraft(draft: ReportTypeDraft): ReportTypeDraft {
+  const buckets = cleanTypeBuckets(draft.buckets);
+  return {
+    name: cleanTypeName(draft.name),
+    description: cleanTypeDescription(draft.description),
+    buckets,
+    conditions: cleanConditionSet(conditionsForBuckets(buckets, draft.conditions)),
+    usesVerificationFilter: draft.usesVerificationFilter,
+  };
+}
 
-// A report type is only usable by its owner, so someone else's id reads as
-// missing.
+// The labels of a template are stored with the new type, so they arrive in the
+// language the caller is working in.
+function relabelBuckets(
+  buckets: ReadonlyArray<ReportTypeBucket>,
+  labels: ReadonlyArray<string> | undefined
+): ReportTypeBucket[] {
+  if (labels === undefined) return [...buckets];
+  return cleanTypeBuckets(
+    buckets.map((bucket, index) => ({ key: bucket.key, label: labels[index] ?? bucket.label }))
+  );
+}
+
+export async function draftFromTemplate(
+  ctx: QueryCtx | MutationCtx,
+  userId: Id<"users">,
+  name: string,
+  template: ReportTypeTemplate,
+  bucketLabels: ReadonlyArray<string> | undefined
+): Promise<ReportTypeDraft> {
+  if (template === "blank") {
+    const buckets: ReportTypeBucket[] = [{ key: "b1", label: defaultBucketLabel(0) }];
+    return {
+      name,
+      description: "",
+      buckets: relabelBuckets(buckets, bucketLabels),
+      conditions: conditionsForBuckets(buckets, { buckets: [] }),
+      usesVerificationFilter: false,
+    };
+  }
+
+  const source = await loadRunnableReportType(ctx, userId, template.fromReportTypeId);
+  return {
+    name,
+    description: source.description,
+    buckets: relabelBuckets(source.buckets, bucketLabels),
+    conditions: source.conditions,
+    usesVerificationFilter: source.usesVerificationFilter,
+  };
+}
+
+// A report type is usable by its owner or, for a built-in, by every operator,
+// so anything else reads as missing.
+export async function loadRunnableReportType(
+  ctx: QueryCtx | MutationCtx,
+  userId: Id<"users">,
+  reportTypeId: Id<"reportTypes">
+): Promise<ReportTypeDoc> {
+  const row = await ctx.db.get("reportTypes", reportTypeId);
+  if (row === null || (row.ownerUserId !== null && row.ownerUserId !== userId)) {
+    throw appError({ code: "REPORT_TYPE_NOT_FOUND" });
+  }
+  return row;
+}
+
+// Only the owner edits a personal type, administrators included.
 export async function loadOwnedReportType(
   ctx: QueryCtx | MutationCtx,
   userId: Id<"users">,
   reportTypeId: Id<"reportTypes">
 ): Promise<ReportTypeDoc> {
   const row = await ctx.db.get("reportTypes", reportTypeId);
-  if (row === null || row.userId !== userId) {
+  if (row === null || row.ownerUserId !== userId) {
     throw appError({ code: "REPORT_TYPE_NOT_FOUND" });
   }
   return row;
+}
+
+// Built-in types belong to the deployment, not to a user, so only the
+// administrator-guarded functions reach them.
+export async function loadBuiltinReportType(
+  ctx: QueryCtx | MutationCtx,
+  reportTypeId: Id<"reportTypes">
+): Promise<ReportTypeDoc> {
+  const row = await ctx.db.get("reportTypes", reportTypeId);
+  if (row === null || row.ownerUserId !== null) {
+    throw appError({ code: "REPORT_TYPE_NOT_FOUND" });
+  }
+  return row;
+}
+
+// Names are unique for a scope: built-ins among themselves, a personal type
+// among the types of its owner.
+export async function assertTypeNameAvailable(
+  ctx: QueryCtx | MutationCtx,
+  ownerUserId: Id<"users"> | null,
+  name: string,
+  exceptId: Id<"reportTypes"> | null
+): Promise<void> {
+  const rows = await ctx.db
+    .query("reportTypes")
+    .withIndex("by_ownerUserId", (query) => query.eq("ownerUserId", ownerUserId))
+    .collect();
+  const taken = rows.some(
+    (row) => row._id !== exceptId && row.name.toLowerCase() === name.toLowerCase()
+  );
+  if (taken) {
+    throw appError({ code: "REPORT_TYPE_NAME_TAKEN", name });
+  }
 }

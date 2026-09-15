@@ -10,14 +10,6 @@ export const staffRole = v.union(v.literal("admin"), v.literal("operator"));
 export const staffStatus = v.union(v.literal("active"), v.literal("disabled"));
 // The language the user picked in the app. Missing means "follow the device".
 export const staffLanguage = v.union(v.literal("en"), v.literal("es"));
-export const reportOperationKey = v.union(
-  v.literal("pending-audit"),
-  v.literal("pending-execution"),
-  v.literal("smilist-filters"),
-  v.literal("luna-formulas"),
-  v.literal("diva-formulas"),
-  v.literal("depot-row-highlight")
-);
 const reportRunStatus = v.union(
   v.literal("pending"),
   v.literal("running"),
@@ -69,27 +61,30 @@ export default defineSchema({
     .index("by_clientId_and_name", ["clientId", "name"])
     .index("by_googleSheetId", ["googleSheetId"]),
 
-  // Report types the user builds on top of the row-report pipeline. A row
-  // lands in the first bucket whose expression matches it, in bucket order.
+  // Report types the row-report pipeline runs. A row lands in the first bucket
+  // whose expression matches it, in bucket order. `ownerUserId: null` is a
+  // built-in type: administrators edit it and every operator can run it. A set
+  // owner keeps the type private to that account.
   reportTypes: defineTable({
-    userId: v.id("users"),
+    ownerUserId: v.union(v.id("users"), v.null()),
     name: v.string(),
     description: v.string(),
     // Keys stay stable across renames and reorders, so stored conditions keep
     // pointing at the right group.
     buckets: v.array(reportTypeBucket),
     conditions: reportConditionSet,
+    // Shows the verification-type picker on the run form.
+    usesVerificationFilter: v.boolean(),
     createdAt: v.number(),
     updatedAt: v.number(),
-  }).index("by_userId", ["userId"]),
+  }).index("by_ownerUserId", ["ownerUserId"]),
 
   reportRuns: defineTable({
     initiatedByUserId: v.id("users"),
-    // Built-in runs store operationKey, custom runs store reportTypeId plus a
-    // name snapshot so history survives deleting the type.
-    operationKey: v.optional(reportOperationKey),
-    reportTypeId: v.optional(v.id("reportTypes")),
-    reportTypeName: v.optional(v.string()),
+    // The type may be renamed or deleted later, so the name travels with the
+    // run.
+    reportTypeId: v.id("reportTypes"),
+    reportTypeName: v.string(),
     clientId: v.optional(v.id("clients")),
     status: reportRunStatus,
     startedAt: v.number(),
@@ -102,18 +97,4 @@ export default defineSchema({
     .index("by_initiatedByUserId_and_startedAt", ["initiatedByUserId", "startedAt"])
     .index("by_clientId_and_startedAt", ["clientId", "startedAt"])
     .index("by_status_and_startedAt", ["status", "startedAt"]),
-
-  // Row conditions per user and report operation. `clinicId: null` is the
-  // user's general default; a clinic id is a full override for that clinic.
-  // A missing row means "use the code default".
-  reportConditions: defineTable({
-    userId: v.id("users"),
-    operationKey: reportOperationKey,
-    clinicId: v.union(v.id("clinics"), v.null()),
-    conditions: reportConditionSet,
-    updatedAt: v.number(),
-  })
-    .index("by_userId_and_operationKey", ["userId", "operationKey"])
-    .index("by_userId_and_operationKey_and_clinicId", ["userId", "operationKey", "clinicId"])
-    .index("by_clinicId", ["clinicId"]),
 });

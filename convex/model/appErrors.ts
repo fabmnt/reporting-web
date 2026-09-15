@@ -35,15 +35,12 @@ export type AppErrorPayload =
   | { code: "GOOGLE_SHEET_REQUIRED" }
   | { code: "INVALID_DATE_RANGE" }
   | { code: "INVALID_DATE_FORMAT" }
-  | { code: "OPERATION_NOT_CONFIGURED"; operationKey: string }
-  | { code: "OPERATION_NOT_SUPPORTED"; operationKey: string }
   | { code: "REPORT_TYPE_NAME_TAKEN"; name: string }
   | { code: "REPORT_TYPE_NOT_FOUND" }
   | { code: "REPORT_TYPE_NAME_REQUIRED" }
   | { code: "REPORT_TYPE_GROUP_REQUIRED" }
   | { code: "REPORT_TYPE_GROUP_LIMIT"; limit: number }
-  | { code: "REPORT_TYPE_GROUP_KEYS" }
-  | { code: "BUCKET_KEYS_MISMATCH"; operationKey: string; expected: string };
+  | { code: "REPORT_TYPE_GROUP_KEYS" };
 
 export type AppErrorCode = AppErrorPayload["code"];
 

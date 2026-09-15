@@ -4,7 +4,6 @@ import {
   type ReportSheetError,
 } from "../../../convex/model/appErrors";
 import type { Messages } from "./messages";
-import { operationLabel } from "./reportLabels";
 
 // Every backend error the user can see, rendered from the code the server sent.
 // A code this build does not know yet, and errors thrown by anything else, fall
@@ -73,10 +72,6 @@ function renderAppError(payload: AppErrorPayload, t: Messages): string | null {
       return e.INVALID_DATE_RANGE;
     case "INVALID_DATE_FORMAT":
       return e.INVALID_DATE_FORMAT;
-    case "OPERATION_NOT_CONFIGURED":
-      return e.OPERATION_NOT_CONFIGURED(operationLabel(t, payload.operationKey));
-    case "OPERATION_NOT_SUPPORTED":
-      return e.OPERATION_NOT_SUPPORTED(operationLabel(t, payload.operationKey));
     case "REPORT_TYPE_NAME_TAKEN":
       return e.REPORT_TYPE_NAME_TAKEN(payload.name);
     case "REPORT_TYPE_NOT_FOUND":
@@ -89,8 +84,6 @@ function renderAppError(payload: AppErrorPayload, t: Messages): string | null {
       return e.REPORT_TYPE_GROUP_LIMIT(payload.limit);
     case "REPORT_TYPE_GROUP_KEYS":
       return e.REPORT_TYPE_GROUP_KEYS;
-    case "BUCKET_KEYS_MISMATCH":
-      return e.BUCKET_KEYS_MISMATCH(operationLabel(t, payload.operationKey), payload.expected);
     default:
       return null;
   }
