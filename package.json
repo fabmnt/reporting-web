@@ -21,7 +21,7 @@
     "e2e": "playwright test",
     "typecheck": "astro check",
     "google:token": "node --env-file-if-exists=.env.local scripts/generate-google-token.ts",
-    "import:legacy-columns": "node --env-file-if-exists=.env.local scripts/import-legacy-clinic-columns.ts"
+    "import:legacy-clinics": "node --env-file-if-exists=.env.local scripts/import-legacy-clinics.ts"
   },
   "dependencies": {
     "@astrojs/react": "^6.0.5",

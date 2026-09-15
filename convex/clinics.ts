@@ -4,6 +4,7 @@ import type { Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
 import { mutation, query } from "./_generated/server";
 import { appError, type AppErrorPayload } from "./model/appErrors";
+import { clientKeyFromName } from "./model/clients";
 import { clinicSheetColumns } from "./model/clinicSheetColumns";
 import { listProfileClinics, profileUsesAllClinics } from "./model/reporting";
 import { requireAdmin, requireOperator } from "./model/staff";
@@ -53,13 +54,6 @@ function cleanRequiredText(value: string, missingField: AppErrorPayload): string
     throw appError(missingField);
   }
   return trimmed;
-}
-
-function clientKeyFromName(name: string): string {
-  return name
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
 }
 
 function cleanQaGroupKeys(keys: string[]): string[] {
