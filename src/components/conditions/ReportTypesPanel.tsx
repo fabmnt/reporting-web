@@ -190,7 +190,7 @@ export function ReportTypesPanel({ scope }: { scope: ReportTypeScope }) {
         sources={data.types
           .filter((item) => item.engine !== "execute")
           .map((item) => ({ reportTypeId: item.reportTypeId, name: item.name }))}
-        existingNames={data.types.map((item) => item.name)}
+        existingNames={data.types.filter((item) => item.owner === scope).map((item) => item.name)}
         open={creating}
         onOpenChange={setCreating}
         onCreated={handleCreated}

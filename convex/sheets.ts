@@ -3,7 +3,7 @@ import { v } from "convex/values";
 import { internalAction } from "./_generated/server";
 import { actionDeadline, fetchSheetsJson, refreshAccessToken } from "./googleApi";
 import { reportSheetError, sheetErrorFrom, type ReportSheetError } from "./model/appErrors";
-import { tabsInDateRange } from "./model/reporting";
+import { assertReportDateRange, tabsInDateRange } from "./model/reporting";
 
 type SheetsTabListResponse = {
   sheets?: Array<{ properties?: { title?: string } }>;
@@ -46,6 +46,10 @@ export const planSheetTabs = internalAction({
     errorsForClinic: v.record(v.string(), reportSheetError),
   }),
   handler: async (ctx, args) => {
+    // A malformed range is the run's problem and not a clinic's, so it is
+    // rejected before any spreadsheet is read.
+    assertReportDateRange(args.startDate, args.endDate);
+
     // One deadline for the whole action, however many clinics it covers.
     const deadlineMs = actionDeadline();
     const tabsForClinic: Record<string, string[]> = {};

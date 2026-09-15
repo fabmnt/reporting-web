@@ -62,14 +62,17 @@ function verificationMatches(value: string, filter: ExecuteVerificationFilter): 
   return value === filter;
 }
 
-// Column W holds a percentage like "76%". A cell without one cannot be under
-// the threshold.
+// Column W holds a percentage like "76%". A cell without one, or with no
+// number in front of it, cannot be under the threshold.
 function bksBelowThreshold(row: string[], index: number): boolean {
   const raw = cell(row, index);
   const separator = raw.indexOf("%");
   if (separator < 0) return false;
 
-  const percent = Number(raw.slice(0, separator).trim());
+  const numeric = raw.slice(0, separator).trim();
+  if (numeric === "") return false;
+
+  const percent = Number(numeric);
   return Number.isFinite(percent) && percent < LOW_BKS_PERCENT;
 }
 
