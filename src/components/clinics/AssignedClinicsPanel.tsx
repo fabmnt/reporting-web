@@ -4,6 +4,7 @@ import { useState, type SyntheticEvent } from "react";
 
 import { api } from "../../../convex/_generated/api";
 import { DataCard, DataCardList, DataCardRow, DataTableFrame } from "@/components/app/DataCard";
+import { TruncatedText } from "@/components/app/TruncatedText";
 import { SheetColumnFields } from "@/components/clinics/SheetColumnFields";
 import { PageHeader } from "@/components/app/PageHeader";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -256,15 +257,17 @@ export function AssignedClinicsPanel() {
                 }
               >
                 <DataCardRow label={t.clinics.table.client}>
-                  <span className="truncate">{clinic.clientName}</span>
+                  <TruncatedText>{clinic.clientName}</TruncatedText>
                 </DataCardRow>
                 <DataCardRow label={t.clinics.table.googleSheet}>
-                  <span className="truncate font-mono text-xs">{clinic.googleSheetId}</span>
+                  <TruncatedText className="font-mono text-xs">
+                    {clinic.googleSheetId}
+                  </TruncatedText>
                 </DataCardRow>
                 <DataCardRow label={t.clinics.table.columns}>
-                  <span className="truncate font-mono text-xs">
+                  <TruncatedText className="font-mono text-xs">
                     {formatSheetColumnSummary(clinic.sheetColumns)}
-                  </span>
+                  </TruncatedText>
                 </DataCardRow>
                 <DataCardRow>
                   <Button variant="outline" size="sm" onClick={() => openEdit(clinic)}>

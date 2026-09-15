@@ -2,6 +2,8 @@ import type { ReactNode } from "react";
 
 import { cn } from "@/lib/utils";
 
+import { TruncatedText } from "./TruncatedText";
+
 /**
  * One record of a table, rendered as a card. Tables stay sideways-scrollable
  * only on wide screens, so narrow screens read the same record as labelled
@@ -14,7 +16,7 @@ export function DataCard({
   children,
 }: {
   title: ReactNode;
-  subtitle?: ReactNode;
+  subtitle?: string | null;
   badge?: ReactNode;
   children?: ReactNode;
 }) {
@@ -28,7 +30,7 @@ export function DataCard({
               outside the card. */}
           <span className="text-sm font-medium wrap-anywhere">{title}</span>
           {subtitle ? (
-            <span className="truncate text-xs text-muted-foreground">{subtitle}</span>
+            <TruncatedText className="text-xs text-muted-foreground">{subtitle}</TruncatedText>
           ) : null}
         </div>
         {badge}
@@ -48,7 +50,9 @@ export function DataCardRow({ label, children }: { label?: string; children: Rea
     <div className="grid grid-cols-[minmax(0,auto)_minmax(0,1fr)] items-center gap-3">
       {label ? (
         // The cap keeps a long sheet header from taking the room of its value.
-        <dt className="max-w-32 truncate text-xs text-muted-foreground">{label}</dt>
+        <dt className="max-w-32 text-xs text-muted-foreground">
+          <TruncatedText>{label}</TruncatedText>
+        </dt>
       ) : null}
       <dd
         className={cn(

@@ -30,7 +30,7 @@ import { useDocumentTitle, useI18n } from "@/lib/i18n/context";
 import { localizedError, localizedMessage, type LocalizedMessage } from "@/lib/i18n/errors";
 import { cn } from "@/lib/utils";
 
-import { ResultsCard, type ReportResult } from "./ReportResults";
+import { OverviewCard, ResultsCard, type ReportResult } from "./ReportResults";
 
 function ReportRunnerSkeleton() {
   const { t } = useI18n();
@@ -333,7 +333,10 @@ export function ReportRunner() {
           {result === null ? (
             <ResultsPlaceholder running={running} clinicCount={assignedClinicCount} />
           ) : (
-            <ResultsCard result={result} />
+            <>
+              <OverviewCard result={result} />
+              <ResultsCard result={result} />
+            </>
           )}
         </div>
       </div>
