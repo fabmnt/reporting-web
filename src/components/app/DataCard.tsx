@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
 
+import { cn } from "@/lib/utils";
+
 /**
  * One record of a table, rendered as a card. Tables stay sideways-scrollable
  * only on wide screens, so narrow screens read the same record as labelled
@@ -18,7 +20,9 @@ export function DataCard({
 }) {
   return (
     <li className="flex flex-col gap-3 rounded-lg border p-4">
-      <div className="flex items-start justify-between gap-2">
+      {/* The badge keeps its own column and the name takes what is left, so a
+          long name or subtitle cannot widen the card past the screen. */}
+      <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-2">
         <div className="flex min-w-0 flex-col gap-1">
           {/* A record name can be one long word, so it wraps instead of painting
               outside the card. */}
@@ -37,13 +41,22 @@ export function DataCard({
 /** A label on the left and its control or value on the right. */
 export function DataCardRow({ label, children }: { label?: string; children: ReactNode }) {
   return (
-    <div className="flex items-center justify-between gap-3">
-      {/* Sheet headers can be long, so the label is capped and the value keeps
-          at least the rest of the row. */}
+    // A flex row would take the width of its nowrap label and value, which
+    // widens the whole card past the screen. Grid columns that start at zero
+    // keep the row's own width at zero, so the label and the value truncate
+    // inside their shares instead of pushing the card out of the screen.
+    <div className="grid grid-cols-[minmax(0,auto)_minmax(0,1fr)] items-center gap-3">
       {label ? (
-        <dt className="max-w-[55%] shrink-0 truncate text-xs text-muted-foreground">{label}</dt>
+        // The cap keeps a long sheet header from taking the room of its value.
+        <dt className="max-w-32 truncate text-xs text-muted-foreground">{label}</dt>
       ) : null}
-      <dd className="flex min-w-0 flex-1 items-center justify-end gap-2 empty:hidden">
+      <dd
+        className={cn(
+          "flex min-w-0 items-center justify-end gap-2 empty:hidden",
+          // A row without a label is a control, so it lines up with the card edge.
+          label ? null : "col-span-full"
+        )}
+      >
         {children}
       </dd>
     </div>
