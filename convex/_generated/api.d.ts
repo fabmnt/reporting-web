@@ -15,6 +15,7 @@ import type * as http from "../http.js";
 import type * as migrations_dataCleanup from "../migrations/dataCleanup.js";
 import type * as migrations_importLegacyClinics from "../migrations/importLegacyClinics.js";
 import type * as migrations_importLegacyStaff from "../migrations/importLegacyStaff.js";
+import type * as migrations_renameStaffAccount from "../migrations/renameStaffAccount.js";
 import type * as model_appErrors from "../model/appErrors.js";
 import type * as model_clients from "../model/clients.js";
 import type * as model_clinicSheetColumns from "../model/clinicSheetColumns.js";
@@ -47,6 +48,7 @@ declare const fullApi: ApiFromModules<{
   "migrations/dataCleanup": typeof migrations_dataCleanup;
   "migrations/importLegacyClinics": typeof migrations_importLegacyClinics;
   "migrations/importLegacyStaff": typeof migrations_importLegacyStaff;
+  "migrations/renameStaffAccount": typeof migrations_renameStaffAccount;
   "model/appErrors": typeof model_appErrors;
   "model/clients": typeof model_clients;
   "model/clinicSheetColumns": typeof model_clinicSheetColumns;
