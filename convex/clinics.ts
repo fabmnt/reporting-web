@@ -15,6 +15,10 @@ const MAX_STAFF_PROFILES = 500;
 // Mirrors the cap the assignment mutations and the report scope use, so a
 // self-service assignment cannot grow past what the reports can read.
 const MAX_ASSIGNED_CLINICS = 200;
+// The clinic picker shows what is still available, so its scan reads past the
+// first page of the table: filtering after a short cap would hide every clinic
+// that sits behind the pages of clinics the caller already has.
+const MAX_AVAILABLE_SCAN = 2000;
 
 const clientView = v.object({
   clientId: v.id("clients"),
@@ -356,12 +360,10 @@ export const listAvailable = query({
     const rows = await ctx.db
       .query("clinics")
       .withIndex("by_clientId_and_name")
-      .take(MAX_CLINICS + 1);
+      .take(MAX_AVAILABLE_SCAN + 1);
 
-    const available = rows
-      .slice(0, MAX_CLINICS)
-      .filter((row) => row.isActive && !assigned.has(row._id));
-    const named = await withClientNames(ctx, available);
+    const available = rows.filter((row) => row.isActive && !assigned.has(row._id));
+    const named = await withClientNames(ctx, available.slice(0, MAX_CLINICS));
     const clinics = named
       .map((row) => ({
         clinicId: row._id,
@@ -371,7 +373,13 @@ export const listAvailable = query({
       }))
       .sort((a, b) => a.clientName.localeCompare(b.clientName) || a.name.localeCompare(b.name));
 
-    return { clinics, limit: MAX_CLINICS, hasMore: rows.length > MAX_CLINICS };
+    return {
+      clinics,
+      limit: MAX_CLINICS,
+      // Either the scan or the result cap left clinics out, so the picker says
+      // the list is not the whole directory.
+      hasMore: rows.length > MAX_AVAILABLE_SCAN || available.length > MAX_CLINICS,
+    };
   },
 });
 

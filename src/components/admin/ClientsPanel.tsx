@@ -119,8 +119,19 @@ function ClientForm({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+    <Dialog
+      open={open}
+      // A save in flight lands on whatever form is open when it settles, so the
+      // dialog only closes from the request it owns.
+      onOpenChange={(next, eventDetails) => {
+        if (!next && pending) {
+          eventDetails.cancel();
+          return;
+        }
+        onOpenChange(next);
+      }}
+    >
+      <DialogContent showCloseButton={!pending}>
         <form onSubmit={(event) => void handleSubmit(event)} className="flex flex-col gap-6">
           <DialogHeader>
             <DialogTitle>
@@ -276,10 +287,12 @@ export function AdminClientsPanel() {
     <PageHeader
       title={t.admin.clients.pageTitle}
       actions={
-        <Button onClick={openCreate}>
-          <Plus aria-hidden="true" />
-          {t.admin.clients.addClient}
-        </Button>
+        canManage ? (
+          <Button onClick={openCreate}>
+            <Plus aria-hidden="true" />
+            {t.admin.clients.addClient}
+          </Button>
+        ) : undefined
       }
     />
   );

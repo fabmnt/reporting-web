@@ -15,7 +15,7 @@ export const clinics = {
     search: "Search clinics",
     noneAvailable: "Every active clinic is already on your account.",
     noMatches: "No clinics match this search.",
-    limit: (limit: number) => `Showing the first ${limit} clinics.`,
+    limit: (limit: number) => `Showing the first ${limit} clinics. Some may not be listed.`,
   },
   table: {
     clinic: "Clinic",

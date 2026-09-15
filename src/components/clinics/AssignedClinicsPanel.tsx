@@ -88,8 +88,19 @@ function ClinicConfigForm({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl">
+    <Dialog
+      open={open}
+      // A save in flight lands on whatever form is open when it settles, so the
+      // dialog only closes from the request it owns.
+      onOpenChange={(next, eventDetails) => {
+        if (!next && pending) {
+          eventDetails.cancel();
+          return;
+        }
+        onOpenChange(next);
+      }}
+    >
+      <DialogContent className="sm:max-w-2xl" showCloseButton={!pending}>
         <form onSubmit={(event) => void handleSubmit(event)} className="flex flex-col gap-6">
           <DialogHeader>
             <DialogTitle>{t.clinics.dialog.configureTitle(clinic.name)}</DialogTitle>
@@ -324,10 +335,12 @@ export function AssignedClinicsPanel() {
     <PageHeader
       title={t.clinics.pageTitle}
       actions={
-        <Button onClick={() => setIsAdding(true)}>
-          <Plus aria-hidden="true" />
-          {t.clinics.addClinic}
-        </Button>
+        canConfigure ? (
+          <Button onClick={() => setIsAdding(true)}>
+            <Plus aria-hidden="true" />
+            {t.clinics.addClinic}
+          </Button>
+        ) : undefined
       }
     />
   );

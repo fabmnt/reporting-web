@@ -15,7 +15,7 @@ export const clinics = {
     search: "Buscar clínicas",
     noneAvailable: "Todas las clínicas activas ya están en tu cuenta.",
     noMatches: "Ninguna clínica coincide con esta búsqueda.",
-    limit: (limit: number) => `Mostrando las primeras ${limit} clínicas.`,
+    limit: (limit: number) => `Mostrando las primeras ${limit} clínicas. Puede que falten algunas.`,
   },
   table: {
     clinic: "Clínica",
