@@ -7,6 +7,7 @@ import { AppLink, useNavigation } from "./navigation";
 const ADMIN_TABS = [
   { href: "/admin", labelKey: "accounts" },
   { href: "/admin/clinics", labelKey: "clinics" },
+  { href: "/admin/report-types", labelKey: "reportTypes" },
 ] as const;
 
 export function AdminTabs() {

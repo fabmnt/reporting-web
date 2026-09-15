@@ -43,20 +43,7 @@ import {
   sheetErrorText,
   type LocalizedMessage,
 } from "@/lib/i18n/errors";
-import type { Messages } from "@/lib/i18n/messages";
-import { bucketLabel, operationDescription, operationLabel } from "@/lib/i18n/reportLabels";
 import { cn } from "@/lib/utils";
-
-type BuiltinOperationKey = "pending-audit";
-type ReportTypeSource = "builtin" | "custom";
-
-type RunnableType = {
-  source: ReportTypeSource;
-  key: string;
-  label: string;
-  description: string;
-  buckets: Array<{ key: string; label: string }>;
-};
 
 type ReportRow = { rowNumber: number; values: string[] };
 type SheetResult = {
@@ -83,10 +70,6 @@ type ReportResult = {
 // only from here, so editing the controls never rewrites what a run returned.
 type CompletedRun = {
   data: ReportResult;
-  source: ReportTypeSource;
-  // Built-in runs carry the operation key, which is what the translated bucket
-  // labels are looked up by.
-  operationKey: string | null;
   startDate: string;
   endDate: string;
 };
@@ -112,34 +95,6 @@ const TONES: Record<
     badgeClass: "border-transparent bg-warning/10 text-warning",
   },
 };
-
-// Row tone per built-in bucket key. Custom report types name their own groups,
-// so they stay neutral instead of guessing what a name means.
-const BUCKET_TONES: Record<string, RowTone> = {
-  audit: "neutral",
-};
-
-function bucketTone(source: ReportTypeSource, bucketKey: string): RowTone {
-  if (source !== "builtin") return "neutral";
-  return BUCKET_TONES[bucketKey] ?? "neutral";
-}
-
-// Built-in report types travel from the backend with their English labels, so
-// the list is translated once here and everything downstream reads it.
-function translatedTypes(types: RunnableType[], t: Messages): RunnableType[] {
-  return types.map((item) => {
-    if (item.source !== "builtin") return item;
-    return {
-      ...item,
-      label: operationLabel(t, item.key, item.label),
-      description: operationDescription(t, item.key, item.description),
-      buckets: item.buckets.map((bucket) => ({
-        ...bucket,
-        label: bucketLabel(t, item.key, bucket.key, bucket.label),
-      })),
-    };
-  });
-}
 
 // Leading data columns shown beside the row number; the rest of the sheet is
 // read from the sheet itself.
@@ -367,12 +322,8 @@ function ResultsCard({ run }: { run: CompletedRun }) {
                 {sheet.bucketRows.map((bucket) => (
                   <ResultTable
                     key={bucket.bucketKey}
-                    title={
-                      run.operationKey === null
-                        ? bucket.label
-                        : bucketLabel(t, run.operationKey, bucket.bucketKey, bucket.label)
-                    }
-                    tone={bucketTone(run.source, bucket.bucketKey)}
+                    title={bucket.label}
+                    tone="neutral"
                     count={bucket.rows.length}
                     headers={sheet.headers}
                     rows={bucket.rows}
@@ -408,10 +359,10 @@ export function ReportRunner() {
 
   useDocumentTitle(t.app.titles.report);
 
-  const types: RunnableType[] = translatedTypes(typeData?.types ?? [], t);
-  const selectedType = types.find((item) => item.key === typeKey) ?? types[0];
-  const builtinTypes = types.filter((item) => item.source === "builtin");
-  const customTypes = types.filter((item) => item.source === "custom");
+  const types = typeData?.types ?? [];
+  const selectedType = types.find((item) => item.reportTypeId === typeKey) ?? types[0];
+  const builtinTypes = types.filter((item) => item.owner === "builtin");
+  const ownTypes = types.filter((item) => item.owner === "mine");
 
   async function handleRun() {
     if ((assignment?.clinics.length ?? 0) === 0) {
@@ -435,18 +386,13 @@ export function ReportRunner() {
     setResult(null);
     try {
       const data = await runReport({
-        target:
-          selectedType.source === "builtin"
-            ? { source: "builtin", operationKey: selectedType.key as BuiltinOperationKey }
-            : { source: "custom", reportTypeId: selectedType.key as Id<"reportTypes"> },
+        reportTypeId: selectedType.reportTypeId,
         startDate: dateRange.startDate,
         endDate: dateRange.endDate,
         verificationFilter: verification,
       });
       setResult({
         data,
-        source: selectedType.source,
-        operationKey: selectedType.source === "builtin" ? selectedType.key : null,
         startDate: dateRange.startDate,
         endDate: dateRange.endDate,
       });
@@ -493,42 +439,46 @@ export function ReportRunner() {
 
             <Field>
               <FieldLabel>{t.reports.reportType}</FieldLabel>
-              <Select
-                items={types.map((item) => ({ value: item.key, label: item.label }))}
-                value={selectedType?.key ?? ""}
-                onValueChange={(value) => setTypeKey((value as string) ?? null)}
-                disabled={running}
-              >
-                <SelectTrigger aria-label={t.reports.reportType} className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectGroup>
-                    <SelectLabel>{t.reports.builtIn}</SelectLabel>
-                    {builtinTypes.map((item) => (
-                      <SelectItem key={item.key} value={item.key}>
-                        {item.label}
-                      </SelectItem>
-                    ))}
-                  </SelectGroup>
-                  {customTypes.length > 0 ? (
+              {types.length === 0 ? (
+                <p className="text-sm text-muted-foreground">{t.reports.noReportTypes}</p>
+              ) : (
+                <Select
+                  items={types.map((item) => ({ value: item.reportTypeId, label: item.name }))}
+                  value={selectedType?.reportTypeId ?? ""}
+                  onValueChange={(value) => setTypeKey((value as string) ?? null)}
+                  disabled={running}
+                >
+                  <SelectTrigger aria-label={t.reports.reportType} className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
                     <SelectGroup>
-                      <SelectLabel>{t.reports.myReportTypes}</SelectLabel>
-                      {customTypes.map((item) => (
-                        <SelectItem key={item.key} value={item.key}>
-                          {item.label}
+                      <SelectLabel>{t.reports.builtIn}</SelectLabel>
+                      {builtinTypes.map((item) => (
+                        <SelectItem key={item.reportTypeId} value={item.reportTypeId}>
+                          {item.name}
                         </SelectItem>
                       ))}
                     </SelectGroup>
-                  ) : null}
-                </SelectContent>
-              </Select>
+                    {ownTypes.length > 0 ? (
+                      <SelectGroup>
+                        <SelectLabel>{t.reports.myReportTypes}</SelectLabel>
+                        {ownTypes.map((item) => (
+                          <SelectItem key={item.reportTypeId} value={item.reportTypeId}>
+                            {item.name}
+                          </SelectItem>
+                        ))}
+                      </SelectGroup>
+                    ) : null}
+                  </SelectContent>
+                </Select>
+              )}
               {selectedType ? (
                 <p className="text-xs text-muted-foreground">{selectedType.description}</p>
               ) : null}
             </Field>
 
-            {selectedType?.source === "builtin" && selectedType.key === "pending-audit" ? (
+            {selectedType?.usesVerificationFilter ? (
               <Field>
                 <FieldLabel>{t.reports.verificationType}</FieldLabel>
                 <Select

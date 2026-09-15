@@ -3,7 +3,6 @@
 import { ArrowDown, ArrowUp, Plus, Trash2 } from "lucide-react";
 import { useId } from "react";
 
-import type { ReportConditionSet } from "../../../convex/model/reportConditions";
 import {
   conditionsForBuckets,
   MAX_BUCKETS_PER_TYPE,
@@ -11,39 +10,35 @@ import {
   MAX_TYPE_NAME_LENGTH,
   nextBucketKey,
   type ReportTypeBucket,
+  type ReportTypeDraft,
 } from "../../../convex/model/reportTypes";
 import { Button } from "@/components/ui/button";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
+import { Switch } from "@/components/ui/switch";
 import { useI18n } from "@/lib/i18n/context";
 
 import { ConditionSetEditor } from "./ConditionSetEditor";
 
-export type CustomReportTypeDraft = {
-  name: string;
-  description: string;
-  buckets: ReportTypeBucket[];
-  conditions: ReportConditionSet;
-};
-
 /**
- * Name, row groups, and rules of one custom report type. Bucket keys stay
- * stable while labels, order, and rules change, so saved conditions keep
- * pointing at the right group.
+ * Name, row groups, and rules of one report type, personal or built-in. Bucket
+ * keys stay stable while labels, order, and rules change, so saved conditions
+ * keep pointing at the right group.
  */
-export function CustomReportTypeEditor({
+export function ReportTypeEditor({
   draft,
   onChange,
   disabled,
 }: {
-  draft: CustomReportTypeDraft;
-  onChange: (draft: CustomReportTypeDraft) => void;
+  draft: ReportTypeDraft;
+  onChange: (draft: ReportTypeDraft) => void;
   disabled: boolean;
 }) {
   const { t } = useI18n();
   const nameInputId = useId();
   const descriptionInputId = useId();
+  const verificationFilterId = useId();
   const groupInputIdBase = useId();
 
   const updateBuckets = (buckets: ReportTypeBucket[]) =>
@@ -106,6 +101,19 @@ export function CustomReportTypeEditor({
           />
         </Field>
       </div>
+
+      <Field orientation="horizontal">
+        <Switch
+          id={verificationFilterId}
+          checked={draft.usesVerificationFilter}
+          onCheckedChange={(checked) => onChange({ ...draft, usesVerificationFilter: checked })}
+          disabled={disabled}
+        />
+        <div className="flex flex-col gap-1">
+          <FieldLabel htmlFor={verificationFilterId}>{t.conditions.verificationFilter}</FieldLabel>
+          <p className="text-xs text-muted-foreground">{t.conditions.verificationFilterNote}</p>
+        </div>
+      </Field>
 
       <Separator />
 

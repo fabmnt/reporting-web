@@ -121,4 +121,10 @@ export const admin = {
       clientFailed: "Deleting the client failed.",
     },
   },
+  reportTypes: {
+    pageTitle: "Report types",
+    pageDescription:
+      "Built-in report types are shared with every account and only administrators can change them.",
+    accessDeniedBody: "Your account cannot manage built-in report types.",
+  },
 };

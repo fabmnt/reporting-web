@@ -1,11 +1,6 @@
 import { v } from "convex/values";
 import type { Infer } from "convex/values";
 
-import type { Id } from "../_generated/dataModel";
-import type { QueryCtx } from "../_generated/server";
-import { appError } from "./appErrors";
-import type { ReportOperationKey } from "./reportOperations";
-
 type SheetRow = string[];
 
 function cell(row: SheetRow, index: number): string {
@@ -77,148 +72,6 @@ export type ConditionBucket = Infer<typeof conditionBucket>;
 export type ReportConditionSet = Infer<typeof reportConditionSet>;
 
 // ---------------------------------------------------------------------------
-// Buckets
-// ---------------------------------------------------------------------------
-
-// Operations whose row rules are configurable. The other report types in
-// `reportOperationKey` do not have conditions yet.
-export const IMPLEMENTED_REPORT_OPERATIONS = ["pending-audit"] as const;
-export type ImplementedOperationKey = (typeof IMPLEMENTED_REPORT_OPERATIONS)[number];
-
-export function isImplementedOperation(key: string): key is ImplementedOperationKey {
-  return (IMPLEMENTED_REPORT_OPERATIONS as readonly string[]).includes(key);
-}
-
-// Each report type owns its buckets in code; users edit the expression of each
-// one. Rows land in the first bucket that matches, in this order.
-export const REPORT_BUCKETS: Record<
-  ImplementedOperationKey,
-  ReadonlyArray<{ key: string; label: string }>
-> = {
-  "pending-audit": [{ key: "audit", label: "Pending audit" }],
-};
-
-// ---------------------------------------------------------------------------
-// Defaults (legacy parity)
-// ---------------------------------------------------------------------------
-
-// Old tool rule (get_rows_pending_to_audit_conditions), non-view branch. An
-// update status equal to one of these means the row already has an answer.
-export const AUDIT_EXCLUDE_STATUS = [
-  "DONE",
-  "MEDICAL PLAN",
-  "UNKNOWN",
-  "NOT FOUND",
-  "INCIDENCE",
-  "NO DENTAL COVERAGE",
-  "NOT ELIGIBLE FOR DENTAL BENEFITS",
-  "NO PROVIDER",
-  "CHECK THAT THERE IS NO TITLE FOR THIS LOCATION",
-  "CHECK THERE IS NO TITLE FOR THIS OFFICE BUT PATIENT IS ACTIVE",
-  "CHECK THERE IS NO TITLE FOR THIS OFFICE BUT PATIENT IS INACTIVE",
-  "CHECK THERE IS NO TITLE FOR THIS OFFICE",
-  "WFL",
-  "REVIEWED BY QA",
-];
-
-// The conditions that reproduce the hardcoded rules. Built fresh on every call
-// so callers can edit the result without touching each other.
-export function defaultConditionsFor(operationKey: ReportOperationKey): ReportConditionSet {
-  if (operationKey === "pending-audit") {
-    return {
-      buckets: [
-        {
-          bucketKey: "audit",
-          catchAll: false,
-          expression: {
-            filters: [
-              { column: "updateStatus", operator: "notEquals", values: [...AUDIT_EXCLUDE_STATUS] },
-              { column: "uploadStatus", operator: "equals", values: ["EMPTY", "UNCHECKED"] },
-            ],
-            // The legacy DONE + TERMED option is already covered by the first
-            // group, because TERMED is not an excluded M marker.
-            groups: [
-              {
-                match: "all",
-                clauses: [
-                  { column: "L", operator: "contains", values: ["DONE"] },
-                  {
-                    column: "M",
-                    operator: "notContains",
-                    values: ["NO ACTION", "EMPTY", "NEXT VERIFICATION ON"],
-                  },
-                ],
-              },
-              {
-                match: "all",
-                clauses: [
-                  { column: "L", operator: "contains", values: ["CHECK"] },
-                  { column: "M", operator: "contains", values: ["NOT FOUND"] },
-                ],
-              },
-            ],
-          },
-        },
-      ],
-    };
-  }
-  throw appError({ code: "OPERATION_NOT_CONFIGURED", operationKey });
-}
-
-export type BucketDefinition = { key: string; label: string };
-
-// Only the last bucket of a multi-bucket report can catch all rows no earlier
-// bucket took.
-export function bucketCatalog(
-  definitions: ReadonlyArray<BucketDefinition>
-): Array<{ key: string; label: string; canCatchAll: boolean }> {
-  return definitions.map((bucket, index) => ({
-    key: bucket.key,
-    label: bucket.label,
-    canCatchAll: definitions.length > 1 && index === definitions.length - 1,
-  }));
-}
-
-// What the config UI needs to render the bucket picker of a built-in report.
-export function bucketCatalogFor(operationKey: ImplementedOperationKey): Array<{
-  key: string;
-  label: string;
-  canCatchAll: boolean;
-}> {
-  return bucketCatalog(REPORT_BUCKETS[operationKey]);
-}
-
-export function bucketKeysFor(operationKey: ImplementedOperationKey): string[] {
-  return REPORT_BUCKETS[operationKey].map((bucket) => bucket.key);
-}
-
-export function bucketKeysMatch(
-  conditions: ReportConditionSet,
-  expectedKeys: readonly string[]
-): boolean {
-  return (
-    conditions.buckets.length === expectedKeys.length &&
-    conditions.buckets.every((bucket, index) => bucket.bucketKey === expectedKeys[index])
-  );
-}
-
-// A stored set is only usable by the bucket list it was written for, so a set
-// that no longer matches is rejected instead of evaluated.
-export function assertBucketKeys(
-  conditions: ReportConditionSet,
-  expectedKeys: readonly string[],
-  operationKey: string
-): void {
-  if (!bucketKeysMatch(conditions, expectedKeys)) {
-    throw appError({
-      code: "BUCKET_KEYS_MISMATCH",
-      operationKey,
-      expected: expectedKeys.join(", "),
-    });
-  }
-}
-
-// ---------------------------------------------------------------------------
 // Cleaning
 // ---------------------------------------------------------------------------
 
@@ -270,45 +123,6 @@ export function cleanConditionSet(conditions: ReportConditionSet): ReportConditi
           : false,
       expression: cleanExpression(bucket.expression),
     })),
-  };
-}
-
-// ---------------------------------------------------------------------------
-// Resolution
-// ---------------------------------------------------------------------------
-
-export type ResolvedConditions = {
-  defaultConditions: ReportConditionSet;
-  defaultIsCustom: boolean;
-  byClinicId: Map<Id<"clinics">, ReportConditionSet>;
-};
-
-// Clinic override wins over the user default, the user default wins over the
-// code default. Reads every row stored for the user and operation: unassigning
-// a clinic does not remove its override, so a fixed cap could push the default
-// or a real override out of the window.
-export async function resolveConditionsForClinics(
-  ctx: QueryCtx,
-  userId: Id<"users">,
-  operationKey: ImplementedOperationKey
-): Promise<ResolvedConditions> {
-  let defaultConditions: ReportConditionSet | null = null;
-  const byClinicId = new Map<Id<"clinics">, ReportConditionSet>();
-
-  for await (const row of ctx.db
-    .query("reportConditions")
-    .withIndex("by_userId_and_operationKey", (query) =>
-      query.eq("userId", userId).eq("operationKey", operationKey)
-    )) {
-    if (!bucketKeysMatch(row.conditions, bucketKeysFor(operationKey))) continue;
-    if (row.clinicId === null) defaultConditions = row.conditions;
-    else byClinicId.set(row.clinicId, row.conditions);
-  }
-
-  return {
-    defaultConditions: defaultConditions ?? defaultConditionsFor(operationKey),
-    defaultIsCustom: defaultConditions !== null,
-    byClinicId,
   };
 }
 

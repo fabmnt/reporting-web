@@ -34,18 +34,13 @@ export const errors = {
   GOOGLE_SHEET_REQUIRED: "El ID de la hoja de Google es obligatorio.",
   INVALID_DATE_RANGE: "La fecha de inicio debe ser anterior o igual a la fecha de fin.",
   INVALID_DATE_FORMAT: "Las fechas deben usar el formato AAAA-MM-DD.",
-  OPERATION_NOT_CONFIGURED: (label: string) =>
-    `Todavía no hay condiciones definidas para "${label}".`,
-  OPERATION_NOT_SUPPORTED: (label: string) => `"${label}" todavía no admite condiciones.`,
-  REPORT_TYPE_NAME_TAKEN: (name: string) => `Ya tienes un tipo de reporte llamado "${name}".`,
+  REPORT_TYPE_NAME_TAKEN: (name: string) => `Ya existe un tipo de reporte llamado "${name}".`,
   REPORT_TYPE_NOT_FOUND: "Este tipo de reporte no existe.",
   REPORT_TYPE_NAME_REQUIRED: "El tipo de reporte necesita un nombre.",
   REPORT_TYPE_GROUP_REQUIRED: "Un tipo de reporte necesita al menos un grupo de filas.",
   REPORT_TYPE_GROUP_LIMIT: (limit: number) =>
     `Un tipo de reporte admite hasta ${limit} grupos de filas.`,
   REPORT_TYPE_GROUP_KEYS: "Las claves de los grupos de filas deben ser únicas y no estar vacías.",
-  BUCKET_KEYS_MISMATCH: (label: string, expected: string) =>
-    `Los grupos de filas de "${label}" deben ser exactamente ${expected}.`,
   SHEET_NO_TABS: (startDate: string, endDate: string) =>
     `No se encontraron pestañas entre ${startDate} y ${endDate}.`,
   SHEET_INVALID_COLUMN: (column: string) =>

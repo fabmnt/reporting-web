@@ -2,11 +2,8 @@
 
 import { useState } from "react";
 
-import {
-  bucketCatalog,
-  type ConditionBucket,
-  type ReportConditionSet,
-} from "../../../convex/model/reportConditions";
+import type { ConditionBucket, ReportConditionSet } from "../../../convex/model/reportConditions";
+import { bucketCatalog } from "../../../convex/model/reportTypes";
 import { Field, FieldLabel } from "@/components/ui/field";
 import {
   Select,

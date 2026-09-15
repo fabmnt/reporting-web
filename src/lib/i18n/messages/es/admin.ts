@@ -123,4 +123,10 @@ export const admin = {
       clientFailed: "No se pudo eliminar el cliente.",
     },
   },
+  reportTypes: {
+    pageTitle: "Tipos de reporte",
+    pageDescription:
+      "Los tipos de reporte integrados se comparten con todas las cuentas y solo los administradores pueden cambiarlos.",
+    accessDeniedBody: "Tu cuenta no puede gestionar los tipos de reporte integrados.",
+  },
 };

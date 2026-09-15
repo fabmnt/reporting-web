@@ -35,18 +35,22 @@ const ASSIGNMENT = {
 const REPORT_TYPES = {
   types: [
     {
-      source: "builtin",
-      key: "pending-audit",
-      label: "Pending audit",
+      reportTypeId: "type-builtin",
+      owner: "builtin",
+      name: "Pending audit",
       description: "Rows waiting for QA review before upload.",
       buckets: [{ key: "audit", label: "Pending audit" }],
+      conditions: { buckets: [] },
+      usesVerificationFilter: true,
     },
     {
-      source: "custom",
-      key: "type-1",
-      label: "Late verifications",
+      reportTypeId: "type-1",
+      owner: "mine",
+      name: "Late verifications",
       description: "My own row rules.",
       buckets: [{ key: "b1", label: "Group 1" }],
+      conditions: { buckets: [] },
+      usesVerificationFilter: false,
     },
   ],
 };

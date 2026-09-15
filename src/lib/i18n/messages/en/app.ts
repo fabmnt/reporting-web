@@ -15,6 +15,7 @@ export const app = {
     admin: "Admin",
     adminSections: "Admin sections",
     accounts: "Accounts",
+    reportTypes: "Report types",
   },
   theme: {
     light: "light",
@@ -80,6 +81,7 @@ export const app = {
     clinics: "Clinics | Reporting Web",
     configuration: "Configuration | Reporting Web",
     accounts: "Accounts | Reporting Web",
+    adminReportTypes: "Report types | Reporting Web",
     signIn: "Sign in | Reporting Web",
     signUp: "Create account | Reporting Web",
     setPassword: "Set password | Reporting Web",

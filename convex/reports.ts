@@ -1,5 +1,4 @@
 import { v } from "convex/values";
-import type { Infer } from "convex/values";
 
 import type { Id } from "./_generated/dataModel";
 import type { QueryCtx } from "./_generated/server";
@@ -13,21 +12,17 @@ import {
 } from "./model/appErrors";
 import type { ResolvedClinicSheetColumns } from "./model/clinicSheetColumns";
 import {
-  bucketCatalogFor,
   evaluateConditionSet,
   EXECUTION_COLUMN_INDEX,
   filterColumnsForBucket,
-  isImplementedOperation,
   MESSAGE_COLUMN_INDEX,
   reportConditionSet,
-  resolveConditionsForClinics,
   type ConditionClause,
   type ConditionColumnIndexes,
   type ReportConditionSet,
 } from "./model/reportConditions";
 import { columnLetterToIndex, listProfileClinics } from "./model/reporting";
-import { loadOwnedReportType, type ReportTypeBucket } from "./model/reportTypes";
-import { reportOperationKey } from "./schema";
+import { loadRunnableReportType, type ReportTypeBucket } from "./model/reportTypes";
 
 type SheetRow = string[];
 type ReportRow = { rowNumber: number; values: string[] };
@@ -43,18 +38,6 @@ const reportBucketResult = v.object({
   rows: v.array(reportRow),
   filterColumns: v.array(v.number()),
 });
-
-// A run either uses a built-in report or one of the caller's own report types.
-// The two cases resolve their rules differently, so they stay separate in the
-// arguments instead of sharing an ambiguous id.
-const reportRunTarget = v.union(
-  v.object({
-    source: v.literal("builtin"),
-    operationKey: v.literal("pending-audit"),
-  }),
-  v.object({ source: v.literal("custom"), reportTypeId: v.id("reportTypes") })
-);
-type ReportRunTarget = Infer<typeof reportRunTarget>;
 
 const reportSheetResult = v.object({
   clinicId: v.id("clinics"),
@@ -124,14 +107,16 @@ type ReportRunConfig = {
   clinics: ClinicRunConfig[];
   // Row groups of the run target, in evaluation order.
   buckets: ReportTypeBucket[];
-  // Only custom targets have a name to snapshot on the run.
-  reportTypeName: string | null;
+  // Snapshot for the run history, so a rename or a delete keeps it readable.
+  reportTypeName: string;
+  // Whether the run form offers the verification-type picker for this type.
+  usesVerificationFilter: boolean;
 };
 
 async function reportRunConfigForUser(
   ctx: QueryCtx,
   userId: Id<"users">,
-  target: ReportRunTarget
+  reportTypeId: Id<"reportTypes">
 ): Promise<ReportRunConfig> {
   const profile = await ctx.db
     .query("staffProfiles")
@@ -144,44 +129,29 @@ async function reportRunConfigForUser(
     throw appError({ code: "OPERATOR_REQUIRED" });
   }
 
+  const reportType = await loadRunnableReportType(ctx, userId, reportTypeId);
   const clinics = await listProfileClinics(ctx, profile);
-  const base = clinics.map((clinic) => ({
-    clinicId: clinic._id,
-    clientId: clinic.clientId,
-    name: clinic.name,
-    googleSheetId: clinic.googleSheetId,
-    sheetColumns: clinic.sheetColumns,
-  }));
 
-  // A custom type has one rule set for every clinic, with no overrides.
-  if (target.source === "custom") {
-    const reportType = await loadOwnedReportType(ctx, userId, target.reportTypeId);
-    return {
-      clinics: base.map((clinic) => ({ ...clinic, conditions: reportType.conditions })),
-      buckets: reportType.buckets,
-      reportTypeName: reportType.name,
-    };
-  }
-
-  const resolved = await resolveConditionsForClinics(ctx, userId, target.operationKey);
   return {
-    clinics: base.map((clinic) => ({
-      ...clinic,
-      conditions: resolved.byClinicId.get(clinic.clinicId) ?? resolved.defaultConditions,
+    // A report type has one rule set for every clinic it runs on.
+    clinics: clinics.map((clinic) => ({
+      clinicId: clinic._id,
+      clientId: clinic.clientId,
+      name: clinic.name,
+      googleSheetId: clinic.googleSheetId,
+      sheetColumns: clinic.sheetColumns,
+      conditions: reportType.conditions,
     })),
-    buckets: bucketCatalogFor(target.operationKey).map((bucket) => ({
-      key: bucket.key,
-      label: bucket.label,
-    })),
-    reportTypeName: null,
+    buckets: reportType.buckets,
+    reportTypeName: reportType.name,
+    usesVerificationFilter: reportType.usesVerificationFilter,
   };
 }
 
 export const recordReportRun = internalMutation({
   args: {
-    operationKey: v.optional(reportOperationKey),
-    reportTypeId: v.optional(v.id("reportTypes")),
-    reportTypeName: v.optional(v.string()),
+    reportTypeId: v.id("reportTypes"),
+    reportTypeName: v.string(),
     clientId: v.optional(v.id("clients")),
     status: v.union(v.literal("completed"), v.literal("failed"), v.literal("cancelled")),
     initiatedByUserId: v.id("users"),
@@ -196,7 +166,6 @@ export const recordReportRun = internalMutation({
   handler: async (ctx, args) => {
     const reportRunId = await ctx.db.insert("reportRuns", {
       initiatedByUserId: args.initiatedByUserId,
-      operationKey: args.operationKey,
       reportTypeId: args.reportTypeId,
       reportTypeName: args.reportTypeName,
       clientId: args.clientId,
@@ -212,11 +181,11 @@ export const recordReportRun = internalMutation({
   },
 });
 
-// v1: the built-in pending audit row report and the caller's own report types.
-// The execute operation needs carrier API data and comes later.
+// v1: the row reports. The execute operation needs carrier API data and comes
+// later.
 export const runSheetReport = action({
   args: {
-    target: reportRunTarget,
+    reportTypeId: v.id("reportTypes"),
     startDate: v.string(),
     endDate: v.string(),
     verificationFilter: v.optional(v.union(v.literal("all"), v.literal("fbd"), v.literal("elg"))),
@@ -241,13 +210,18 @@ export const runSheetReport = action({
     const startedAt = Date.now();
     const verificationFilter = args.verificationFilter ?? "all";
 
+    const config: ReportRunConfig = await ctx.runQuery(internal.reports.runSheetReportConfig, {
+      userId,
+      reportTypeId: args.reportTypeId,
+      startDate: args.startDate,
+      endDate: args.endDate,
+    });
+
     // The verification choice is a run-level narrowing, not part of the stored
     // rules: it becomes one more clause every bucket has to satisfy. Only the
-    // pending audit report offers it, like the legacy tool.
-    const isPendingAudit =
-      args.target.source === "builtin" && args.target.operationKey === "pending-audit";
+    // report types that ask for it offer the picker.
     const extraFilters: ConditionClause[] =
-      isPendingAudit && verificationFilter !== "all"
+      config.usesVerificationFilter && verificationFilter !== "all"
         ? [
             {
               column: "verificationType",
@@ -257,12 +231,6 @@ export const runSheetReport = action({
           ]
         : [];
 
-    const config: ReportRunConfig = await ctx.runQuery(internal.reports.runSheetReportConfig, {
-      userId,
-      target: args.target,
-      startDate: args.startDate,
-      endDate: args.endDate,
-    });
     const bucketLabels = new Map(config.buckets.map((bucket) => [bucket.key, bucket.label]));
 
     const { tabsForClinic }: { tabsForClinic: Record<string, string[]> } = await ctx.runAction(
@@ -399,9 +367,8 @@ export const runSheetReport = action({
     const { reportRunId }: { reportRunId: Id<"reportRuns"> } = await ctx.runMutation(
       internal.reports.recordReportRun,
       {
-        operationKey: args.target.source === "builtin" ? args.target.operationKey : undefined,
-        reportTypeId: args.target.source === "custom" ? args.target.reportTypeId : undefined,
-        reportTypeName: config.reportTypeName ?? undefined,
+        reportTypeId: args.reportTypeId,
+        reportTypeName: config.reportTypeName,
         clientId: reportClientId,
         status: succeededClinics === 0 ? "failed" : "completed",
         initiatedByUserId: userId,
@@ -425,7 +392,7 @@ export const runSheetReport = action({
 export const runSheetReportConfig = internalQuery({
   args: {
     userId: v.id("users"),
-    target: reportRunTarget,
+    reportTypeId: v.id("reportTypes"),
     startDate: v.string(),
     endDate: v.string(),
   },
@@ -446,18 +413,13 @@ export const runSheetReportConfig = internalQuery({
       })
     ),
     buckets: v.array(v.object({ key: v.string(), label: v.string() })),
-    reportTypeName: v.union(v.string(), v.null()),
+    reportTypeName: v.string(),
+    usesVerificationFilter: v.boolean(),
   }),
   handler: async (ctx, args) => {
     if (args.startDate > args.endDate) {
       throw appError({ code: "INVALID_DATE_RANGE" });
     }
-    if (args.target.source === "builtin" && !isImplementedOperation(args.target.operationKey)) {
-      throw appError({
-        code: "OPERATION_NOT_CONFIGURED",
-        operationKey: args.target.operationKey,
-      });
-    }
-    return reportRunConfigForUser(ctx, args.userId, args.target);
+    return reportRunConfigForUser(ctx, args.userId, args.reportTypeId);
   },
 });

@@ -5,7 +5,7 @@ import { useId, useState } from "react";
 
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
-import { REPORT_BUCKETS, type ReportConditionSet } from "../../../convex/model/reportConditions";
+import type { ReportConditionSet } from "../../../convex/model/reportConditions";
 import {
   MAX_TYPE_NAME_LENGTH,
   type ReportTypeBucket,
@@ -34,32 +34,32 @@ import {
 import { Spinner } from "@/components/ui/spinner";
 import { useI18n } from "@/lib/i18n/context";
 import { localizedError, type LocalizedMessage } from "@/lib/i18n/errors";
-import type { Messages } from "@/lib/i18n/messages";
-import { bucketLabel } from "@/lib/i18n/reportLabels";
+
+import type { ReportTypeScope } from "./ReportTypesPanel";
 
 export type CreatedReportType = {
   reportTypeId: Id<"reportTypes">;
+  owner: ReportTypeScope;
   name: string;
   description: string;
   buckets: ReportTypeBucket[];
   conditions: ReportConditionSet;
+  usesVerificationFilter: boolean;
 };
 
-// The buckets of a template are stored with the new type, so they are created
-// with the labels of the language the user is working in.
-function templateBucketLabels(t: Messages, template: ReportTypeTemplate): string[] {
-  if (template === "blank") return [t.conditions.editor.group(0)];
-  return REPORT_BUCKETS[template].map((bucket) =>
-    bucketLabel(t, template, bucket.key, bucket.label)
-  );
-}
+const BLANK = "blank";
 
 export function NewReportTypeDialog({
+  scope,
+  sources,
   open,
   onOpenChange,
   onCreated,
   disabled,
 }: {
+  scope: ReportTypeScope;
+  // Report types the caller can run, offered as a starting point.
+  sources: ReadonlyArray<{ reportTypeId: Id<"reportTypes">; name: string }>;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onCreated: (created: CreatedReportType) => void;
@@ -67,28 +67,38 @@ export function NewReportTypeDialog({
 }) {
   const { t } = useI18n();
   const createMine = useMutation(api.reportTypes.createMine);
+  const createBuiltin = useMutation(api.reportTypes.createBuiltin);
   const nameInputId = useId();
   const [name, setName] = useState("");
-  const [template, setTemplate] = useState<ReportTypeTemplate>("blank");
+  const [source, setSource] = useState<string>(BLANK);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<LocalizedMessage | null>(null);
 
-  const templateItems: ReadonlyArray<{ value: ReportTypeTemplate; label: string }> = [
-    { value: "blank", label: t.conditions.newType.templateBlank },
-    { value: "pending-audit", label: t.conditions.newType.templatePendingAudit },
-  ];
+  const template: ReportTypeTemplate =
+    source === BLANK ? BLANK : { fromReportTypeId: source as Id<"reportTypes"> };
+
+  // Names are unique per scope, so a personal type can share one with a
+  // built-in. The two then sit next to each other in the run form, which the
+  // note makes visible before the type exists.
+  const trimmedName = name.trim();
+  const nameTaken =
+    trimmedName !== "" &&
+    sources.some((item) => item.name.toLowerCase() === trimmedName.toLowerCase());
 
   async function handleCreate() {
     setSaving(true);
     setError(null);
     try {
-      const created = await createMine({
+      const create = scope === "builtin" ? createBuiltin : createMine;
+      const created = await create({
         name,
         template,
-        bucketLabels: templateBucketLabels(t, template),
+        // An empty type starts from a group label in the working language. A
+        // copy keeps the labels of the type it copies.
+        bucketLabels: source === BLANK ? [t.conditions.editor.group(0)] : undefined,
       });
       setName("");
-      setTemplate("blank");
+      setSource(BLANK);
       onCreated(created);
       onOpenChange(false);
     } catch (cause) {
@@ -116,14 +126,20 @@ export function NewReportTypeDialog({
             maxLength={MAX_TYPE_NAME_LENGTH}
             disabled={saving}
           />
+          {nameTaken ? (
+            <p className="text-xs text-muted-foreground">{t.conditions.newType.nameTakenNote}</p>
+          ) : null}
         </Field>
 
         <Field>
           <FieldLabel>{t.conditions.newType.startingPoint}</FieldLabel>
           <Select
-            items={templateItems}
-            value={template}
-            onValueChange={(value) => setTemplate((value as ReportTypeTemplate) ?? "blank")}
+            items={[
+              { value: BLANK, label: t.conditions.newType.templateBlank },
+              ...sources.map((item) => ({ value: item.reportTypeId, label: item.name })),
+            ]}
+            value={source}
+            onValueChange={(value) => setSource((value as string) ?? BLANK)}
             disabled={saving}
           >
             <SelectTrigger aria-label={t.conditions.newType.startingPoint} className="w-full">
@@ -131,15 +147,16 @@ export function NewReportTypeDialog({
             </SelectTrigger>
             <SelectContent>
               <SelectGroup>
-                {templateItems.map((item) => (
-                  <SelectItem key={item.value} value={item.value}>
-                    {item.label}
+                <SelectItem value={BLANK}>{t.conditions.newType.templateBlank}</SelectItem>
+                {sources.map((item) => (
+                  <SelectItem key={item.reportTypeId} value={item.reportTypeId}>
+                    {item.name}
                   </SelectItem>
                 ))}
               </SelectGroup>
             </SelectContent>
           </Select>
-          <p className="text-xs text-muted-foreground">{t.conditions.newType.copyNote}</p>
+          <p className="text-xs text-muted-foreground">{t.conditions.newType.templateCopyNote}</p>
         </Field>
 
         {error ? (

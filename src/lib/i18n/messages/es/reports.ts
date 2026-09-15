@@ -18,6 +18,8 @@ export const reports = {
   includedClinics: "Clínicas incluidas",
   noAssignedClinics:
     "Aún no tienes clínicas asignadas. Pide a un administrador que te asigne clínicas.",
+  noReportTypes:
+    "Aún no hay tipos de reporte. Crea uno en Configuración o pide a un administrador que comparta uno integrado.",
   run: "Ejecutar reporte",
   running: "Ejecutando reporte",
   failedTitle: "El reporte falló",

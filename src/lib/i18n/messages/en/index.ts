@@ -4,7 +4,6 @@ import { clinics } from "./clinics";
 import { common } from "./common";
 import { conditions } from "./conditions";
 import { errors } from "./errors";
-import { operations } from "./operations";
 import { reports } from "./reports";
 
 // English is the source of truth for the message shape: every other language
@@ -12,7 +11,6 @@ import { reports } from "./reports";
 export const en = {
   common,
   app,
-  operations,
   errors,
   reports,
   conditions,
