@@ -2,6 +2,7 @@ export const reports = {
   pageTitle: "Run report",
   pageDescription:
     "Reads your assigned clinic sheets for the selected dates and applies the same row rules as the desktop tool.",
+  configure: "Configure",
   loading: {
     page: "Loading report page",
     settings: "Loading report settings",

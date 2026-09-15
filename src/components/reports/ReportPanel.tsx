@@ -8,10 +8,11 @@ import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 import type { ReportSheetError } from "../../../convex/model/appErrors";
 import { DataCard, DataCardList, DataCardRow, DataTableFrame } from "@/components/app/DataCard";
+import { AppLink } from "@/components/app/navigation";
 import { PageHeader } from "@/components/app/PageHeader";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader } from "@/components/ui/card";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { Field, FieldLabel } from "@/components/ui/field";
@@ -192,7 +193,11 @@ function ReportRunnerSkeleton() {
 
   return (
     <div className="flex flex-col gap-6" aria-busy="true" aria-label={t.reports.loading.page}>
-      <PageHeader title={t.reports.pageTitle} description={t.reports.pageDescription} />
+      <PageHeader
+        title={t.reports.pageTitle}
+        description={t.reports.pageDescription}
+        actions={<ConfigureLink />}
+      />
       <div className="grid gap-6 lg:grid-cols-[360px_minmax(0,1fr)] lg:items-start">
         <Card className="lg:sticky lg:top-20" aria-label={t.reports.loading.settings}>
           <CardHeader className="gap-3">
@@ -344,6 +349,25 @@ function ResultsCard({ run }: { run: CompletedRun }) {
   );
 }
 
+// The configuration screen has no entry in the header of its own, so the
+// reports page links to it and only shows the link to accounts that may open it.
+const CONFIGURATION_PATH = "/configuration";
+
+function ConfigureLink() {
+  const { t } = useI18n();
+  const current = useQuery(api.staffAccounts.current, {});
+  const canConfigure =
+    current?.status === "active" && (current.role === "admin" || current.role === "operator");
+
+  if (!canConfigure) return null;
+
+  return (
+    <AppLink href={CONFIGURATION_PATH} className={cn(buttonVariants({ variant: "outline" }))}>
+      {t.reports.configure}
+    </AppLink>
+  );
+}
+
 export function ReportRunner() {
   const { t } = useI18n();
   const assignment = useQuery(api.googleSheets.listAssignedReportClinics, {});
@@ -409,7 +433,11 @@ export function ReportRunner() {
 
   return (
     <div className="flex flex-col gap-6">
-      <PageHeader title={t.reports.pageTitle} description={t.reports.pageDescription} />
+      <PageHeader
+        title={t.reports.pageTitle}
+        description={t.reports.pageDescription}
+        actions={<ConfigureLink />}
+      />
 
       {error ? (
         <Alert variant="destructive">

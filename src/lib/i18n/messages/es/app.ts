@@ -11,7 +11,6 @@ export const app = {
     primary: "Principal",
     reports: "Reportes",
     clinics: "Clínicas",
-    configuration: "Configuración",
     admin: "Administración",
     adminSections: "Secciones de administración",
     accounts: "Cuentas",
