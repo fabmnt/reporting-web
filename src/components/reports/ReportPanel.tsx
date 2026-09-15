@@ -64,7 +64,13 @@ type SheetResult = {
   googleSheetId: string;
   tabTitle: string;
   headers: string[];
-  bucketRows: Array<{ bucketKey: string; label: string; rows: ReportRow[] }>;
+  bucketRows: Array<{
+    bucketKey: string;
+    label: string;
+    rows: ReportRow[];
+    // 0-based sheet columns the conditions read to pick these rows.
+    filterColumns: number[];
+  }>;
   error: ReportSheetError | null;
 };
 type ReportResult = {
@@ -134,24 +140,40 @@ function translatedTypes(types: RunnableType[], t: Messages): RunnableType[] {
   });
 }
 
+// Leading data columns shown beside the row number; the rest of the sheet is
+// read from the sheet itself.
+const LEADING_COLUMN_COUNT = 8;
+
+// Sheet columns of a result table: the leading ones for context plus the ones
+// the conditions read, so every row shows the cells that put it in the bucket.
+function visibleColumnIndexes(headerCount: number, filterColumns: number[]): number[] {
+  const indexes = new Set<number>();
+  for (let index = 0; index < Math.min(headerCount, LEADING_COLUMN_COUNT); index += 1) {
+    indexes.add(index);
+  }
+  for (const index of filterColumns) indexes.add(index);
+  return [...indexes].sort((left, right) => left - right);
+}
+
 function ResultTable({
   title,
   tone,
   count,
   headers,
   rows,
+  filterColumns,
 }: {
   title: string;
   tone: RowTone;
   count: number;
   headers: string[];
   rows: ReportRow[];
+  filterColumns: number[];
 }) {
   const { t } = useI18n();
 
   if (rows.length === 0) return null;
-  // Show first 8 data columns plus row number; full rows copy from the sheet.
-  const visibleHeaders = headers.slice(0, 8);
+  const columnIndexes = visibleColumnIndexes(headers.length, filterColumns);
   const { Icon, iconClass, badgeClass } = TONES[tone];
   return (
     <div className="flex flex-col gap-2">
@@ -167,9 +189,9 @@ function ResultTable({
           <TableHeader className="bg-muted/40">
             <TableRow>
               <TableHead>{t.common.row}</TableHead>
-              {visibleHeaders.map((header, index) => (
-                <TableHead key={`${header}-${index}`}>
-                  {header || t.common.columnFallback(index)}
+              {columnIndexes.map((index) => (
+                <TableHead key={index}>
+                  {headers[index] || t.common.columnFallback(index)}
                 </TableHead>
               ))}
             </TableRow>
@@ -178,7 +200,7 @@ function ResultTable({
             {rows.map((row) => (
               <TableRow key={row.rowNumber}>
                 <TableCell className="font-mono tabular-nums">{row.rowNumber}</TableCell>
-                {visibleHeaders.map((_, index) => (
+                {columnIndexes.map((index) => (
                   <TableCell key={index} className="max-w-40 truncate">
                     {row.values[index] ?? ""}
                   </TableCell>
@@ -336,6 +358,7 @@ function ResultsCard({ run }: { run: CompletedRun }) {
                     count={bucket.rows.length}
                     headers={sheet.headers}
                     rows={bucket.rows}
+                    filterColumns={bucket.filterColumns}
                   />
                 ))}
                 {sheet.bucketRows.every((bucket) => bucket.rows.length === 0) ? (

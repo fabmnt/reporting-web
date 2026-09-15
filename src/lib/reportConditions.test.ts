@@ -11,6 +11,7 @@ import {
   cleanConditionSet,
   defaultConditionsFor,
   evaluateConditionSet,
+  filterColumnsForBucket,
   isImplementedOperation,
   MAX_CLAUSES_PER_SECTION,
   MAX_GROUPS_PER_EXPRESSION,
@@ -254,6 +255,39 @@ describe("evaluateConditionSet with several buckets", () => {
     // The row does not reach column L, so it is dropped before any bucket is
     // evaluated.
     expect(evaluateConditionSet(["", ""], COLUMNS, set)).toBeNull();
+  });
+});
+
+describe("filterColumnsForBucket", () => {
+  const conditions = defaultConditionsFor("pending-audit");
+  const [auditBucket] = conditions.buckets;
+
+  it("returns the mapped columns of the pending audit rule in sheet order", () => {
+    expect(filterColumnsForBucket(conditions.buckets, auditBucket!, [], COLUMNS)).toEqual([
+      11, 12, 13, 14,
+    ]);
+  });
+
+  it("adds the column of the run-level filters", () => {
+    expect(
+      filterColumnsForBucket(conditions.buckets, auditBucket!, verificationFilters("fbd"), COLUMNS)
+    ).toEqual([11, 12, 13, 14, 15]);
+  });
+
+  it("uses the earlier buckets for a catch all bucket", () => {
+    const buckets: ReportConditionSet["buckets"] = [
+      {
+        bucketKey: "ready",
+        catchAll: false,
+        expression: { filters: [clause("updateStatus", "contains", ["DONE"])], groups: [] },
+      },
+      { bucketKey: "review", catchAll: true, expression: { filters: [], groups: [] } },
+    ];
+
+    expect(filterColumnsForBucket(buckets, buckets[1]!, [], COLUMNS)).toEqual([13]);
+    expect(
+      filterColumnsForBucket(buckets, buckets[1]!, verificationFilters("elg"), COLUMNS)
+    ).toEqual([13, 15]);
   });
 });
 

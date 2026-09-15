@@ -54,6 +54,31 @@ const REPORT_TYPES = {
 // A pending-audit run: it has audit rows but no rows for any other report type.
 // Switching the report type after the run would therefore show "No matching
 // rows" if the view read live control state.
+// Sheet columns of the fixture: leading data columns plus the fixed execution
+// (L) and message (M) columns at 11 and 12, like the clinic sheets.
+const FIXTURE_HEADERS = [
+  "Name",
+  "Phone",
+  "Email",
+  "DOB",
+  "Plan",
+  "Provider",
+  "City",
+  "State",
+  "Notes",
+  "Extra",
+  "Tag",
+  "Execution",
+  "Message",
+];
+
+function auditRow(name: string, execution: string): string[] {
+  const values = Array.from({ length: FIXTURE_HEADERS.length }, () => "");
+  values[0] = name;
+  values[11] = execution;
+  return values;
+}
+
 const PENDING_AUDIT_RUN = {
   reportRunId: null,
   assignedClinicCount: 1,
@@ -63,14 +88,16 @@ const PENDING_AUDIT_RUN = {
       clinicName: "Downtown",
       googleSheetId: "sheet-1",
       tabTitle: "2026-09-10",
-      headers: ["Name", "Status"],
+      headers: FIXTURE_HEADERS,
       bucketRows: [
         {
           bucketKey: "audit",
           label: "Pending audit",
+          // Column L (11), the one the pending audit rule reads.
+          filterColumns: [11],
           rows: [
-            { rowNumber: 2, values: ["a"] },
-            { rowNumber: 3, values: ["b"] },
+            { rowNumber: 2, values: auditRow("Ana", "DONE") },
+            { rowNumber: 3, values: auditRow("Luis", "CHECK") },
           ],
         },
       ],
@@ -124,6 +151,23 @@ describe("ReportRunner", () => {
     expect(screen.getByText("2 rows")).toBeInTheDocument();
     expect(screen.queryByText("No matching rows.")).not.toBeInTheDocument();
     expect(runReport).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows the columns the conditions read even when they sit past the leading ones", async () => {
+    const user = userEvent.setup();
+    runReport.mockResolvedValue(PENDING_AUDIT_RUN);
+    renderRunner();
+
+    await user.click(screen.getByRole("button", { name: "Run report" }));
+
+    // Column L is outside the leading columns but decided the bucket, so it
+    // shows with its header and cells.
+    expect(await screen.findByRole("columnheader", { name: "Execution" })).toBeVisible();
+    expect(screen.getByRole("cell", { name: "DONE" })).toBeVisible();
+    expect(screen.getByRole("cell", { name: "CHECK" })).toBeVisible();
+
+    // A column that is neither leading nor read by the conditions stays out.
+    expect(screen.queryByRole("columnheader", { name: "Message" })).not.toBeInTheDocument();
   });
 
   it("shows form and results skeletons while clinics are loading", () => {

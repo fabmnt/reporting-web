@@ -16,6 +16,7 @@ import {
   bucketCatalogFor,
   evaluateConditionSet,
   EXECUTION_COLUMN_INDEX,
+  filterColumnsForBucket,
   isImplementedOperation,
   MESSAGE_COLUMN_INDEX,
   reportConditionSet,
@@ -32,6 +33,16 @@ type SheetRow = string[];
 type ReportRow = { rowNumber: number; values: string[] };
 
 const reportRow = v.object({ rowNumber: v.number(), values: v.array(v.string()) });
+
+// One entry per bucket of a report type, in bucket order. `filterColumns` are
+// the 0-based sheet columns its conditions read, so the results view can show
+// the cells behind the filter next to each row.
+const reportBucketResult = v.object({
+  bucketKey: v.string(),
+  label: v.string(),
+  rows: v.array(reportRow),
+  filterColumns: v.array(v.number()),
+});
 
 // A run either uses a built-in report or one of the caller's own report types.
 // The two cases resolve their rules differently, so they stay separate in the
@@ -52,11 +63,16 @@ const reportSheetResult = v.object({
   tabTitle: v.string(),
   headers: v.array(v.string()),
   // One entry per bucket of the report type, in bucket order.
-  bucketRows: v.array(
-    v.object({ bucketKey: v.string(), label: v.string(), rows: v.array(reportRow) })
-  ),
+  bucketRows: v.array(reportBucketResult),
   error: v.union(reportSheetError, v.null()),
 });
+
+type BucketResultEntry = {
+  bucketKey: string;
+  label: string;
+  rows: ReportRow[];
+  filterColumns: number[];
+};
 
 type SheetResultEntry = {
   clinicId: Id<"clinics">;
@@ -64,7 +80,7 @@ type SheetResultEntry = {
   googleSheetId: string;
   tabTitle: string;
   headers: string[];
-  bucketRows: Array<{ bucketKey: string; label: string; rows: ReportRow[] }>;
+  bucketRows: BucketResultEntry[];
   error: ReportSheetError | null;
 };
 
@@ -347,6 +363,12 @@ export const runSheetReport = action({
           bucketKey: bucket.bucketKey,
           label: bucketLabels.get(bucket.bucketKey) ?? bucket.bucketKey,
           rows: [] as ReportRow[],
+          filterColumns: filterColumnsForBucket(
+            clinic.conditions.buckets,
+            bucket,
+            extraFilters,
+            indexes
+          ),
         }));
         const rowsByBucket = new Map(bucketRows.map((bucket) => [bucket.bucketKey, bucket.rows]));
         values.forEach((row: SheetRow, index) => {

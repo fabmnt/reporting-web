@@ -377,6 +377,36 @@ function shortestUsableLength(
   return highest + 1;
 }
 
+// Columns an expression reads, in clause order and with repeats.
+function expressionColumns(expression: ConditionExpression): ConditionColumn[] {
+  const columns = expression.filters.map((clause) => clause.column);
+  for (const group of expression.groups) {
+    columns.push(...group.clauses.map((clause) => clause.column));
+  }
+  return columns;
+}
+
+/**
+ * Sheet columns (0-based) that decided why a bucket holds its rows: the ones
+ * its own conditions read plus the run-level filters, resolved through the
+ * clinic mapping and sorted in sheet order. A catch-all bucket keeps the rows
+ * no earlier bucket took, so the columns of those buckets are the ones that
+ * filtered its rows.
+ */
+export function filterColumnsForBucket(
+  buckets: ConditionBucket[],
+  bucket: ConditionBucket,
+  extraFilters: ConditionClause[],
+  indexes: ConditionColumnIndexes
+): number[] {
+  const sources = bucket.catchAll ? buckets.filter((item) => !item.catchAll) : [bucket];
+  const columns = new Set<number>(extraFilters.map((clause) => indexes[clause.column]));
+  for (const source of sources) {
+    for (const column of expressionColumns(source.expression)) columns.add(indexes[column]);
+  }
+  return [...columns].sort((left, right) => left - right);
+}
+
 /**
  * Returns the key of the first bucket that takes the row, or null when no
  * bucket does (the row is dropped). `extraFilters` narrow the whole set, for
