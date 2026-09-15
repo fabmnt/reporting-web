@@ -84,6 +84,8 @@ function renderAppError(payload: AppErrorPayload, t: Messages): string | null {
       return e.REPORT_TYPE_GROUP_LIMIT(payload.limit);
     case "REPORT_TYPE_GROUP_KEYS":
       return e.REPORT_TYPE_GROUP_KEYS;
+    case "SHEET_RATE_LIMITED":
+      return e.SHEET_RATE_LIMITED;
     default:
       return null;
   }
@@ -126,6 +128,8 @@ export function sheetErrorText(error: ReportSheetError, t: Messages): string {
       return t.errors.SHEET_NO_TABS(error.startDate, error.endDate);
     case "SHEET_INVALID_COLUMN":
       return t.errors.SHEET_INVALID_COLUMN(error.column);
+    case "SHEET_RATE_LIMITED":
+      return t.errors.SHEET_RATE_LIMITED;
     case "SHEET_FAILED":
       return error.message;
   }

@@ -45,4 +45,5 @@ export const errors = {
     `No tabs found between ${startDate} and ${endDate}.`,
   SHEET_INVALID_COLUMN: (column: string) =>
     `Invalid sheet column "${column}". Use letters like A, T, or AB.`,
+  SHEET_RATE_LIMITED: "Google rate limited our requests. Wait a minute and try again.",
 };

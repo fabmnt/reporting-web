@@ -2,22 +2,13 @@ import { v } from "convex/values";
 
 import { action, query } from "./_generated/server";
 import { internal } from "./_generated/api.js";
-import { env } from "./_generated/server";
+import { fetchSheetsJson, refreshAccessToken } from "./googleApi";
 import { listProfileClinics } from "./model/reporting";
 import { requireOperator } from "./model/staff";
-
-type GoogleTokenResponse = {
-  access_token?: string;
-  error?: string;
-  error_description?: string;
-};
 
 type SheetsTabListResponse = {
   sheets?: Array<{ properties?: { title?: string } }>;
 };
-
-const GOOGLE_TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token";
-const GOOGLE_SHEETS_BASE = "https://sheets.googleapis.com/v4/spreadsheets";
 
 // Runs as the operator who called it: the action asks the currentOperator
 // internal query to check staffProfiles with the caller's auth. Throws
@@ -44,41 +35,13 @@ export const googleAuthStatus = action({
   },
 });
 
-async function refreshAccessToken(): Promise<string> {
-  const response = await fetch(GOOGLE_TOKEN_ENDPOINT, {
-    method: "POST",
-    headers: { "content-type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      client_id: env.GOOGLE_OAUTH_CLIENT_ID,
-      client_secret: env.GOOGLE_OAUTH_CLIENT_SECRET,
-      refresh_token: env.GOOGLE_REFRESH_TOKEN,
-      grant_type: "refresh_token",
-    }),
-  });
-  const data = (await response.json()) as GoogleTokenResponse;
-  if (!response.ok || !data.access_token) {
-    throw new Error(data.error_description ?? data.error ?? "Google token refresh failed.");
-  }
-  return data.access_token;
-}
-
-async function sheetsFetch(path: string, token: string): Promise<unknown> {
-  const response = await fetch(`${GOOGLE_SHEETS_BASE}/${path}`, {
-    headers: { authorization: `Bearer ${token}` },
-  });
-  if (!response.ok) {
-    throw new Error(`Google Sheets request failed with status ${response.status}.`);
-  }
-  return (await response.json()) as unknown;
-}
-
 export const listSheetTabs = action({
   args: { googleSheetId: v.string() },
   returns: v.object({ tabs: v.array(v.string()) }),
   handler: async (ctx, args) => {
     await ctx.runQuery(internal.staffAuth.currentOperator, {});
     const token = await refreshAccessToken();
-    const data = (await sheetsFetch(args.googleSheetId, token)) as SheetsTabListResponse;
+    const data = (await fetchSheetsJson(ctx, args.googleSheetId, token)) as SheetsTabListResponse;
     const tabs = (data.sheets ?? [])
       .map((sheet) => sheet.properties?.title ?? "")
       .filter((title) => title !== "");
