@@ -24,6 +24,14 @@ const CLINICS_PATH = "/clinics";
 const CONFIGURATION_PATH = "/configuration";
 const ADMIN_PATH = "/admin";
 
+// A nav item can cover more than one route. The configuration screen is only
+// reachable from the reports page, so its route keeps the Reports item current.
+type NavItem = { href: string; label: string; sectionPaths?: string[] };
+
+function isCurrentSection({ href, sectionPaths = [] }: NavItem, path: string): boolean {
+  return [href, ...sectionPaths].some((candidate) => isActivePath(candidate, path));
+}
+
 function initialsFor(account: CurrentAccount): string {
   const source = account.displayName.trim() || account.username || "";
   const parts = source.split(/\s+/).filter(Boolean);
@@ -41,10 +49,9 @@ export function AppHeader({ account }: { account: CurrentAccount }) {
   const canAdmin = account.role === "admin" && account.status === "active";
   const canConfigureClinics =
     account.status === "active" && (account.role === "admin" || account.role === "operator");
-  const navItems = [
-    { href: REPORT_PATH, label: t.app.nav.reports },
+  const navItems: NavItem[] = [
+    { href: REPORT_PATH, label: t.app.nav.reports, sectionPaths: [CONFIGURATION_PATH] },
     ...(canConfigureClinics ? [{ href: CLINICS_PATH, label: t.app.nav.clinics }] : []),
-    ...(canConfigureClinics ? [{ href: CONFIGURATION_PATH, label: t.app.nav.configuration }] : []),
     ...(canAdmin ? [{ href: ADMIN_PATH, label: t.app.nav.admin }] : []),
   ];
 
@@ -90,7 +97,7 @@ export function AppHeader({ account }: { account: CurrentAccount }) {
           className="flex min-w-0 flex-1 items-stretch self-stretch overflow-x-auto overscroll-x-contain [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         >
           {navItems.map((item) => {
-            const active = isActivePath(item.href, path);
+            const active = isCurrentSection(item, path);
             return (
               <AppLink
                 key={item.href}

@@ -11,7 +11,6 @@ export const app = {
     primary: "Primary",
     reports: "Reports",
     clinics: "Clinics",
-    configuration: "Configuration",
     admin: "Admin",
     adminSections: "Admin sections",
     accounts: "Accounts",

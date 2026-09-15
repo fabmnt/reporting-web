@@ -2,6 +2,7 @@ export const reports = {
   pageTitle: "Ejecutar reporte",
   pageDescription:
     "Lee las hojas de tus clínicas asignadas para las fechas elegidas y aplica las mismas reglas de filas que la herramienta de escritorio.",
+  configure: "Configurar",
   loading: {
     page: "Cargando la página del reporte",
     settings: "Cargando la configuración del reporte",
