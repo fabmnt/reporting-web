@@ -79,28 +79,32 @@ export function DateRangePicker({
         <CalendarIcon data-icon="inline-start" />
         <span>{formatRangeLabel(value, locale, t.common.pickDateRange)}</span>
       </PopoverTrigger>
-      {/* Two months stack on narrow screens, so the popup is capped and scrolls
-          instead of running past the bottom of the screen. */}
-      <PopoverContent
-        className="max-h-(--available-height) w-auto overflow-y-auto p-0"
-        align="start"
-      >
-        <Calendar
-          mode="range"
-          locale={DATE_LOCALES[locale]}
-          defaultMonth={selectedRange.from ?? selectedRange.to}
-          selected={selectedRange}
-          onSelect={(range) => {
-            onChange({
-              startDate: range?.from ? toIsoDate(range.from) : "",
-              endDate: range?.to ? toIsoDate(range.to) : "",
-            });
-            if (range?.from && range?.to) {
-              setOpen(false);
+      {/* Two months stack on narrow screens, so the calendar area is capped and
+          scrolls instead of running past the screen, and the confirm button
+          stays in view under it. */}
+      <PopoverContent className="max-h-(--available-height) w-auto gap-0 p-0" align="start">
+        <div className="min-h-0 overflow-y-auto">
+          <Calendar
+            mode="range"
+            locale={DATE_LOCALES[locale]}
+            defaultMonth={selectedRange.from ?? selectedRange.to}
+            selected={selectedRange}
+            // Picking a date only widens the range: the popup waits for the
+            // confirm button so a half-picked range never closes it.
+            onSelect={(range) =>
+              onChange({
+                startDate: range?.from ? toIsoDate(range.from) : "",
+                endDate: range?.to ? toIsoDate(range.to) : "",
+              })
             }
-          }}
-          numberOfMonths={2}
-        />
+            numberOfMonths={2}
+          />
+        </div>
+        <div className="flex shrink-0 justify-end border-t p-2">
+          <Button size="sm" onClick={() => setOpen(false)}>
+            {t.common.done}
+          </Button>
+        </div>
       </PopoverContent>
     </Popover>
   );

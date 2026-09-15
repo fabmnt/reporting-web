@@ -5,6 +5,7 @@ export const common = {
   edit: "Editar",
   delete: "Eliminar",
   saveChanges: "Guardar cambios",
+  done: "Listo",
   loading: "Cargando",
   active: "Activo",
   inactive: "Inactivo",

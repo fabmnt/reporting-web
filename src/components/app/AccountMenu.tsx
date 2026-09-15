@@ -1,4 +1,4 @@
-import { Languages, LogOut, Menu, Monitor, Moon, Sun } from "lucide-react";
+import { ChevronDown, Languages, LogOut, Monitor, Moon, Sun } from "lucide-react";
 
 import { LOCALES, LOCALE_NAMES, type Locale } from "@/lib/i18n/locales";
 import { setTheme, THEMES, type Theme } from "@/lib/theme";
@@ -55,10 +55,11 @@ export function AccountMenu({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
-        render={<Button variant="ghost" size="icon" className="size-10 md:hidden" />}
+        render={<Button variant="ghost" className="h-10 gap-1 px-2 md:hidden" />}
         aria-label={t.app.account.menu}
       >
-        <Menu />
+        <span className="max-w-28 truncate text-sm font-medium">{account.username}</span>
+        <ChevronDown className="size-4 text-muted-foreground" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" sideOffset={6} className="w-60">
         <DropdownMenuGroup>

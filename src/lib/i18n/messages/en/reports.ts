@@ -42,9 +42,6 @@ export const reports = {
   results: {
     title: "Results",
     rows: (count: number) => (count === 1 ? "1 row" : `${count} rows`),
-    clinics: (count: number) => (count === 1 ? "1 clinic" : `${count} clinics`),
-    summary: (clinics: string, startDate: string, endDate: string) =>
-      `${clinics}, ${startDate} to ${endDate}. Sheet row numbers match the Google Sheet.`,
     noneProcessed: "No sheets were processed. Check your assigned clinics and the selected dates.",
     sheetError: "Sheet error",
     noMatchingRows: "No matching rows.",

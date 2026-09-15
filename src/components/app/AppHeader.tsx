@@ -77,18 +77,13 @@ export function AppHeader({ account }: { account: CurrentAccount }) {
   return (
     <header className="sticky top-0 z-40 border-b bg-background/85 backdrop-blur-md">
       <div className="mx-auto flex h-14 w-full max-w-6xl items-center gap-1 px-3 sm:gap-4 sm:px-6">
+        {/* Narrow screens only have room for the nav, so the brand waits for
+            the wider layout instead of squeezing the nav items. */}
         <AppLink
           href={REPORT_PATH}
-          className="flex items-center gap-2 text-sm font-semibold tracking-tight"
+          className="hidden shrink-0 items-center text-sm font-semibold tracking-tight sm:flex"
         >
-          <span
-            aria-hidden="true"
-            className="grid size-6 shrink-0 place-items-center rounded-md bg-primary text-xs font-semibold text-primary-foreground"
-          >
-            R
-          </span>
-          <span className="hidden sm:inline">{t.app.brand}</span>
-          <span className="sr-only sm:hidden">{t.app.brand}</span>
+          {t.app.brand}
         </AppLink>
 
         <nav

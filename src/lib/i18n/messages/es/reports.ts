@@ -43,9 +43,6 @@ export const reports = {
   results: {
     title: "Resultados",
     rows: (count: number) => (count === 1 ? "1 fila" : `${count} filas`),
-    clinics: (count: number) => (count === 1 ? "1 clínica" : `${count} clínicas`),
-    summary: (clinics: string, startDate: string, endDate: string) =>
-      `${clinics}, de ${startDate} a ${endDate}. Los números de fila coinciden con la hoja de Google.`,
     noneProcessed:
       "No se procesó ninguna hoja. Revisa tus clínicas asignadas y las fechas elegidas.",
     sheetError: "Error en la hoja",

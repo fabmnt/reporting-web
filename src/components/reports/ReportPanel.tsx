@@ -1,13 +1,10 @@
 "use client";
 
 import { useAction, useQuery } from "convex/react";
-import { CircleCheck, ClipboardList, FileText, TriangleAlert } from "lucide-react";
+import { FileText } from "lucide-react";
 import { useState } from "react";
 
 import { api } from "../../../convex/_generated/api";
-import type { Id } from "../../../convex/_generated/dataModel";
-import type { ReportSheetError } from "../../../convex/model/appErrors";
-import { DataCard, DataCardList, DataCardRow, DataTableFrame } from "@/components/app/DataCard";
 import { AppLink } from "@/components/app/navigation";
 import { PageHeader } from "@/components/app/PageHeader";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -28,165 +25,12 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { todayIso } from "@/lib/dates";
 import { useDocumentTitle, useI18n } from "@/lib/i18n/context";
-import {
-  localizedError,
-  localizedMessage,
-  sheetErrorText,
-  type LocalizedMessage,
-} from "@/lib/i18n/errors";
+import { localizedError, localizedMessage, type LocalizedMessage } from "@/lib/i18n/errors";
 import { cn } from "@/lib/utils";
 
-type ReportRow = { rowNumber: number; values: string[] };
-type SheetResult = {
-  clinicId: Id<"clinics">;
-  clinicName: string;
-  googleSheetId: string;
-  tabTitle: string;
-  headers: string[];
-  bucketRows: Array<{
-    bucketKey: string;
-    label: string;
-    rows: ReportRow[];
-    // 0-based sheet columns the conditions read to pick these rows.
-    filterColumns: number[];
-  }>;
-  error: ReportSheetError | null;
-};
-type ReportResult = {
-  reportRunId: Id<"reportRuns"> | null;
-  assignedClinicCount: number;
-  sheets: SheetResult[];
-};
-// A finished run plus the parameters it actually used. The results view reads
-// only from here, so editing the controls never rewrites what a run returned.
-type CompletedRun = {
-  data: ReportResult;
-  startDate: string;
-  endDate: string;
-};
-type RowTone = "neutral" | "success" | "warning";
-
-const TONES: Record<
-  RowTone,
-  { Icon: typeof ClipboardList; iconClass: string; badgeClass: string }
-> = {
-  neutral: {
-    Icon: ClipboardList,
-    iconClass: "text-muted-foreground",
-    badgeClass: "border-transparent bg-muted text-foreground",
-  },
-  success: {
-    Icon: CircleCheck,
-    iconClass: "text-success",
-    badgeClass: "border-transparent bg-success/10 text-success",
-  },
-  warning: {
-    Icon: TriangleAlert,
-    iconClass: "text-warning",
-    badgeClass: "border-transparent bg-warning/10 text-warning",
-  },
-};
-
-// Leading data columns shown beside the row number; the rest of the sheet is
-// read from the sheet itself.
-const LEADING_COLUMN_COUNT = 8;
-
-// Sheet columns of a result table: the leading ones for context plus the ones
-// the conditions read, so every row shows the cells that put it in the bucket.
-function visibleColumnIndexes(headerCount: number, filterColumns: number[]): number[] {
-  const indexes = new Set<number>();
-  for (let index = 0; index < Math.min(headerCount, LEADING_COLUMN_COUNT); index += 1) {
-    indexes.add(index);
-  }
-  for (const index of filterColumns) indexes.add(index);
-  return [...indexes].sort((left, right) => left - right);
-}
-
-function ResultTable({
-  title,
-  tone,
-  count,
-  headers,
-  rows,
-  filterColumns,
-}: {
-  title: string;
-  tone: RowTone;
-  count: number;
-  headers: string[];
-  rows: ReportRow[];
-  filterColumns: number[];
-}) {
-  const { t } = useI18n();
-
-  if (rows.length === 0) return null;
-  const columnIndexes = visibleColumnIndexes(headers.length, filterColumns);
-  const { Icon, iconClass, badgeClass } = TONES[tone];
-  return (
-    <div className="flex flex-col gap-2">
-      <div className="flex items-center gap-2">
-        <Icon className={cn("size-4", iconClass)} aria-hidden="true" />
-        <h4 className="text-sm font-medium">{title}</h4>
-        <Badge variant="outline" className={cn("tabular-nums", badgeClass)}>
-          {count}
-        </Badge>
-      </div>
-      <DataTableFrame>
-        <Table>
-          <TableHeader className="bg-muted/40">
-            <TableRow>
-              <TableHead>{t.common.row}</TableHead>
-              {columnIndexes.map((index) => (
-                <TableHead key={index}>
-                  {headers[index] || t.common.columnFallback(index)}
-                </TableHead>
-              ))}
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {rows.map((row) => (
-              <TableRow key={row.rowNumber}>
-                <TableCell className="font-mono tabular-nums">{row.rowNumber}</TableCell>
-                {columnIndexes.map((index) => (
-                  <TableCell key={index} className="max-w-40 truncate">
-                    {row.values[index] ?? ""}
-                  </TableCell>
-                ))}
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </DataTableFrame>
-
-      <DataCardList>
-        {rows.map((row) => (
-          <DataCard
-            key={row.rowNumber}
-            title={
-              <span className="font-mono tabular-nums">{`${t.common.row} ${row.rowNumber}`}</span>
-            }
-          >
-            {columnIndexes.map((index) => (
-              <DataCardRow key={index} label={headers[index] || t.common.columnFallback(index)}>
-                <span className="truncate">{row.values[index] ?? ""}</span>
-              </DataCardRow>
-            ))}
-          </DataCard>
-        ))}
-      </DataCardList>
-    </div>
-  );
-}
+import { ResultsCard, type ReportResult } from "./ReportResults";
 
 function ReportRunnerSkeleton() {
   const { t } = useI18n();
@@ -270,85 +114,6 @@ function ResultsPlaceholder({ running, clinicCount }: { running: boolean; clinic
   );
 }
 
-function countRows(run: CompletedRun): number {
-  return run.data.sheets.reduce(
-    (sum, sheet) =>
-      sum + sheet.bucketRows.reduce((sheetSum, bucket) => sheetSum + bucket.rows.length, 0),
-    0
-  );
-}
-
-/**
- * Renders one finished run. Every value comes from the run itself, so editing
- * the report controls afterward never rewrites what the run returned.
- */
-function ResultsCard({ run }: { run: CompletedRun }) {
-  const { t } = useI18n();
-  const { data } = run;
-
-  return (
-    <Card>
-      <CardHeader>
-        <div className="flex flex-wrap items-center gap-2">
-          <h2 className="font-heading text-base leading-snug font-medium">
-            {t.reports.results.title}
-          </h2>
-          <Badge variant="secondary" className="tabular-nums">
-            {t.reports.results.rows(countRows(run))}
-          </Badge>
-        </div>
-        <CardDescription>
-          {t.reports.results.summary(
-            t.reports.results.clinics(data.assignedClinicCount),
-            run.startDate,
-            run.endDate
-          )}
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-6">
-        {data.sheets.length === 0 ? (
-          <p className="text-sm text-muted-foreground">{t.reports.results.noneProcessed}</p>
-        ) : null}
-        {data.sheets.map((sheet) => (
-          <div
-            key={`${sheet.clinicId}-${sheet.tabTitle}`}
-            className="flex flex-col gap-4 rounded-lg border p-4"
-          >
-            <h3 className="text-sm font-medium">
-              {sheet.clinicName} {sheet.tabTitle ? `· ${sheet.tabTitle}` : ""}
-            </h3>
-            {sheet.error ? (
-              <Alert variant="destructive">
-                <AlertTitle>{t.reports.results.sheetError}</AlertTitle>
-                <AlertDescription>{sheetErrorText(sheet.error, t)}</AlertDescription>
-              </Alert>
-            ) : (
-              <>
-                {sheet.bucketRows.map((bucket) => (
-                  <ResultTable
-                    key={bucket.bucketKey}
-                    title={bucket.label}
-                    tone="neutral"
-                    count={bucket.rows.length}
-                    headers={sheet.headers}
-                    rows={bucket.rows}
-                    filterColumns={bucket.filterColumns}
-                  />
-                ))}
-                {sheet.bucketRows.every((bucket) => bucket.rows.length === 0) ? (
-                  <p className="text-sm text-muted-foreground">
-                    {t.reports.results.noMatchingRows}
-                  </p>
-                ) : null}
-              </>
-            )}
-          </div>
-        ))}
-      </CardContent>
-    </Card>
-  );
-}
-
 // The configuration screen has no entry in the header of its own, so the
 // reports page links to it and only shows the link to accounts that may open it.
 const CONFIGURATION_PATH = "/configuration";
@@ -379,7 +144,7 @@ export function ReportRunner() {
   const [verification, setVerification] = useState<"all" | "fbd" | "elg">("all");
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<LocalizedMessage | null>(null);
-  const [result, setResult] = useState<CompletedRun | null>(null);
+  const [result, setResult] = useState<ReportResult | null>(null);
 
   useDocumentTitle(t.app.titles.report);
 
@@ -415,11 +180,7 @@ export function ReportRunner() {
         endDate: dateRange.endDate,
         verificationFilter: verification,
       });
-      setResult({
-        data,
-        startDate: dateRange.startDate,
-        endDate: dateRange.endDate,
-      });
+      setResult(data);
     } catch (cause) {
       setError(localizedError(cause, (t) => t.reports.outcomes.failed));
     } finally {
@@ -580,7 +341,7 @@ export function ReportRunner() {
           {result === null ? (
             <ResultsPlaceholder running={running} clinicCount={assignedClinicCount} />
           ) : (
-            <ResultsCard run={result} />
+            <ResultsCard result={result} />
           )}
         </div>
       </div>
