@@ -209,6 +209,25 @@ async function requireAssignedClinic(
   return clinic;
 }
 
+/**
+ * The assigned ids whose clinic still exists and is active. The list keeps the
+ * ids of clinics that were disabled or deleted since they were assigned, and
+ * the screens cannot show those, so only the usable ones hold room in the cap.
+ */
+async function usableClinicIds(
+  ctx: MutationCtx,
+  clinicIds: Id<"clinics">[]
+): Promise<Id<"clinics">[]> {
+  const usable: Id<"clinics">[] = [];
+  for (const clinicId of clinicIds) {
+    const clinic = await ctx.db.get("clinics", clinicId);
+    if (clinic !== null && clinic.isActive) {
+      usable.push(clinicId);
+    }
+  }
+  return usable;
+}
+
 export const listClients = query({
   args: {},
   returns: v.object({
@@ -428,12 +447,20 @@ export const addAssigned = mutation({
     if (clinic === null || !clinic.isActive) {
       throw appError({ code: "CLINIC_NOT_FOUND" });
     }
-    if (assignedClinicIds.length >= MAX_ASSIGNED_CLINICS) {
+
+    // A list that only looks full, because it holds clinics that were disabled
+    // or deleted since they were assigned, still takes another clinic. The ids
+    // that hold no room leave with the same write.
+    const assigned =
+      assignedClinicIds.length >= MAX_ASSIGNED_CLINICS
+        ? await usableClinicIds(ctx, assignedClinicIds)
+        : assignedClinicIds;
+    if (assigned.length >= MAX_ASSIGNED_CLINICS) {
       throw appError({ code: "CLINIC_ASSIGNMENT_LIMIT", limit: MAX_ASSIGNED_CLINICS });
     }
 
     await ctx.db.patch("staffProfiles", profile._id, {
-      assignedClinicIds: [...assignedClinicIds, args.clinicId],
+      assignedClinicIds: [...assigned, args.clinicId],
     });
 
     return null;

@@ -151,17 +151,21 @@ function ClientForm({
               disabled={pending}
             />
           </Field>
-          <Field orientation="horizontal">
-            <Switch
-              id="client-active"
-              checked={values.isActive}
-              onCheckedChange={(checked) =>
-                setValues((current) => ({ ...current, isActive: checked }))
-              }
-              disabled={pending}
-            />
-            <FieldLabel htmlFor="client-active">{t.admin.clients.form.active}</FieldLabel>
-          </Field>
+          {/* A new client is always created active, so only the edit form
+              offers the switch. */}
+          {isEditing ? (
+            <Field orientation="horizontal">
+              <Switch
+                id="client-active"
+                checked={values.isActive}
+                onCheckedChange={(checked) =>
+                  setValues((current) => ({ ...current, isActive: checked }))
+                }
+                disabled={pending}
+              />
+              <FieldLabel htmlFor="client-active">{t.admin.clients.form.active}</FieldLabel>
+            </Field>
+          ) : null}
           {error ? (
             <Alert variant="destructive">
               <AlertTitle>{t.admin.clients.form.saveFailedTitle}</AlertTitle>
