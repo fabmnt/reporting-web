@@ -37,11 +37,7 @@ function ReportRunnerSkeleton() {
 
   return (
     <div className="flex flex-col gap-6" aria-busy="true" aria-label={t.reports.loading.page}>
-      <PageHeader
-        title={t.reports.pageTitle}
-        description={t.reports.pageDescription}
-        actions={<ConfigureLink />}
-      />
+      <PageHeader title={t.reports.pageTitle} actions={<ConfigureLink />} />
       <div className="grid gap-6 lg:grid-cols-[360px_minmax(0,1fr)] lg:items-start">
         <Card className="lg:sticky lg:top-20" aria-label={t.reports.loading.settings}>
           <CardHeader className="gap-3">
@@ -194,11 +190,7 @@ export function ReportRunner() {
 
   return (
     <div className="flex flex-col gap-6">
-      <PageHeader
-        title={t.reports.pageTitle}
-        description={t.reports.pageDescription}
-        actions={<ConfigureLink />}
-      />
+      <PageHeader title={t.reports.pageTitle} actions={<ConfigureLink />} />
 
       {error ? (
         <Alert variant="destructive">

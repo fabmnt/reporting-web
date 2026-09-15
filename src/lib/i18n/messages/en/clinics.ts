@@ -1,7 +1,5 @@
 export const clinics = {
   pageTitle: "Clinics",
-  pageDescription:
-    "Configure the Google Sheet link and column letters for clinics assigned to you.",
   accessDeniedTitle: "Active staff access required",
   accessDeniedBody: "Your account cannot configure clinics.",
   noneAssigned:

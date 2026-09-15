@@ -638,7 +638,6 @@ export function AdminClinicsPanel() {
   const header = (
     <PageHeader
       title={t.admin.clinics.pageTitle}
-      description={t.admin.clinics.pageDescription}
       actions={
         <Button onClick={openCreate}>
           <Plus aria-hidden="true" />

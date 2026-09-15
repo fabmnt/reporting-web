@@ -2,7 +2,6 @@ export const admin = {
   accessDeniedTitle: "Se requiere acceso de administrador",
   accounts: {
     pageTitle: "Cuentas",
-    pageDescription: "Habilita cuentas nuevas y asigna a cada persona el rol mínimo que necesita.",
     accessDeniedBody: "Tu cuenta no puede gestionar otros usuarios.",
     updateFailedTitle: "Falló la actualización",
     staffAccounts: "Cuentas de personal",
@@ -49,8 +48,6 @@ export const admin = {
   },
   clinics: {
     pageTitle: "Clínicas",
-    pageDescription:
-      "Los clientes son dueños de las clínicas, y cada clínica apunta a una hoja de Google que lee el backend de reportes.",
     accessDeniedBody: "Tu cuenta no puede gestionar clínicas.",
     addClinic: "Añadir clínica",
     clientsTitle: "Clientes",
@@ -125,8 +122,6 @@ export const admin = {
   },
   reportTypes: {
     pageTitle: "Tipos de reporte",
-    pageDescription:
-      "Los tipos de reporte integrados se comparten con todas las cuentas y solo los administradores pueden cambiarlos.",
     accessDeniedBody: "Tu cuenta no puede gestionar los tipos de reporte integrados.",
   },
 };

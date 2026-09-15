@@ -2,7 +2,6 @@ export const admin = {
   accessDeniedTitle: "Administrator access required",
   accounts: {
     pageTitle: "Accounts",
-    pageDescription: "Enable new accounts and assign the minimum role each person needs.",
     accessDeniedBody: "Your account cannot manage other users.",
     updateFailedTitle: "Update failed",
     staffAccounts: "Staff accounts",
@@ -48,8 +47,6 @@ export const admin = {
   },
   clinics: {
     pageTitle: "Clinics",
-    pageDescription:
-      "Clients own clinics, and each clinic points to one Google Sheet the reporting backend reads.",
     accessDeniedBody: "Your account cannot manage clinics.",
     addClinic: "Add clinic",
     clientsTitle: "Clients",
@@ -123,8 +120,6 @@ export const admin = {
   },
   reportTypes: {
     pageTitle: "Report types",
-    pageDescription:
-      "Built-in report types are shared with every account and only administrators can change them.",
     accessDeniedBody: "Your account cannot manage built-in report types.",
   },
 };

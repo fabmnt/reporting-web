@@ -1,7 +1,5 @@
 export const clinics = {
   pageTitle: "Clínicas",
-  pageDescription:
-    "Configura el enlace de la hoja de Google y las letras de columna de las clínicas que tienes asignadas.",
   accessDeniedTitle: "Se requiere acceso de personal activo",
   accessDeniedBody: "Tu cuenta no puede configurar clínicas.",
   noneAssigned:

@@ -313,9 +313,7 @@ export function AdminAccountsPanel() {
 
   useDocumentTitle(t.app.titles.accounts);
 
-  const header = (
-    <PageHeader title={t.admin.accounts.pageTitle} description={t.admin.accounts.pageDescription} />
-  );
+  const header = <PageHeader title={t.admin.accounts.pageTitle} />;
 
   if (current === undefined) return <Skeleton className="h-80 w-full" />;
 

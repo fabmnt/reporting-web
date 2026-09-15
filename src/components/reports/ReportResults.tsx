@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronDown, CircleCheck, ClipboardList, TriangleAlert } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 
 import type { Id } from "../../../convex/_generated/dataModel";
 import type { ReportSheetError } from "../../../convex/model/appErrors";
@@ -19,7 +19,6 @@ import {
 } from "@/components/ui/table";
 import { useI18n } from "@/lib/i18n/context";
 import { sheetErrorText } from "@/lib/i18n/errors";
-import { cn } from "@/lib/utils";
 
 export type ReportRow = { rowNumber: number; values: string[] };
 export type BucketResult = {
@@ -44,42 +43,20 @@ export type ReportResult = {
   sheets: SheetResult[];
 };
 
-type RowTone = "neutral" | "success" | "warning";
-
-const TONES: Record<
-  RowTone,
-  { Icon: typeof ClipboardList; iconClass: string; badgeClass: string }
-> = {
-  neutral: {
-    Icon: ClipboardList,
-    iconClass: "text-muted-foreground",
-    badgeClass: "border-transparent bg-muted text-foreground",
-  },
-  success: {
-    Icon: CircleCheck,
-    iconClass: "text-success",
-    badgeClass: "border-transparent bg-success/10 text-success",
-  },
-  warning: {
-    Icon: TriangleAlert,
-    iconClass: "text-warning",
-    badgeClass: "border-transparent bg-warning/10 text-warning",
-  },
-};
-
 // Leading data columns shown beside the row number; the rest of the sheet is
 // read from the sheet itself.
 const LEADING_COLUMN_COUNT = 8;
 
-// Sheet columns of a result table: the leading ones for context plus the ones
-// the conditions read, so every row shows the cells that put it in the bucket.
-function visibleColumnIndexes(headerCount: number, filterColumns: number[]): number[] {
-  const indexes = new Set<number>();
+// Sheet columns of a result table, in reading order: the columns the conditions
+// read come first so every row shows the cells that put it in the bucket, then
+// the leading columns give the row its context.
+function tableColumnIndexes(headerCount: number, filterColumns: number[]): number[] {
+  const filters = [...new Set(filterColumns)].sort((left, right) => left - right);
+  const leading: number[] = [];
   for (let index = 0; index < Math.min(headerCount, LEADING_COLUMN_COUNT); index += 1) {
-    indexes.add(index);
+    if (!filters.includes(index)) leading.push(index);
   }
-  for (const index of filterColumns) indexes.add(index);
-  return [...indexes].sort((left, right) => left - right);
+  return [...filters, ...leading];
 }
 
 type RowCell = { column: number; label: string; value: string };
@@ -210,7 +187,7 @@ function ResultTable({
   filterColumns: number[];
 }) {
   const { t } = useI18n();
-  const columnIndexes = visibleColumnIndexes(headers.length, filterColumns);
+  const columnIndexes = tableColumnIndexes(headers.length, filterColumns);
 
   return (
     <DataTableFrame>
@@ -242,32 +219,22 @@ function ResultTable({
 
 function ResultBucket({
   bucket,
-  tone,
   headers,
   showLabel,
 }: {
   bucket: BucketResult;
-  tone: RowTone;
   headers: string[];
   // A run with a single group is named after the report type the user just
-  // picked, so only multi-group runs label their groups on narrow screens.
+  // picked, so only multi-group runs label their groups.
   showLabel: boolean;
 }) {
   if (bucket.rows.length === 0) return null;
-  const { Icon, iconClass, badgeClass } = TONES[tone];
 
   return (
     <section className="flex flex-col gap-2">
       {showLabel ? (
-        <h4 className="text-xs font-medium text-muted-foreground lg:hidden">{bucket.label}</h4>
+        <h4 className="text-xs font-medium text-muted-foreground">{bucket.label}</h4>
       ) : null}
-      <div className="hidden items-center gap-2 lg:flex">
-        <Icon className={cn("size-4", iconClass)} aria-hidden="true" />
-        <h4 className="text-sm font-medium">{bucket.label}</h4>
-        <Badge variant="outline" className={cn("tabular-nums", badgeClass)}>
-          {bucket.rows.length}
-        </Badge>
-      </div>
       <ResultTable headers={headers} rows={bucket.rows} filterColumns={bucket.filterColumns} />
       <ResultRows headers={headers} rows={bucket.rows} filterColumns={bucket.filterColumns} />
     </section>
@@ -330,7 +297,6 @@ export function ResultsCard({ result }: { result: ReportResult }) {
                     <ResultBucket
                       key={bucket.bucketKey}
                       bucket={bucket}
-                      tone="neutral"
                       headers={sheet.headers}
                       showLabel={buckets.length > 1}
                     />

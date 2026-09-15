@@ -26,7 +26,6 @@ export function ConditionsPanel() {
   const header = (
     <PageHeader
       title={t.conditions.pageTitle}
-      description={t.conditions.pageDescription}
       actions={
         <AppLink href={REPORT_PATH} className={cn(buttonVariants({ variant: "outline" }))}>
           {t.conditions.backToReports}

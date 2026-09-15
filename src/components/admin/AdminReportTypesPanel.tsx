@@ -17,12 +17,7 @@ export function AdminReportTypesPanel() {
 
   useDocumentTitle(t.app.titles.adminReportTypes);
 
-  const header = (
-    <PageHeader
-      title={t.admin.reportTypes.pageTitle}
-      description={t.admin.reportTypes.pageDescription}
-    />
-  );
+  const header = <PageHeader title={t.admin.reportTypes.pageTitle} />;
 
   if (current === undefined) {
     return (

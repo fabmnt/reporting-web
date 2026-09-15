@@ -173,7 +173,7 @@ export function AssignedClinicsPanel() {
 
   useDocumentTitle(t.app.titles.clinics);
 
-  const header = <PageHeader title={t.clinics.pageTitle} description={t.clinics.pageDescription} />;
+  const header = <PageHeader title={t.clinics.pageTitle} />;
 
   if (current === undefined) return <Skeleton className="h-80 w-full" />;
 
