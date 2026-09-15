@@ -21,6 +21,8 @@ export const errors = {
   CLIENT_DISABLED: "Este cliente está deshabilitado.",
   CLINIC_NOT_FOUND: "No se encontró la clínica.",
   CLINIC_NOT_ASSIGNED: "Esta clínica no está asignada a tu cuenta.",
+  CLINIC_ASSIGNMENT_LIMIT: (limit: number) =>
+    `Puedes trabajar en hasta ${limit} clínicas. Quita una antes de añadir otra.`,
   INVALID_SHEET_COLUMN: (column: string) =>
     `Columna de hoja no válida "${column}". Usa letras como A, T o AB.`,
   CLINIC_NAME_TAKEN: "Ya existe una clínica con este nombre para este cliente.",

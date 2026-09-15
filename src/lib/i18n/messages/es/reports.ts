@@ -40,9 +40,8 @@ export const reports = {
   },
   overview: {
     title: "Resumen",
-    copy: "Copiar filas",
-    copied: "Copiado",
     copyFor: (label: string) => `Copiar los números de fila de ${label}`,
+    copiedFor: (label: string) => `Se copiaron los números de fila de ${label}`,
   },
   results: {
     title: "Resultados",

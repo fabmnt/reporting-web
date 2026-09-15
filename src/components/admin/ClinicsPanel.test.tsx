@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { getFunctionName } from "convex/server";
 import { useMutation, useQuery } from "convex/react";
@@ -41,15 +41,23 @@ const CLINICS = [
     sheetColumns: {},
     qaGroupKeys: [],
   },
+  {
+    clinicId: "clinic-2",
+    name: "Uptown",
+    googleSheetId: "sheet-2",
+    externalClinicId: "401",
+    isActive: false,
+    clientId: "client-1",
+    clientName: "Smilist",
+    sheetColumns: {},
+    qaGroupKeys: [],
+  },
 ];
 
 const mutations = {
   createClinic: vi.fn(),
   updateClinic: vi.fn(),
   removeClinic: vi.fn(),
-  createClient: vi.fn(),
-  updateClient: vi.fn(),
-  removeClient: vi.fn(),
 };
 
 const QUERY_NAMES = {
@@ -62,9 +70,6 @@ const MUTATION_NAMES = {
   createClinic: nameOf(api.clinics.create),
   updateClinic: nameOf(api.clinics.update),
   removeClinic: nameOf(api.clinics.remove),
-  createClient: nameOf(api.clinics.createClient),
-  updateClient: nameOf(api.clinics.updateClient),
-  removeClient: nameOf(api.clinics.removeClient),
 } as const;
 
 function mockQueries() {
@@ -91,12 +96,6 @@ function mockMutations() {
         return mutations.updateClinic;
       case MUTATION_NAMES.removeClinic:
         return mutations.removeClinic;
-      case MUTATION_NAMES.createClient:
-        return mutations.createClient;
-      case MUTATION_NAMES.updateClient:
-        return mutations.updateClient;
-      case MUTATION_NAMES.removeClient:
-        return mutations.removeClient;
       default:
         return vi.fn();
     }
@@ -120,43 +119,13 @@ beforeEach(() => {
 });
 
 describe("AdminClinicsPanel", () => {
-  it("lists the clients and clinics it reads", () => {
+  it("lists the clinics it reads", () => {
     renderPanel();
 
     // Each record is rendered twice: once in the table, once in the cards that
     // replace it on narrow screens.
-    expect(screen.getAllByText("smilist")).toHaveLength(2);
     expect(screen.getAllByText("Downtown")).toHaveLength(2);
-  });
-
-  it("closes the client dialog after a successful create", async () => {
-    const user = userEvent.setup();
-    mutations.createClient.mockResolvedValue({});
-    renderPanel();
-
-    await user.click(screen.getByRole("button", { name: /add client/i }));
-    const dialog = await screen.findByRole("dialog");
-    await user.type(within(dialog).getByLabelText("Client name"), "New Co");
-    await user.click(within(dialog).getByRole("button", { name: "Create client" }));
-
-    await waitFor(() => expect(mutations.createClient).toHaveBeenCalledWith({ name: "New Co" }));
-    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
-  });
-
-  it("keeps the client dialog open and shows the server error inside it", async () => {
-    const user = userEvent.setup();
-    mutations.createClient.mockRejectedValue(new Error("A client with this name already exists."));
-    renderPanel();
-
-    await user.click(screen.getByRole("button", { name: /add client/i }));
-    const dialog = await screen.findByRole("dialog");
-    await user.type(within(dialog).getByLabelText("Client name"), "Smilist");
-    await user.click(within(dialog).getByRole("button", { name: "Create client" }));
-
-    expect(
-      await within(dialog).findByText("A client with this name already exists.")
-    ).toBeVisible();
-    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(screen.getAllByText("Uptown")).toHaveLength(2);
   });
 
   it("blocks an empty clinic submit before calling the server", async () => {
@@ -169,16 +138,6 @@ describe("AdminClinicsPanel", () => {
 
     expect(within(dialog).getByText("Clinic name is required.")).toBeInTheDocument();
     expect(mutations.createClinic).not.toHaveBeenCalled();
-  });
-
-  it("prefills the client form when editing", async () => {
-    const user = userEvent.setup();
-    renderPanel();
-
-    await user.click(screen.getAllByRole("button", { name: "Edit" })[0]);
-    const dialog = await screen.findByRole("dialog");
-
-    expect(within(dialog).getByLabelText("Client name")).toHaveValue("Smilist");
   });
 
   it("shows a failed clinic save inside the clinic dialog", async () => {
@@ -196,20 +155,5 @@ describe("AdminClinicsPanel", () => {
       await within(dialog).findByText("Another clinic already uses this sheet.")
     ).toBeVisible();
     expect(screen.getByRole("dialog")).toBeInTheDocument();
-  });
-
-  it("shows the delete guard message inside the confirmation dialog", async () => {
-    const user = userEvent.setup();
-    mutations.removeClient.mockRejectedValue(
-      new Error("Smilist still owns 1 clinic. Move or delete them first.")
-    );
-    renderPanel();
-
-    await user.click(screen.getAllByRole("button", { name: "Delete" })[0]);
-    const dialog = await screen.findByRole("alertdialog");
-    await user.click(within(dialog).getByRole("button", { name: "Delete client" }));
-
-    expect(await within(dialog).findByText(/still owns 1 clinic/)).toBeVisible();
-    expect(screen.getByRole("alertdialog")).toBeInTheDocument();
   });
 });

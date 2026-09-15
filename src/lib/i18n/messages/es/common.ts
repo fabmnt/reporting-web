@@ -3,6 +3,7 @@ export const common = {
   close: "Cerrar",
   add: "Añadir",
   edit: "Editar",
+  remove: "Quitar",
   delete: "Eliminar",
   saveChanges: "Guardar cambios",
   done: "Listo",
@@ -15,4 +16,12 @@ export const common = {
   row: "Fila",
   columnFallback: (index: number) => `Col. ${index + 1}`,
   pickDateRange: "Elige un rango de fechas",
+  allStatuses: "Todos los estados",
+  deleteFailedTitle: "Falló la eliminación",
+  pagination: {
+    range: (first: number, last: number, total: number) => `Mostrando ${first}–${last} de ${total}`,
+    page: (page: number, pageCount: number) => `Página ${page} de ${pageCount}`,
+    previous: "Anterior",
+    next: "Siguiente",
+  },
 };

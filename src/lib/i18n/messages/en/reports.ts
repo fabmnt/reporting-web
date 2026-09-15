@@ -39,9 +39,8 @@ export const reports = {
   },
   overview: {
     title: "Overview",
-    copy: "Copy rows",
-    copied: "Copied",
     copyFor: (label: string) => `Copy the row numbers of ${label}`,
+    copiedFor: (label: string) => `Copied the row numbers of ${label}`,
   },
   results: {
     title: "Results",

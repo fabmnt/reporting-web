@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronDown, Copy } from "lucide-react";
+import { Check, ChevronDown, Copy } from "lucide-react";
 import { useState } from "react";
 
 import type { Id } from "../../../convex/_generated/dataModel";
@@ -110,6 +110,32 @@ function sheetsWithRowsFirst(sheets: SheetResult[]): SheetResult[] {
     ...sheets.filter((sheet) => sheetRowCount(sheet) > 0),
     ...sheets.filter((sheet) => sheetRowCount(sheet) === 0),
   ];
+}
+
+type ClinicGroup = {
+  clinicId: Id<"clinics">;
+  clinicName: string;
+  sheets: SheetResult[];
+};
+
+// The run comes back as one entry per clinic tab. Both cards read it grouped by
+// clinic first and then by tab, so the tabs of a clinic stay together and the
+// clinic is named once instead of on every tab.
+function groupByClinic(sheets: SheetResult[]): ClinicGroup[] {
+  const groups: ClinicGroup[] = [];
+  const groupByClinicId = new Map<string, ClinicGroup>();
+
+  for (const sheet of sheetsWithRowsFirst(sheets)) {
+    let group = groupByClinicId.get(sheet.clinicId);
+    if (group === undefined) {
+      group = { clinicId: sheet.clinicId, clinicName: sheet.clinicName, sheets: [] };
+      groupByClinicId.set(sheet.clinicId, group);
+      groups.push(group);
+    }
+    group.sheets.push(sheet);
+  }
+
+  return groups;
 }
 
 /** The row numbers of one sheet in the shape they are copied in: '2', '3', '33'. */
@@ -318,7 +344,10 @@ function ResultBucket({
   );
 }
 
-/** Copies one sheet's row number list. */
+/**
+ * Copies one sheet's row number list. The button shows the icon alone, so its
+ * name is what tells a screen reader which sheet it copies.
+ */
 function CopyRowNumbers({ label, rowNumbers }: { label: string; rowNumbers: string }) {
   const { t } = useI18n();
   const [isCopied, setIsCopied] = useState(false);
@@ -337,11 +366,16 @@ function CopyRowNumbers({ label, rowNumbers }: { label: string; rowNumbers: stri
     <Button
       variant="outline"
       size="sm"
-      aria-label={t.reports.overview.copyFor(label)}
+      aria-label={
+        isCopied ? t.reports.overview.copiedFor(label) : t.reports.overview.copyFor(label)
+      }
       onClick={() => void copy()}
     >
-      <Copy data-icon="inline-start" aria-hidden="true" />
-      {isCopied ? t.reports.overview.copied : t.reports.overview.copy}
+      {isCopied ? (
+        <Check data-icon="inline-start" aria-hidden="true" />
+      ) : (
+        <Copy data-icon="inline-start" aria-hidden="true" />
+      )}
     </Button>
   );
 }
@@ -353,9 +387,16 @@ function CopyRowNumbers({ label, rowNumbers }: { label: string; rowNumbers: stri
  */
 export function OverviewCard({ result }: { result: ReportResult }) {
   const { t } = useI18n();
-  const sheets = sheetsWithRowsFirst(result.sheets).filter((sheet) => sheetRowCount(sheet) > 0);
+  // Only the sheets that found rows belong in the summary, so a clinic whose
+  // tabs all came back empty is left out whole.
+  const groups = groupByClinic(result.sheets)
+    .map((group) => ({
+      ...group,
+      sheets: group.sheets.filter((sheet) => sheetRowCount(sheet) > 0),
+    }))
+    .filter((group) => group.sheets.length > 0);
 
-  if (sheets.length === 0) return null;
+  if (groups.length === 0) return null;
 
   return (
     <Card>
@@ -370,19 +411,31 @@ export function OverviewCard({ result }: { result: ReportResult }) {
         </div>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
-        {sheets.map((sheet) => {
-          const label = sheetLabel(sheet);
-          const rowNumbers = rowNumberList(sheet);
-          return (
-            <div key={`${sheet.clinicId}-${sheet.tabTitle}`} className="flex flex-col gap-1.5">
-              <h3 className="text-sm font-medium">{label}</h3>
-              <div className="flex flex-wrap items-center gap-2">
-                <p className="font-mono text-xs">{rowNumbers}</p>
-                <CopyRowNumbers label={label} rowNumbers={rowNumbers} />
-              </div>
+        {groups.map((group) => (
+          <div key={group.clinicId} className="flex flex-col gap-2">
+            <h3 className="text-sm font-medium">{group.clinicName}</h3>
+            <div className="flex flex-col gap-3 border-l pl-3">
+              {group.sheets.map((sheet) => {
+                const label = sheetLabel(sheet);
+                const rowNumbers = rowNumberList(sheet);
+                return (
+                  <div
+                    key={`${sheet.clinicId}-${sheet.tabTitle}`}
+                    className="flex flex-col gap-1.5"
+                  >
+                    {sheet.tabTitle === "" ? null : (
+                      <h4 className="text-xs text-muted-foreground">{sheet.tabTitle}</h4>
+                    )}
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="font-mono text-xs">{rowNumbers}</p>
+                      <CopyRowNumbers label={label} rowNumbers={rowNumbers} />
+                    </div>
+                  </div>
+                );
+              })}
             </div>
-          );
-        })}
+          </div>
+        ))}
       </CardContent>
     </Card>
   );
@@ -411,43 +464,57 @@ export function ResultsCard({ result }: { result: ReportResult }) {
         {result.sheets.length === 0 ? (
           <p className="text-sm text-muted-foreground">{t.reports.results.noneProcessed}</p>
         ) : null}
-        {sheetsWithRowsFirst(result.sheets).map((sheet) => {
-          const buckets = sheet.bucketRows.filter((bucket) => bucket.rows.length > 0);
-          return (
-            <div key={`${sheet.clinicId}-${sheet.tabTitle}`} className="flex flex-col gap-3">
-              <div className="flex flex-wrap items-center gap-2">
-                <h3 className="text-sm font-medium">{sheetLabel(sheet)}</h3>
-                {sheet.error === null ? (
-                  <Badge variant="secondary" className="tabular-nums">
-                    {sheetRowCount(sheet)}
-                  </Badge>
-                ) : null}
-              </div>
-              {sheet.error ? (
-                <Alert variant="destructive">
-                  <AlertTitle>{t.reports.results.sheetError}</AlertTitle>
-                  <AlertDescription>{sheetErrorText(sheet.error, t)}</AlertDescription>
-                </Alert>
-              ) : (
-                <>
-                  {buckets.map((bucket) => (
-                    <ResultBucket
-                      key={bucket.bucketKey}
-                      bucket={bucket}
-                      headers={sheet.headers}
-                      showLabel={buckets.length > 1}
-                    />
-                  ))}
-                  {buckets.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">
-                      {t.reports.results.noMatchingRows}
-                    </p>
-                  ) : null}
-                </>
-              )}
+        {groupByClinic(result.sheets).map((group) => (
+          <div key={group.clinicId} className="flex flex-col gap-3">
+            <h3 className="text-sm font-medium">{group.clinicName}</h3>
+            <div className="flex flex-col gap-4 border-l pl-3">
+              {group.sheets.map((sheet) => {
+                const buckets = sheet.bucketRows.filter((bucket) => bucket.rows.length > 0);
+                // A sheet with neither a tab name nor a row count is a failed
+                // read of a whole sheet: only its error says anything.
+                const hasTabHeading = sheet.tabTitle !== "" || sheet.error === null;
+                return (
+                  <div key={`${sheet.clinicId}-${sheet.tabTitle}`} className="flex flex-col gap-3">
+                    {hasTabHeading ? (
+                      <div className="flex flex-wrap items-center gap-2">
+                        {sheet.tabTitle === "" ? null : (
+                          <h4 className="text-xs font-medium">{sheet.tabTitle}</h4>
+                        )}
+                        {sheet.error === null ? (
+                          <Badge variant="secondary" className="tabular-nums">
+                            {sheetRowCount(sheet)}
+                          </Badge>
+                        ) : null}
+                      </div>
+                    ) : null}
+                    {sheet.error ? (
+                      <Alert variant="destructive">
+                        <AlertTitle>{t.reports.results.sheetError}</AlertTitle>
+                        <AlertDescription>{sheetErrorText(sheet.error, t)}</AlertDescription>
+                      </Alert>
+                    ) : (
+                      <>
+                        {buckets.map((bucket) => (
+                          <ResultBucket
+                            key={bucket.bucketKey}
+                            bucket={bucket}
+                            headers={sheet.headers}
+                            showLabel={buckets.length > 1}
+                          />
+                        ))}
+                        {buckets.length === 0 ? (
+                          <p className="text-sm text-muted-foreground">
+                            {t.reports.results.noMatchingRows}
+                          </p>
+                        ) : null}
+                      </>
+                    )}
+                  </div>
+                );
+              })}
             </div>
-          );
-        })}
+          </div>
+        ))}
       </CardContent>
     </Card>
   );

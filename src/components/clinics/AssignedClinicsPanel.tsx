@@ -1,8 +1,10 @@
 import type { FunctionReturnType } from "convex/server";
 import { useMutation, useQuery } from "convex/react";
+import { Plus } from "lucide-react";
 import { useState, type SyntheticEvent } from "react";
 
 import { api } from "../../../convex/_generated/api";
+import type { Id } from "../../../convex/_generated/dataModel";
 import { DataCard, DataCardList, DataCardRow, DataTableFrame } from "@/components/app/DataCard";
 import { TruncatedText } from "@/components/app/TruncatedText";
 import { SheetColumnFields } from "@/components/clinics/SheetColumnFields";
@@ -40,6 +42,8 @@ import { localizedError, localizedMessage, type LocalizedMessage } from "@/lib/i
 
 type AssignedClinicList = FunctionReturnType<typeof api.clinics.listAssigned>;
 type AssignedClinicView = AssignedClinicList["clinics"][number];
+type AvailableClinicList = FunctionReturnType<typeof api.clinics.listAvailable>;
+type AvailableClinicView = AvailableClinicList["clinics"][number];
 
 type ClinicConfigFormValues = {
   sheetInput: string;
@@ -129,6 +133,132 @@ function ClinicConfigForm({
   );
 }
 
+function AvailableClinicRow({
+  clinic,
+  disabled,
+  onAdd,
+}: {
+  clinic: AvailableClinicView;
+  disabled: boolean;
+  onAdd: (clinicId: Id<"clinics">) => void;
+}) {
+  const { t } = useI18n();
+
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <div className="flex min-w-0 flex-col">
+        <span className="text-sm">{clinic.name}</span>
+        <span className="text-xs text-muted-foreground">
+          {clinic.externalClinicId
+            ? `${clinic.clientName} · ${t.clinics.externalId(clinic.externalClinicId)}`
+            : clinic.clientName}
+        </span>
+      </div>
+      <Button
+        variant="outline"
+        size="sm"
+        disabled={disabled}
+        onClick={() => onAdd(clinic.clinicId)}
+      >
+        {t.common.add}
+      </Button>
+    </div>
+  );
+}
+
+/**
+ * Picks clinics for the caller's own assignment. The list holds what is left to
+ * add, so an added clinic leaves the dialog as soon as the assignment lands.
+ */
+function AddClinicDialog({
+  open,
+  onOpenChange,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const { t } = useI18n();
+  const availableData = useQuery(api.clinics.listAvailable, {});
+  const addAssigned = useMutation(api.clinics.addAssigned);
+  const [search, setSearch] = useState("");
+  const [pendingClinicId, setPendingClinicId] = useState<Id<"clinics"> | null>(null);
+  const [error, setError] = useState<LocalizedMessage | null>(null);
+
+  const available = availableData?.clinics ?? [];
+  const needle = search.trim().toLowerCase();
+  const matches =
+    needle === ""
+      ? available
+      : available.filter((clinic) =>
+          `${clinic.name} ${clinic.clientName}`.toLowerCase().includes(needle)
+        );
+
+  async function add(clinicId: Id<"clinics">) {
+    setPendingClinicId(clinicId);
+    setError(null);
+    try {
+      await addAssigned({ clinicId });
+    } catch (cause) {
+      setError(localizedError(cause, (t) => t.clinics.addFailed));
+    } finally {
+      setPendingClinicId(null);
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>{t.clinics.addDialog.title}</DialogTitle>
+          <DialogDescription>{t.clinics.addDialog.description}</DialogDescription>
+        </DialogHeader>
+        <Field>
+          <FieldLabel htmlFor="available-clinic-search">{t.clinics.addDialog.search}</FieldLabel>
+          <Input
+            id="available-clinic-search"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+          />
+        </Field>
+        <div className="flex max-h-72 flex-col gap-3 overflow-y-auto">
+          {availableData === undefined ? (
+            <Skeleton className="h-40 w-full" />
+          ) : available.length === 0 ? (
+            <p className="text-sm text-muted-foreground">{t.clinics.addDialog.noneAvailable}</p>
+          ) : matches.length === 0 ? (
+            <p className="text-sm text-muted-foreground">{t.clinics.addDialog.noMatches}</p>
+          ) : (
+            matches.map((clinic) => (
+              <AvailableClinicRow
+                key={clinic.clinicId}
+                clinic={clinic}
+                disabled={pendingClinicId !== null}
+                onAdd={(clinicId) => void add(clinicId)}
+              />
+            ))
+          )}
+        </div>
+        {availableData?.hasMore ? (
+          <p className="text-xs text-muted-foreground">
+            {t.clinics.addDialog.limit(availableData.limit)}
+          </p>
+        ) : null}
+        {error ? (
+          <Alert variant="destructive">
+            <AlertTitle>{t.clinics.addFailedTitle}</AlertTitle>
+            <AlertDescription>{error.resolve(t)}</AlertDescription>
+          </Alert>
+        ) : null}
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            {t.common.close}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export function AssignedClinicsPanel() {
   const { t } = useI18n();
   const current = useQuery(api.staffAccounts.current, {});
@@ -136,11 +266,15 @@ export function AssignedClinicsPanel() {
     current?.status === "active" && (current.role === "admin" || current.role === "operator");
   const assignedData = useQuery(api.clinics.listAssigned, canConfigure ? {} : "skip");
   const updateAssigned = useMutation(api.clinics.updateAssigned);
+  const removeAssigned = useMutation(api.clinics.removeAssigned);
 
   const [editingClinic, setEditingClinic] = useState<AssignedClinicView | null>(null);
   const [formSession, setFormSession] = useState(0);
   const [formError, setFormError] = useState<LocalizedMessage | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [isAdding, setIsAdding] = useState(false);
+  const [pendingClinicId, setPendingClinicId] = useState<Id<"clinics"> | null>(null);
+  const [removeError, setRemoveError] = useState<LocalizedMessage | null>(null);
 
   function closeForm() {
     setEditingClinic(null);
@@ -172,9 +306,31 @@ export function AssignedClinicsPanel() {
     }
   }
 
+  async function removeClinic(clinic: AssignedClinicView) {
+    setPendingClinicId(clinic.clinicId);
+    setRemoveError(null);
+    try {
+      await removeAssigned({ clinicId: clinic.clinicId });
+    } catch (cause) {
+      setRemoveError(localizedError(cause, (t) => t.clinics.removeFailed));
+    } finally {
+      setPendingClinicId(null);
+    }
+  }
+
   useDocumentTitle(t.app.titles.clinics);
 
-  const header = <PageHeader title={t.clinics.pageTitle} />;
+  const header = (
+    <PageHeader
+      title={t.clinics.pageTitle}
+      actions={
+        <Button onClick={() => setIsAdding(true)}>
+          <Plus aria-hidden="true" />
+          {t.clinics.addClinic}
+        </Button>
+      }
+    />
+  );
 
   if (current === undefined) return <Skeleton className="h-80 w-full" />;
 
@@ -194,6 +350,13 @@ export function AssignedClinicsPanel() {
     <div className="flex flex-col gap-6">
       {header}
 
+      {removeError ? (
+        <Alert variant="destructive">
+          <AlertTitle>{t.clinics.removeFailedTitle}</AlertTitle>
+          <AlertDescription>{removeError.resolve(t)}</AlertDescription>
+        </Alert>
+      ) : null}
+
       {assignedData === undefined ? (
         <Skeleton className="h-64 w-full" />
       ) : assignedData.clinics.length === 0 ? (
@@ -212,35 +375,49 @@ export function AssignedClinicsPanel() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {assignedData.clinics.map((clinic) => (
-                  <TableRow key={clinic.clinicId}>
-                    <TableCell>
-                      <div className="flex flex-col gap-1">
-                        <span>{clinic.name}</span>
-                        {clinic.externalClinicId ? (
-                          <span className="text-xs text-muted-foreground">
-                            {t.clinics.externalId(clinic.externalClinicId)}
-                          </span>
-                        ) : null}
-                      </div>
-                    </TableCell>
-                    <TableCell>{clinic.clientName}</TableCell>
-                    <TableCell
-                      className="max-w-48 truncate font-mono text-xs"
-                      title={clinic.googleSheetId}
-                    >
-                      {clinic.googleSheetId}
-                    </TableCell>
-                    <TableCell className="font-mono text-xs">
-                      {formatSheetColumnSummary(clinic.sheetColumns)}
-                    </TableCell>
-                    <TableCell>
-                      <Button variant="outline" size="sm" onClick={() => openEdit(clinic)}>
-                        {t.clinics.table.configure}
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {assignedData.clinics.map((clinic) => {
+                  const isPending = pendingClinicId === clinic.clinicId;
+                  return (
+                    <TableRow key={clinic.clinicId}>
+                      <TableCell>
+                        <div className="flex flex-col gap-1">
+                          <span>{clinic.name}</span>
+                          {clinic.externalClinicId ? (
+                            <span className="text-xs text-muted-foreground">
+                              {t.clinics.externalId(clinic.externalClinicId)}
+                            </span>
+                          ) : null}
+                        </div>
+                      </TableCell>
+                      <TableCell>{clinic.clientName}</TableCell>
+                      <TableCell
+                        className="max-w-48 truncate font-mono text-xs"
+                        title={clinic.googleSheetId}
+                      >
+                        {clinic.googleSheetId}
+                      </TableCell>
+                      <TableCell className="font-mono text-xs">
+                        {formatSheetColumnSummary(clinic.sheetColumns)}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex gap-2">
+                          <Button variant="outline" size="sm" onClick={() => openEdit(clinic)}>
+                            {t.clinics.table.configure}
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                            disabled={isPending}
+                            onClick={() => void removeClinic(clinic)}
+                          >
+                            {t.common.remove}
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           </DataTableFrame>
@@ -273,12 +450,30 @@ export function AssignedClinicsPanel() {
                   <Button variant="outline" size="sm" onClick={() => openEdit(clinic)}>
                     {t.clinics.table.configure}
                   </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                    disabled={pendingClinicId === clinic.clinicId}
+                    onClick={() => void removeClinic(clinic)}
+                  >
+                    {t.common.remove}
+                  </Button>
                 </DataCardRow>
               </DataCard>
             ))}
           </DataCardList>
         </>
       )}
+
+      {isAdding ? (
+        <AddClinicDialog
+          open
+          onOpenChange={(open) => {
+            if (!open) setIsAdding(false);
+          }}
+        />
+      ) : null}
 
       {editingClinic !== null ? (
         <ClinicConfigForm

@@ -24,6 +24,7 @@ export type AppErrorPayload =
   | { code: "CLIENT_DISABLED" }
   | { code: "CLINIC_NOT_FOUND" }
   | { code: "CLINIC_NOT_ASSIGNED" }
+  | { code: "CLINIC_ASSIGNMENT_LIMIT"; limit: number }
   | { code: "INVALID_SHEET_COLUMN"; column: string }
   | { code: "CLINIC_NAME_TAKEN" }
   | { code: "CLIENT_NAME_TAKEN" }

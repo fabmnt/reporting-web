@@ -3,6 +3,7 @@ export const common = {
   close: "Close",
   add: "Add",
   edit: "Edit",
+  remove: "Remove",
   delete: "Delete",
   saveChanges: "Save changes",
   done: "Done",
@@ -15,4 +16,12 @@ export const common = {
   row: "Row",
   columnFallback: (index: number) => `Col ${index + 1}`,
   pickDateRange: "Pick a date range",
+  allStatuses: "All statuses",
+  deleteFailedTitle: "Delete failed",
+  pagination: {
+    range: (first: number, last: number, total: number) => `Showing ${first}–${last} of ${total}`,
+    page: (page: number, pageCount: number) => `Page ${page} of ${pageCount}`,
+    previous: "Previous",
+    next: "Next",
+  },
 };

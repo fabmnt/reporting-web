@@ -1,25 +1,18 @@
 import type { FunctionReturnType } from "convex/server";
 import { useMutation, useQuery } from "convex/react";
 import { Plus } from "lucide-react";
-import { useState, type SyntheticEvent } from "react";
+import { useMemo, useState, type SyntheticEvent } from "react";
 
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
+import { ConfirmDeleteDialog } from "@/components/admin/ConfirmDeleteDialog";
 import { AdminTabs } from "@/components/app/AdminTabs";
 import { DataCard, DataCardList, DataCardRow, DataTableFrame } from "@/components/app/DataCard";
 import { TruncatedText } from "@/components/app/TruncatedText";
 import { PageHeader } from "@/components/app/PageHeader";
+import { StatusFilterSelect } from "@/components/app/StatusFilterSelect";
+import { TablePagination } from "@/components/app/TablePagination";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -61,6 +54,7 @@ import {
 } from "@/lib/clinicSheetColumns";
 import { useDocumentTitle, useI18n } from "@/lib/i18n/context";
 import { localizedError, localizedMessage, type LocalizedMessage } from "@/lib/i18n/errors";
+import { matchesStatusFilter, tablePage, type StatusFilter } from "@/lib/tableList";
 import { SheetColumnFields } from "@/components/clinics/SheetColumnFields";
 
 type ClinicList = FunctionReturnType<typeof api.clinics.list>;
@@ -86,47 +80,9 @@ const EMPTY_FORM: ClinicFormValues = {
   sheetColumns: EMPTY_SHEET_COLUMN_FORM,
 };
 
-type ClientFormValues = {
-  name: string;
-  isActive: boolean;
-};
-
-const EMPTY_CLIENT_FORM: ClientFormValues = {
-  name: "",
-  isActive: true,
-};
-
-/** Shared by the client table and the narrow-screen cards. */
-function ClientActions({
-  client,
-  disabled,
-  onEdit,
-  onDelete,
-}: {
-  client: ClientView;
-  disabled: boolean;
-  onEdit: (client: ClientView) => void;
-  onDelete: (client: ClientView) => void;
-}) {
-  const { t } = useI18n();
-
-  return (
-    <div className="flex gap-2">
-      <Button variant="outline" size="sm" disabled={disabled} onClick={() => onEdit(client)}>
-        {t.common.edit}
-      </Button>
-      <Button
-        variant="ghost"
-        size="sm"
-        className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-        disabled={disabled}
-        onClick={() => onDelete(client)}
-      >
-        {t.common.delete}
-      </Button>
-    </div>
-  );
-}
+// The clinic list is read for every client at once, so the client filter starts
+// with the whole directory.
+const ALL_CLIENTS = "all";
 
 /** Shared by the clinic table and the narrow-screen cards. */
 function ClinicActions({
@@ -157,147 +113,6 @@ function ClinicActions({
         {t.common.delete}
       </Button>
     </div>
-  );
-}
-
-/**
- * Shared confirmation for irreversible actions. Stays open while the request
- * runs so a failure is readable, and closes only from the caller.
- */
-function ConfirmDeleteDialog({
-  open,
-  onOpenChange,
-  title,
-  description,
-  confirmLabel,
-  pending,
-  error,
-  onConfirm,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  title: string;
-  description: string;
-  confirmLabel: string;
-  pending: boolean;
-  error: LocalizedMessage | null;
-  onConfirm: () => void;
-}) {
-  const { t } = useI18n();
-
-  return (
-    <AlertDialog open={open} onOpenChange={onOpenChange}>
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>{title}</AlertDialogTitle>
-          <AlertDialogDescription>{description}</AlertDialogDescription>
-        </AlertDialogHeader>
-        {error ? (
-          <Alert variant="destructive">
-            <AlertTitle>{t.admin.clinics.delete.failedTitle}</AlertTitle>
-            <AlertDescription>{error.resolve(t)}</AlertDescription>
-          </Alert>
-        ) : null}
-        <AlertDialogFooter>
-          <AlertDialogCancel disabled={pending}>{t.common.cancel}</AlertDialogCancel>
-          <AlertDialogAction variant="destructive" disabled={pending} onClick={onConfirm}>
-            {confirmLabel}
-          </AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
-  );
-}
-
-function ClientForm({
-  open,
-  onOpenChange,
-  isEditing,
-  initialValues,
-  pending,
-  error,
-  onSubmit,
-  onCancel,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  isEditing: boolean;
-  initialValues: ClientFormValues;
-  pending: boolean;
-  error: LocalizedMessage | null;
-  onSubmit: (values: ClientFormValues) => Promise<void>;
-  onCancel: () => void;
-}) {
-  const { t } = useI18n();
-  const [values, setValues] = useState(initialValues);
-  const [validationError, setValidationError] = useState<LocalizedMessage | null>(null);
-
-  async function handleSubmit(event: SyntheticEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setValidationError(null);
-
-    const name = values.name.trim();
-    if (name === "") {
-      setValidationError(localizedMessage((t) => t.admin.clinics.clientForm.nameRequired));
-      return;
-    }
-
-    await onSubmit({ name, isActive: values.isActive });
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <form onSubmit={(event) => void handleSubmit(event)} className="flex flex-col gap-6">
-          <DialogHeader>
-            <DialogTitle>
-              {isEditing
-                ? t.admin.clinics.clientForm.editTitle
-                : t.admin.clinics.clientForm.createTitle}
-            </DialogTitle>
-            <DialogDescription>{t.admin.clinics.clientForm.description}</DialogDescription>
-          </DialogHeader>
-          <Field>
-            <FieldLabel htmlFor="client-name">{t.admin.clinics.clientForm.name}</FieldLabel>
-            <Input
-              id="client-name"
-              value={values.name}
-              onChange={(event) =>
-                setValues((current) => ({ ...current, name: event.target.value }))
-              }
-              placeholder={t.admin.clinics.clientForm.namePlaceholder}
-              disabled={pending}
-            />
-          </Field>
-          <Field orientation="horizontal">
-            <Switch
-              id="client-active"
-              checked={values.isActive}
-              onCheckedChange={(checked) =>
-                setValues((current) => ({ ...current, isActive: checked }))
-              }
-              disabled={pending}
-            />
-            <FieldLabel htmlFor="client-active">{t.admin.clinics.clientForm.active}</FieldLabel>
-          </Field>
-          {error ? (
-            <Alert variant="destructive">
-              <AlertTitle>{t.admin.clinics.clientForm.saveFailedTitle}</AlertTitle>
-              <AlertDescription>{error.resolve(t)}</AlertDescription>
-            </Alert>
-          ) : null}
-          <FieldError>{validationError?.resolve(t)}</FieldError>
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={onCancel} disabled={pending}>
-              {t.common.cancel}
-            </Button>
-            <Button type="submit" disabled={pending}>
-              {isEditing ? t.common.saveChanges : t.admin.clinics.clientForm.create}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
   );
 }
 
@@ -337,15 +152,15 @@ function ClinicForm({
     const name = values.name.trim();
     const googleSheetId = parseSpreadsheetId(values.sheetInput);
     if (name === "") {
-      setValidationError(localizedMessage((t) => t.admin.clinics.clinicForm.nameRequired));
+      setValidationError(localizedMessage((t) => t.admin.clinics.form.nameRequired));
       return;
     }
     if (googleSheetId === "") {
-      setValidationError(localizedMessage((t) => t.admin.clinics.clinicForm.invalidSheet));
+      setValidationError(localizedMessage((t) => t.admin.clinics.form.invalidSheet));
       return;
     }
     if (values.clientId === "") {
-      setValidationError(localizedMessage((t) => t.admin.clinics.clinicForm.clientRequired));
+      setValidationError(localizedMessage((t) => t.admin.clinics.form.clientRequired));
       return;
     }
 
@@ -358,19 +173,17 @@ function ClinicForm({
         <form onSubmit={(event) => void handleSubmit(event)} className="flex flex-col gap-6">
           <DialogHeader>
             <DialogTitle>
-              {isEditing
-                ? t.admin.clinics.clinicForm.editTitle
-                : t.admin.clinics.clinicForm.createTitle}
+              {isEditing ? t.admin.clinics.form.editTitle : t.admin.clinics.form.createTitle}
             </DialogTitle>
             <DialogDescription>
               {isEditing
-                ? t.admin.clinics.clinicForm.editDescription
-                : t.admin.clinics.clinicForm.createDescription}
+                ? t.admin.clinics.form.editDescription
+                : t.admin.clinics.form.createDescription}
             </DialogDescription>
           </DialogHeader>
           <div className="grid grid-cols-2 gap-3 md:gap-4">
             <Field>
-              <FieldLabel htmlFor="clinic-name">{t.admin.clinics.clinicForm.name}</FieldLabel>
+              <FieldLabel htmlFor="clinic-name">{t.admin.clinics.form.name}</FieldLabel>
               <Input
                 id="clinic-name"
                 value={values.name}
@@ -379,20 +192,20 @@ function ClinicForm({
               />
             </Field>
             <Field>
-              <FieldLabel>{t.admin.clinics.clinicForm.client}</FieldLabel>
+              <FieldLabel>{t.admin.clinics.form.client}</FieldLabel>
               <Select
                 items={clients.map((client) => ({
                   value: client.clientId,
                   label: client.isActive
                     ? client.name
-                    : `${client.name} ${t.admin.clinics.clinicForm.inactiveSuffix}`,
+                    : `${client.name} ${t.admin.clinics.form.inactiveSuffix}`,
                 }))}
                 value={values.clientId}
                 onValueChange={(value) => update("clientId", value ?? "")}
                 disabled={pending}
               >
-                <SelectTrigger aria-label={t.admin.clinics.clinicForm.client} className="w-full">
-                  <SelectValue placeholder={t.admin.clinics.clinicForm.chooseClient} />
+                <SelectTrigger aria-label={t.admin.clinics.form.client} className="w-full">
+                  <SelectValue placeholder={t.admin.clinics.form.chooseClient} />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectGroup>
@@ -400,7 +213,7 @@ function ClinicForm({
                       <SelectItem key={client.clientId} value={client.clientId}>
                         {client.isActive
                           ? client.name
-                          : `${client.name} ${t.admin.clinics.clinicForm.inactiveSuffix}`}
+                          : `${client.name} ${t.admin.clinics.form.inactiveSuffix}`}
                       </SelectItem>
                     ))}
                   </SelectGroup>
@@ -408,9 +221,7 @@ function ClinicForm({
               </Select>
             </Field>
             <Field className="col-span-2">
-              <FieldLabel htmlFor="clinic-sheet">
-                {t.admin.clinics.clinicForm.sheetLabel}
-              </FieldLabel>
+              <FieldLabel htmlFor="clinic-sheet">{t.admin.clinics.form.sheetLabel}</FieldLabel>
               <Input
                 id="clinic-sheet"
                 value={values.sheetInput}
@@ -421,7 +232,7 @@ function ClinicForm({
             </Field>
             <Field>
               <FieldLabel htmlFor="clinic-external-id">
-                {t.admin.clinics.clinicForm.externalId}
+                {t.admin.clinics.form.externalId}
               </FieldLabel>
               <Input
                 id="clinic-external-id"
@@ -437,7 +248,7 @@ function ClinicForm({
                 onCheckedChange={(checked) => update("isActive", checked)}
                 disabled={pending}
               />
-              <FieldLabel htmlFor="clinic-active">{t.admin.clinics.clinicForm.active}</FieldLabel>
+              <FieldLabel htmlFor="clinic-active">{t.admin.clinics.form.active}</FieldLabel>
             </Field>
           </div>
           <SheetColumnFields
@@ -447,7 +258,7 @@ function ClinicForm({
           />
           {error ? (
             <Alert variant="destructive">
-              <AlertTitle>{t.admin.clinics.clinicForm.saveFailedTitle}</AlertTitle>
+              <AlertTitle>{t.admin.clinics.form.saveFailedTitle}</AlertTitle>
               <AlertDescription>{error.resolve(t)}</AlertDescription>
             </Alert>
           ) : null}
@@ -457,7 +268,7 @@ function ClinicForm({
               {t.common.cancel}
             </Button>
             <Button type="submit" disabled={pending}>
-              {isEditing ? t.common.saveChanges : t.admin.clinics.clinicForm.create}
+              {isEditing ? t.common.saveChanges : t.admin.clinics.form.create}
             </Button>
           </DialogFooter>
         </form>
@@ -476,52 +287,74 @@ export function AdminClinicsPanel() {
   const createClinic = useMutation(api.clinics.create);
   const updateClinic = useMutation(api.clinics.update);
   const removeClinic = useMutation(api.clinics.remove);
-  const createClient = useMutation(api.clinics.createClient);
-  const updateClient = useMutation(api.clinics.updateClient);
-  const removeClient = useMutation(api.clinics.removeClient);
 
-  const [clinicFormError, setClinicFormError] = useState<LocalizedMessage | null>(null);
-  const [clientFormError, setClientFormError] = useState<LocalizedMessage | null>(null);
-  const [clinicDeleteError, setClinicDeleteError] = useState<LocalizedMessage | null>(null);
-  const [clientDeleteError, setClientDeleteError] = useState<LocalizedMessage | null>(null);
+  const [formError, setFormError] = useState<LocalizedMessage | null>(null);
+  const [deleteError, setDeleteError] = useState<LocalizedMessage | null>(null);
   const [isSaving, setIsSaving] = useState(false);
-  const [isSavingClient, setIsSavingClient] = useState(false);
   const [pendingClinicId, setPendingClinicId] = useState<Id<"clinics"> | null>(null);
-  const [pendingClientId, setPendingClientId] = useState<Id<"clients"> | null>(null);
   const [formMode, setFormMode] = useState<"closed" | "creating" | "editing">("closed");
   const [editingClinic, setEditingClinic] = useState<ClinicView | null>(null);
-  const [clientFormMode, setClientFormMode] = useState<"closed" | "creating" | "editing">("closed");
-  const [editingClient, setEditingClient] = useState<ClientView | null>(null);
   // Bumped on every open so the form remounts with fresh values. Cancelling a
   // draft must not leak into the next open.
-  const [clinicFormSession, setClinicFormSession] = useState(0);
-  const [clientFormSession, setClientFormSession] = useState(0);
+  const [formSession, setFormSession] = useState(0);
   const [clinicToDelete, setClinicToDelete] = useState<ClinicView | null>(null);
-  const [clientToDelete, setClientToDelete] = useState<ClientView | null>(null);
+  const [search, setSearch] = useState("");
+  const [clientFilter, setClientFilter] = useState(ALL_CLIENTS);
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [page, setPage] = useState(1);
+
+  const clients = useMemo(() => clientsData?.clients ?? [], [clientsData]);
+  const clinics = useMemo(() => clinicsData?.clinics ?? [], [clinicsData]);
+
+  // The options come from the clinics themselves, so every client shown here
+  // has at least one clinic to filter down to.
+  const clientOptions = useMemo(() => {
+    const nameByClientId = new Map<string, string>();
+    for (const clinic of clinics) nameByClientId.set(clinic.clientId, clinic.clientName);
+    return [...nameByClientId]
+      .map(([value, label]) => ({ value, label }))
+      .sort((left, right) => left.label.localeCompare(right.label));
+  }, [clinics]);
+
+  const filteredClinics = useMemo(() => {
+    const needle = search.trim().toLowerCase();
+    return clinics.filter((clinic) => {
+      if (clientFilter !== ALL_CLIENTS && clinic.clientId !== clientFilter) return false;
+      if (!matchesStatusFilter(clinic.isActive, statusFilter)) return false;
+      if (needle === "") return true;
+      return [
+        clinic.name,
+        clinic.clientName,
+        clinic.externalClinicId ?? "",
+        clinic.googleSheetId,
+      ].some((value) => value.toLowerCase().includes(needle));
+    });
+  }, [clinics, search, clientFilter, statusFilter]);
+  const clinicPage = tablePage(filteredClinics, page);
 
   function closeForm() {
     setFormMode("closed");
     setEditingClinic(null);
-    setClinicFormError(null);
+    setFormError(null);
   }
 
   function openCreate() {
-    setClinicFormError(null);
+    setFormError(null);
     setEditingClinic(null);
-    setClinicFormSession((session) => session + 1);
+    setFormSession((session) => session + 1);
     setFormMode("creating");
   }
 
   function openEdit(clinic: ClinicView) {
-    setClinicFormError(null);
+    setFormError(null);
     setEditingClinic(clinic);
-    setClinicFormSession((session) => session + 1);
+    setFormSession((session) => session + 1);
     setFormMode("editing");
   }
 
   async function submitClinic(values: ClinicFormValues) {
     setIsSaving(true);
-    setClinicFormError(null);
+    setFormError(null);
     try {
       const clientId = values.clientId as Id<"clients">;
       const sheetColumns = buildSheetColumnsInput(values.sheetColumns) ?? {};
@@ -547,90 +380,29 @@ export function AdminClinicsPanel() {
       }
       closeForm();
     } catch (cause) {
-      setClinicFormError(localizedError(cause, (t) => t.admin.clinics.clinicForm.saveFailed));
+      setFormError(localizedError(cause, (t) => t.admin.clinics.form.saveFailed));
     } finally {
       setIsSaving(false);
     }
   }
 
-  function openCreateClient() {
-    setClientFormError(null);
-    setEditingClient(null);
-    setClientFormSession((session) => session + 1);
-    setClientFormMode("creating");
-  }
-
-  function openEditClient(client: ClientView) {
-    setClientFormError(null);
-    setEditingClient(client);
-    setClientFormSession((session) => session + 1);
-    setClientFormMode("editing");
-  }
-
-  function closeClientForm() {
-    setClientFormMode("closed");
-    setEditingClient(null);
-    setClientFormError(null);
-  }
-
-  async function submitClient(values: ClientFormValues) {
-    setIsSavingClient(true);
-    setClientFormError(null);
-    try {
-      if (clientFormMode === "editing" && editingClient !== null) {
-        await updateClient({
-          clientId: editingClient.clientId,
-          name: values.name,
-          isActive: values.isActive,
-        });
-      } else {
-        await createClient({ name: values.name });
-      }
-      closeClientForm();
-    } catch (cause) {
-      setClientFormError(localizedError(cause, (t) => t.admin.clinics.clientForm.saveFailed));
-    } finally {
-      setIsSavingClient(false);
-    }
-  }
-
   function requestClinicDelete(clinic: ClinicView) {
-    setClinicDeleteError(null);
+    setDeleteError(null);
     setClinicToDelete(clinic);
-  }
-
-  function requestClientDelete(client: ClientView) {
-    setClientDeleteError(null);
-    setClientToDelete(client);
   }
 
   async function confirmClinicDelete() {
     if (clinicToDelete === null) return;
 
     setPendingClinicId(clinicToDelete.clinicId);
-    setClinicDeleteError(null);
+    setDeleteError(null);
     try {
       await removeClinic({ clinicId: clinicToDelete.clinicId });
       setClinicToDelete(null);
     } catch (cause) {
-      setClinicDeleteError(localizedError(cause, (t) => t.admin.clinics.delete.clinicFailed));
+      setDeleteError(localizedError(cause, (t) => t.admin.clinics.delete.clinicFailed));
     } finally {
       setPendingClinicId(null);
-    }
-  }
-
-  async function confirmClientDelete() {
-    if (clientToDelete === null) return;
-
-    setPendingClientId(clientToDelete.clientId);
-    setClientDeleteError(null);
-    try {
-      await removeClient({ clientId: clientToDelete.clientId });
-      setClientToDelete(null);
-    } catch (cause) {
-      setClientDeleteError(localizedError(cause, (t) => t.admin.clinics.delete.clientFailed));
-    } finally {
-      setPendingClientId(null);
     }
   }
 
@@ -663,7 +435,6 @@ export function AdminClinicsPanel() {
     );
   }
 
-  const clients = clientsData?.clients ?? [];
   const isEditing = formMode === "editing";
   const formInitialValues: ClinicFormValues =
     isEditing && editingClinic !== null
@@ -683,121 +454,81 @@ export function AdminClinicsPanel() {
       <AdminTabs />
 
       <section className="flex flex-col gap-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="flex flex-col gap-1">
-            <h2 className="font-heading text-base font-medium">{t.admin.clinics.clientsTitle}</h2>
-            <p className="text-sm text-muted-foreground">{t.admin.clinics.clientsDescription}</p>
-          </div>
-          <Button variant="outline" onClick={openCreateClient}>
-            <Plus data-icon="inline-start" />
-            {t.admin.clinics.addClient}
-          </Button>
-        </div>
-
-        {clientsData === undefined ? (
-          <Skeleton className="h-40 w-full" />
-        ) : clients.length === 0 ? (
-          <p className="text-sm text-muted-foreground">{t.admin.clinics.noClients}</p>
-        ) : (
-          <>
-            <DataTableFrame>
-              <Table>
-                <TableHeader className="bg-muted/40">
-                  <TableRow>
-                    <TableHead>{t.admin.clinics.clientTable.client}</TableHead>
-                    <TableHead>{t.admin.clinics.clientTable.key}</TableHead>
-                    <TableHead>{t.admin.clinics.clientTable.status}</TableHead>
-                    <TableHead>{t.common.actions}</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {clients.map((client) => {
-                    const isPending = pendingClientId === client.clientId;
-                    return (
-                      <TableRow key={client.clientId}>
-                        <TableCell>{client.name}</TableCell>
-                        <TableCell className="font-mono text-xs text-muted-foreground">
-                          {client.key}
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant={client.isActive ? "secondary" : "outline"}>
-                            {client.isActive ? t.common.active : t.common.inactive}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <ClientActions
-                            client={client}
-                            disabled={isPending}
-                            onEdit={openEditClient}
-                            onDelete={requestClientDelete}
-                          />
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </DataTableFrame>
-
-            <DataCardList>
-              {clients.map((client) => (
-                <DataCard
-                  key={client.clientId}
-                  title={client.name}
-                  subtitle={client.key}
-                  badge={
-                    <Badge variant={client.isActive ? "secondary" : "outline"}>
-                      {client.isActive ? t.common.active : t.common.inactive}
-                    </Badge>
-                  }
-                >
-                  <DataCardRow>
-                    <ClientActions
-                      client={client}
-                      disabled={pendingClientId === client.clientId}
-                      onEdit={openEditClient}
-                      onDelete={requestClientDelete}
-                    />
-                  </DataCardRow>
-                </DataCard>
-              ))}
-            </DataCardList>
-          </>
-        )}
-
-        {clientsData?.hasMore ? (
-          <p className="text-xs text-muted-foreground">
-            {t.admin.clinics.clientsLimit(clientsData.limit)}
-          </p>
-        ) : null}
-      </section>
-
-      <section className="flex flex-col gap-4">
         <div className="flex flex-col gap-1">
           <h2 className="font-heading text-base font-medium">{t.admin.clinics.allClinicsTitle}</h2>
           <p className="text-sm text-muted-foreground">{t.admin.clinics.allClinicsDescription}</p>
         </div>
 
+        {clinicsData !== undefined && clinics.length > 0 ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <Input
+              value={search}
+              onChange={(event) => {
+                setSearch(event.target.value);
+                setPage(1);
+              }}
+              placeholder={t.admin.clinics.filters.search}
+              aria-label={t.admin.clinics.filters.search}
+              className="h-8 w-full max-w-64"
+            />
+            <Select
+              items={[
+                { value: ALL_CLIENTS, label: t.admin.clinics.filters.allClients },
+                ...clientOptions,
+              ]}
+              value={clientFilter}
+              onValueChange={(value) => {
+                setClientFilter(value ?? ALL_CLIENTS);
+                setPage(1);
+              }}
+            >
+              <SelectTrigger aria-label={t.admin.clinics.filters.client} className="w-48">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectGroup>
+                  <SelectItem value={ALL_CLIENTS}>{t.admin.clinics.filters.allClients}</SelectItem>
+                  {clientOptions.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+            <StatusFilterSelect
+              value={statusFilter}
+              label={t.admin.clinics.filters.status}
+              onChange={(next) => {
+                setStatusFilter(next);
+                setPage(1);
+              }}
+            />
+          </div>
+        ) : null}
+
         {clinicsData === undefined ? (
           <Skeleton className="h-64 w-full" />
-        ) : clinicsData.clinics.length === 0 ? (
+        ) : clinics.length === 0 ? (
           <p className="text-sm text-muted-foreground">{t.admin.clinics.noClinics}</p>
+        ) : filteredClinics.length === 0 ? (
+          <p className="text-sm text-muted-foreground">{t.admin.clinics.noMatches}</p>
         ) : (
           <>
             <DataTableFrame>
               <Table>
                 <TableHeader className="bg-muted/40">
                   <TableRow>
-                    <TableHead>{t.admin.clinics.clinicTable.clinic}</TableHead>
-                    <TableHead>{t.admin.clinics.clinicTable.client}</TableHead>
-                    <TableHead>{t.admin.clinics.clinicTable.googleSheet}</TableHead>
-                    <TableHead>{t.admin.clinics.clinicTable.columns}</TableHead>
-                    <TableHead>{t.admin.clinics.clinicTable.status}</TableHead>
+                    <TableHead>{t.admin.clinics.table.clinic}</TableHead>
+                    <TableHead>{t.admin.clinics.table.client}</TableHead>
+                    <TableHead>{t.admin.clinics.table.googleSheet}</TableHead>
+                    <TableHead>{t.admin.clinics.table.columns}</TableHead>
+                    <TableHead>{t.admin.clinics.table.status}</TableHead>
                     <TableHead>{t.common.actions}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {clinicsData.clinics.map((clinic) => {
+                  {clinicPage.rows.map((clinic) => {
                     const isPending = pendingClinicId === clinic.clinicId;
                     return (
                       <TableRow key={clinic.clinicId}>
@@ -842,7 +573,7 @@ export function AdminClinicsPanel() {
             </DataTableFrame>
 
             <DataCardList>
-              {clinicsData.clinics.map((clinic) => (
+              {clinicPage.rows.map((clinic) => (
                 <DataCard
                   key={clinic.clinicId}
                   title={clinic.name}
@@ -857,15 +588,15 @@ export function AdminClinicsPanel() {
                     </Badge>
                   }
                 >
-                  <DataCardRow label={t.admin.clinics.clinicTable.client}>
+                  <DataCardRow label={t.admin.clinics.table.client}>
                     <TruncatedText>{clinic.clientName}</TruncatedText>
                   </DataCardRow>
-                  <DataCardRow label={t.admin.clinics.clinicTable.googleSheet}>
+                  <DataCardRow label={t.admin.clinics.table.googleSheet}>
                     <TruncatedText className="font-mono text-xs">
                       {clinic.googleSheetId}
                     </TruncatedText>
                   </DataCardRow>
-                  <DataCardRow label={t.admin.clinics.clinicTable.columns}>
+                  <DataCardRow label={t.admin.clinics.table.columns}>
                     <TruncatedText className="font-mono text-xs">
                       {formatSheetColumnSummary(clinic.sheetColumns)}
                     </TruncatedText>
@@ -881,18 +612,27 @@ export function AdminClinicsPanel() {
                 </DataCard>
               ))}
             </DataCardList>
+
+            <TablePagination
+              page={clinicPage.page}
+              pageCount={clinicPage.pageCount}
+              first={clinicPage.first}
+              last={clinicPage.last}
+              total={clinicPage.total}
+              onPageChange={setPage}
+            />
           </>
         )}
 
         {clinicsData?.hasMore ? (
           <p className="text-xs text-muted-foreground">
-            {t.admin.clinics.clinicsLimit(clinicsData.limit)}
+            {t.admin.clinics.limit(clinicsData.limit)}
           </p>
         ) : null}
       </section>
 
       <ClinicForm
-        key={`clinic-form-${clinicFormSession}`}
+        key={`clinic-form-${formSession}`}
         open={formMode !== "closed"}
         onOpenChange={(open) => {
           if (!open) closeForm();
@@ -901,27 +641,9 @@ export function AdminClinicsPanel() {
         clients={clients}
         initialValues={formInitialValues}
         pending={isSaving}
-        error={clinicFormError}
+        error={formError}
         onSubmit={submitClinic}
         onCancel={closeForm}
-      />
-
-      <ClientForm
-        key={`client-form-${clientFormSession}`}
-        open={clientFormMode !== "closed"}
-        onOpenChange={(open) => {
-          if (!open) closeClientForm();
-        }}
-        isEditing={clientFormMode === "editing"}
-        initialValues={
-          clientFormMode === "editing" && editingClient !== null
-            ? { name: editingClient.name, isActive: editingClient.isActive }
-            : EMPTY_CLIENT_FORM
-        }
-        pending={isSavingClient}
-        error={clientFormError}
-        onSubmit={submitClient}
-        onCancel={closeClientForm}
       />
 
       <ConfirmDeleteDialog
@@ -929,7 +651,7 @@ export function AdminClinicsPanel() {
         onOpenChange={(open) => {
           if (!open) {
             setClinicToDelete(null);
-            setClinicDeleteError(null);
+            setDeleteError(null);
           }
         }}
         title={t.admin.clinics.delete.clinicTitle}
@@ -938,26 +660,8 @@ export function AdminClinicsPanel() {
         }
         confirmLabel={t.admin.clinics.delete.deleteClinic}
         pending={pendingClinicId !== null}
-        error={clinicDeleteError}
+        error={deleteError}
         onConfirm={() => void confirmClinicDelete()}
-      />
-
-      <ConfirmDeleteDialog
-        open={clientToDelete !== null}
-        onOpenChange={(open) => {
-          if (!open) {
-            setClientToDelete(null);
-            setClientDeleteError(null);
-          }
-        }}
-        title={t.admin.clinics.delete.clientTitle}
-        description={
-          clientToDelete ? t.admin.clinics.delete.clientDescription(clientToDelete.name) : ""
-        }
-        confirmLabel={t.admin.clinics.delete.deleteClient}
-        pending={pendingClientId !== null}
-        error={clientDeleteError}
-        onConfirm={() => void confirmClientDelete()}
       />
     </div>
   );

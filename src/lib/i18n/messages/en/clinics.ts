@@ -2,8 +2,21 @@ export const clinics = {
   pageTitle: "Clinics",
   accessDeniedTitle: "Active staff access required",
   accessDeniedBody: "Your account cannot configure clinics.",
-  noneAssigned:
-    "No clinics are assigned to you yet. Ask an admin to assign clinics before you can configure them.",
+  noneAssigned: "No clinics are assigned to you yet. Add the clinics you work on.",
+  addClinic: "Add clinic",
+  addFailedTitle: "Could not add the clinic",
+  addFailed: "Adding the clinic failed.",
+  removeFailedTitle: "Could not remove the clinic",
+  removeFailed: "Removing the clinic failed.",
+  addDialog: {
+    title: "Add clinics",
+    description:
+      "Pick the clinics you run reports on. They stay on your account until you remove them.",
+    search: "Search clinics",
+    noneAvailable: "Every active clinic is already on your account.",
+    noMatches: "No clinics match this search.",
+    limit: (limit: number) => `Showing the first ${limit} clinics.`,
+  },
   table: {
     clinic: "Clinic",
     client: "Client",
