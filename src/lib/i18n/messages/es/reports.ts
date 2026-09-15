@@ -16,7 +16,6 @@ export const reports = {
   verificationType: "Tipo de verificación",
   verificationAll: "Todos",
   includedClinics: "Clínicas incluidas",
-  allClinicsAdmin: "Todas las clínicas (admin)",
   noAssignedClinics:
     "Aún no tienes clínicas asignadas. Pide a un administrador que te asigne clínicas.",
   run: "Ejecutar reporte",

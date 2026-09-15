@@ -6,7 +6,7 @@ import { mutation, query } from "./_generated/server";
 import { appError, type AppErrorPayload } from "./model/appErrors";
 import { clientKeyFromName } from "./model/clients";
 import { clinicSheetColumns } from "./model/clinicSheetColumns";
-import { listProfileClinics, profileUsesAllClinics } from "./model/reporting";
+import { listProfileClinics } from "./model/reporting";
 import { requireAdmin, requireOperator } from "./model/staff";
 
 const MAX_CLINICS = 500;
@@ -332,7 +332,6 @@ export const list = query({
 export const listAssigned = query({
   args: {},
   returns: v.object({
-    usesAllClinics: v.boolean(),
     clinics: v.array(assignedClinicView),
   }),
   handler: async (ctx) => {
@@ -360,10 +359,7 @@ export const listAssigned = query({
       });
     }
 
-    return {
-      usesAllClinics: profileUsesAllClinics(profile),
-      clinics,
-    };
+    return { clinics };
   },
 });
 

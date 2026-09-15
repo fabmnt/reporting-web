@@ -16,7 +16,6 @@ export const reports = {
   verificationType: "Verification type",
   verificationAll: "All",
   includedClinics: "Included clinics",
-  allClinicsAdmin: "All clinics (admin)",
   noAssignedClinics: "No clinics assigned yet. Ask an admin to assign clinics to your account.",
   run: "Run report",
   running: "Running report",

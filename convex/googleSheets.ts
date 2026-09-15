@@ -3,7 +3,7 @@ import { v } from "convex/values";
 import { action, query } from "./_generated/server";
 import { internal } from "./_generated/api.js";
 import { env } from "./_generated/server";
-import { listProfileClinics, profileUsesAllClinics } from "./model/reporting";
+import { listProfileClinics } from "./model/reporting";
 import { requireOperator } from "./model/staff";
 
 type GoogleTokenResponse = {
@@ -89,7 +89,6 @@ export const listSheetTabs = action({
 export const listAssignedReportClinics = query({
   args: {},
   returns: v.object({
-    usesAllClinics: v.boolean(),
     clinics: v.array(
       v.object({
         clinicId: v.id("clinics"),
@@ -116,9 +115,6 @@ export const listAssignedReportClinics = query({
         clientName,
       });
     }
-    return {
-      usesAllClinics: profileUsesAllClinics(profile),
-      clinics,
-    };
+    return { clinics };
   },
 });

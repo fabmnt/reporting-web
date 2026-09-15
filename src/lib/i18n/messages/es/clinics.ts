@@ -4,9 +4,6 @@ export const clinics = {
     "Configura el enlace de la hoja de Google y las letras de columna de las clínicas que tienes asignadas.",
   accessDeniedTitle: "Se requiere acceso de personal activo",
   accessDeniedBody: "Tu cuenta no puede configurar clínicas.",
-  allClinicsTitle: "Todas las clínicas activas",
-  allClinicsBody:
-    "Eres administrador y no tienes clínicas asignadas, así que aquí aparecen todas las clínicas activas.",
   noneAssigned:
     "Aún no tienes clínicas asignadas. Pide a un administrador que te asigne clínicas antes de configurarlas.",
   table: {

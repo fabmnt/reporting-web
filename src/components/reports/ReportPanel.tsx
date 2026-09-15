@@ -525,11 +525,6 @@ export function ReportRunner() {
                   {assignedClinicCount}
                 </Badge>
               </div>
-              {assignment.usesAllClinics ? (
-                <Badge variant="outline" className="w-fit">
-                  {t.reports.allClinicsAdmin}
-                </Badge>
-              ) : null}
               {assignedClinicCount === 0 ? (
                 <p className="text-sm text-muted-foreground">{t.reports.noAssignedClinics}</p>
               ) : (

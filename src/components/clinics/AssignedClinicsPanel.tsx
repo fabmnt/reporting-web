@@ -192,13 +192,6 @@ export function AssignedClinicsPanel() {
     <div className="flex flex-col gap-6">
       {header}
 
-      {assignedData?.usesAllClinics ? (
-        <Alert>
-          <AlertTitle>{t.clinics.allClinicsTitle}</AlertTitle>
-          <AlertDescription>{t.clinics.allClinicsBody}</AlertDescription>
-        </Alert>
-      ) : null}
-
       {assignedData === undefined ? (
         <Skeleton className="h-64 w-full" />
       ) : assignedData.clinics.length === 0 ? (

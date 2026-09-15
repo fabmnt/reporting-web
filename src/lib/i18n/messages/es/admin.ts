@@ -15,7 +15,6 @@ export const admin = {
     },
     roleFor: (name: string) => `Rol de ${name}`,
     assign: "Asignar",
-    allClinics: "Todas",
     enabled: "Habilitada",
     disabled: "Deshabilitada",
     failures: {
@@ -26,9 +25,8 @@ export const admin = {
     assignment: {
       title: "Asignar clínicas",
       descriptionFor: (name: string) =>
-        `${name} ejecuta reportes solo en las clínicas que selecciones. Los administradores sin asignaciones ejecutan todas las clínicas activas.`,
-      descriptionGeneric:
-        "Elige en qué clínicas puede ejecutar reportes esta cuenta. Los administradores sin asignaciones ejecutan todas las clínicas activas.",
+        `${name} ejecuta reportes solo en las clínicas que selecciones.`,
+      descriptionGeneric: "Elige en qué clínicas puede ejecutar reportes esta cuenta.",
       noneAvailable: "Aún no hay clínicas. Añádelas antes de asignarlas.",
       failedTitle: "No se pudieron asignar las clínicas",
       save: "Guardar clínicas",

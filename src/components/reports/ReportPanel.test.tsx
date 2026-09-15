@@ -29,7 +29,6 @@ const TYPES_QUERY = nameOf(api.reportTypes.listRunnable);
 const RUN_ACTION = nameOf(api.reports.runSheetReport);
 
 const ASSIGNMENT = {
-  usesAllClinics: false,
   clinics: [{ clinicId: "clinic-1", name: "Downtown", clientName: "Smilist" }],
 };
 

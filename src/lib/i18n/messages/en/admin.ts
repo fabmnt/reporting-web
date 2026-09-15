@@ -15,7 +15,6 @@ export const admin = {
     },
     roleFor: (name: string) => `Role for ${name}`,
     assign: "Assign",
-    allClinics: "All",
     enabled: "Enabled",
     disabled: "Disabled",
     failures: {
@@ -25,10 +24,8 @@ export const admin = {
     },
     assignment: {
       title: "Assign clinics",
-      descriptionFor: (name: string) =>
-        `${name} runs reports only on the clinics you select. Admins with no assignments run every active clinic.`,
-      descriptionGeneric:
-        "Choose which clinics this account can run reports on. Admins with no assignments run every active clinic.",
+      descriptionFor: (name: string) => `${name} runs reports only on the clinics you select.`,
+      descriptionGeneric: "Choose which clinics this account can run reports on.",
       noneAvailable: "No clinics yet. Add clinics before assigning them.",
       failedTitle: "Could not assign clinics",
       save: "Save clinics",

@@ -4,9 +4,6 @@ export const clinics = {
     "Configure the Google Sheet link and column letters for clinics assigned to you.",
   accessDeniedTitle: "Active staff access required",
   accessDeniedBody: "Your account cannot configure clinics.",
-  allClinicsTitle: "All active clinics",
-  allClinicsBody:
-    "You are an admin with no clinic assignments, so every active clinic is listed here.",
   noneAssigned:
     "No clinics are assigned to you yet. Ask an admin to assign clinics before you can configure them.",
   table: {

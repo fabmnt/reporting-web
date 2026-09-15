@@ -1,15 +1,9 @@
-import type { Infer } from "convex/values";
-
 import type { Id } from "../_generated/dataModel";
 import type { QueryCtx } from "../_generated/server";
 import { appError } from "./appErrors";
 import { resolveClinicSheetColumns, type ResolvedClinicSheetColumns } from "./clinicSheetColumns";
-import type { staffRole } from "../schema";
-
-export type StaffRole = Infer<typeof staffRole>;
 
 export type StaffProfileForReporting = {
-  role: StaffRole;
   assignedClinicIds?: Id<"clinics">[];
 };
 
@@ -55,24 +49,13 @@ function toReportingClinic(clinic: {
   };
 }
 
-// Admins with no assignments see every active clinic. Everyone else runs only
-// their assignedClinicIds (active clinics only, unknown ids are skipped).
+// Every account, admins included, sees only its assignedClinicIds (active
+// clinics only, unknown ids are skipped).
 export async function listProfileClinics(
   ctx: ReportingCtx,
   profile: StaffProfileForReporting
 ): Promise<ReportingClinicDoc[]> {
   const assignedIds = (profile.assignedClinicIds ?? []).slice(0, MAX_ASSIGNED_CLINICS);
-
-  if (profile.role === "admin" && assignedIds.length === 0) {
-    const rows = await ctx.db
-      .query("clinics")
-      .withIndex("by_clientId_and_name")
-      .take(MAX_CLIENT_CLINICS);
-    const clinics = rows.filter((clinic) => clinic.isActive).map(toReportingClinic);
-    clinics.sort((a, b) => a.name.localeCompare(b.name));
-    return clinics;
-  }
-
   const clinics: ReportingClinicDoc[] = [];
   for (const clinicId of assignedIds) {
     const clinic = await ctx.db.get("clinics", clinicId);
@@ -81,10 +64,6 @@ export async function listProfileClinics(
   }
   clinics.sort((a, b) => a.name.localeCompare(b.name));
   return clinics;
-}
-
-export function profileUsesAllClinics(profile: StaffProfileForReporting): boolean {
-  return profile.role === "admin" && (profile.assignedClinicIds ?? []).length === 0;
 }
 
 export async function countClientClinics(

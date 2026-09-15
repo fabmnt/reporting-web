@@ -187,10 +187,6 @@ export function AdminAccountsPanel() {
                   {managed.accounts.map((account) => {
                     const isPending = pendingProfileId === account.profileId;
                     const assignedCount = account.assignedClinicIds.length;
-                    const allClinicsAdmin =
-                      account.role === "admin" && assignedCount === 0
-                        ? t.admin.accounts.allClinics
-                        : assignedCount;
                     return (
                       <TableRow key={account.profileId}>
                         <TableCell>
@@ -232,7 +228,7 @@ export function AdminAccountsPanel() {
                         <TableCell>
                           <div className="flex items-center gap-2">
                             <Badge variant="secondary" className="tabular-nums">
-                              {allClinicsAdmin}
+                              {assignedCount}
                             </Badge>
                             <Button
                               variant="outline"
