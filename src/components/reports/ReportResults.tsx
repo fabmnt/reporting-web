@@ -1,12 +1,15 @@
 "use client";
 
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, Copy } from "lucide-react";
+import { useState } from "react";
 
 import type { Id } from "../../../convex/_generated/dataModel";
 import type { ReportSheetError } from "../../../convex/model/appErrors";
 import { DataTableFrame } from "@/components/app/DataCard";
+import { TruncatedText } from "@/components/app/TruncatedText";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
@@ -19,6 +22,7 @@ import {
 } from "@/components/ui/table";
 import { useI18n } from "@/lib/i18n/context";
 import { sheetErrorText } from "@/lib/i18n/errors";
+import { cn } from "@/lib/utils";
 
 export type ReportRow = { rowNumber: number; values: string[] };
 export type BucketResult = {
@@ -86,6 +90,36 @@ function filledColumnIndexes(row: ReportRow, shownColumns: number[]): number[] {
   return indexes;
 }
 
+function sheetRowCount(sheet: SheetResult): number {
+  return sheet.bucketRows.reduce((sum, bucket) => sum + bucket.rows.length, 0);
+}
+
+function countRows(result: ReportResult): number {
+  return result.sheets.reduce((sum, sheet) => sum + sheetRowCount(sheet), 0);
+}
+
+/** How a sheet is named on both cards: the clinic and the tab it was read from. */
+function sheetLabel(sheet: SheetResult): string {
+  return sheet.tabTitle ? `${sheet.clinicName} · ${sheet.tabTitle}` : sheet.clinicName;
+}
+
+// A sheet that holds rows is what the run was for, so it reads before the
+// sheets that found nothing. The order the run returned is kept inside both.
+function sheetsWithRowsFirst(sheets: SheetResult[]): SheetResult[] {
+  return [
+    ...sheets.filter((sheet) => sheetRowCount(sheet) > 0),
+    ...sheets.filter((sheet) => sheetRowCount(sheet) === 0),
+  ];
+}
+
+/** The row numbers of one sheet in the shape they are copied in: '2', '3', '33'. */
+function rowNumberList(sheet: SheetResult): string {
+  const rowNumbers = sheet.bucketRows
+    .flatMap((bucket) => bucket.rows.map((row) => row.rowNumber))
+    .sort((left, right) => left - right);
+  return rowNumbers.map((rowNumber) => `'${rowNumber}'`).join(", ");
+}
+
 /** A record of the phone layout: the cells that picked it are always in view. */
 function ResultRowCard({
   headers,
@@ -130,6 +164,12 @@ function ResultRowCard({
   );
 }
 
+// Opening the row shows its cells in full. The cells sit inside the button that
+// opens the row, where a focusable control is not allowed, so the row itself is
+// how a keyboard reads a clipped value.
+const ROW_OPEN_REVEAL =
+  "group-data-[panel-open]/row:whitespace-normal group-data-[panel-open]/row:wrap-anywhere";
+
 /**
  * Labelled cells of a row card. Spans keep the cells inside the trigger of the
  * collapsible, which only takes phrasing content.
@@ -144,8 +184,15 @@ function ResultRowCells({ cells }: { cells: RowCell[] }) {
           key={cell.column}
           className="grid grid-cols-[minmax(0,auto)_minmax(0,1fr)] items-center gap-3"
         >
-          <span className="max-w-32 truncate text-xs text-muted-foreground">{cell.label}</span>
-          <span className="min-w-0 truncate text-right text-sm">{cell.value}</span>
+          <TruncatedText
+            isPressOnly
+            className={cn("max-w-32 text-xs text-muted-foreground", ROW_OPEN_REVEAL)}
+          >
+            {cell.label}
+          </TruncatedText>
+          <TruncatedText isPressOnly className={cn("min-w-0 text-right text-sm", ROW_OPEN_REVEAL)}>
+            {cell.value}
+          </TruncatedText>
         </span>
       ))}
     </span>
@@ -176,6 +223,29 @@ function ResultRows({
   );
 }
 
+/**
+ * One column title. The title of a column that holds values stays out of the
+ * flow, so the widest cell sets the column width and the title truncates
+ * instead. A column whose rows are all empty keeps its title in the flow, or
+ * the column would collapse to nothing.
+ */
+function ColumnHead({ label, titleSetsWidth }: { label: string; titleSetsWidth: boolean }) {
+  return (
+    <TableHead className={titleSetsWidth ? "max-w-40" : "relative"}>
+      <span
+        className={
+          titleSetsWidth
+            ? "block max-w-40 truncate"
+            : "absolute inset-x-2 top-1/2 -translate-y-1/2 truncate"
+        }
+        title={label}
+      >
+        {label}
+      </span>
+    </TableHead>
+  );
+}
+
 /** The result rows of wide screens, where the whole table fits. */
 function ResultTable({
   headers,
@@ -188,6 +258,9 @@ function ResultTable({
 }) {
   const { t } = useI18n();
   const columnIndexes = tableColumnIndexes(headers.length, filterColumns);
+  const emptyColumns = new Set(
+    columnIndexes.filter((index) => rows.every((row) => (row.values[index] ?? "").trim() === ""))
+  );
 
   return (
     <DataTableFrame>
@@ -196,7 +269,11 @@ function ResultTable({
           <TableRow>
             <TableHead>{t.common.row}</TableHead>
             {columnIndexes.map((index) => (
-              <TableHead key={index}>{headers[index] || t.common.columnFallback(index)}</TableHead>
+              <ColumnHead
+                key={index}
+                label={headers[index] || t.common.columnFallback(index)}
+                titleSetsWidth={emptyColumns.has(index)}
+              />
             ))}
           </TableRow>
         </TableHeader>
@@ -205,8 +282,8 @@ function ResultTable({
             <TableRow key={row.rowNumber}>
               <TableCell className="font-mono tabular-nums">{row.rowNumber}</TableCell>
               {columnIndexes.map((index) => (
-                <TableCell key={index} className="max-w-40 truncate">
-                  {row.values[index] ?? ""}
+                <TableCell key={index} className="max-w-40">
+                  <TruncatedText>{row.values[index] ?? ""}</TruncatedText>
                 </TableCell>
               ))}
             </TableRow>
@@ -241,12 +318,74 @@ function ResultBucket({
   );
 }
 
-function sheetRowCount(sheet: SheetResult): number {
-  return sheet.bucketRows.reduce((sum, bucket) => sum + bucket.rows.length, 0);
+/** Copies one sheet's row number list. */
+function CopyRowNumbers({ label, rowNumbers }: { label: string; rowNumbers: string }) {
+  const { t } = useI18n();
+  const [isCopied, setIsCopied] = useState(false);
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(rowNumbers);
+      setIsCopied(true);
+    } catch {
+      // Browsers refuse clipboard access outside a secure context. The list
+      // stays on screen, so it can still be copied by hand.
+    }
+  }
+
+  return (
+    <Button
+      variant="outline"
+      size="sm"
+      aria-label={t.reports.overview.copyFor(label)}
+      onClick={() => void copy()}
+    >
+      <Copy data-icon="inline-start" aria-hidden="true" />
+      {isCopied ? t.reports.overview.copied : t.reports.overview.copy}
+    </Button>
+  );
 }
 
-function countRows(result: ReportResult): number {
-  return result.sheets.reduce((sum, sheet) => sum + sheetRowCount(sheet), 0);
+/**
+ * The summary of a finished run: how many rows it found and the numbers of
+ * those rows per clinic and sheet tab, each with the button that copies them.
+ * A run that found nothing has nothing to summarize, so the card stays out.
+ */
+export function OverviewCard({ result }: { result: ReportResult }) {
+  const { t } = useI18n();
+  const sheets = sheetsWithRowsFirst(result.sheets).filter((sheet) => sheetRowCount(sheet) > 0);
+
+  if (sheets.length === 0) return null;
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex flex-wrap items-center gap-2">
+          <h2 className="font-heading text-base leading-snug font-medium">
+            {t.reports.overview.title}
+          </h2>
+          <Badge variant="secondary" className="tabular-nums">
+            {t.reports.results.rows(countRows(result))}
+          </Badge>
+        </div>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-4">
+        {sheets.map((sheet) => {
+          const label = sheetLabel(sheet);
+          const rowNumbers = rowNumberList(sheet);
+          return (
+            <div key={`${sheet.clinicId}-${sheet.tabTitle}`} className="flex flex-col gap-1.5">
+              <h3 className="text-sm font-medium">{label}</h3>
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="font-mono text-xs">{rowNumbers}</p>
+                <CopyRowNumbers label={label} rowNumbers={rowNumbers} />
+              </div>
+            </div>
+          );
+        })}
+      </CardContent>
+    </Card>
+  );
 }
 
 /**
@@ -272,14 +411,12 @@ export function ResultsCard({ result }: { result: ReportResult }) {
         {result.sheets.length === 0 ? (
           <p className="text-sm text-muted-foreground">{t.reports.results.noneProcessed}</p>
         ) : null}
-        {result.sheets.map((sheet) => {
+        {sheetsWithRowsFirst(result.sheets).map((sheet) => {
           const buckets = sheet.bucketRows.filter((bucket) => bucket.rows.length > 0);
           return (
             <div key={`${sheet.clinicId}-${sheet.tabTitle}`} className="flex flex-col gap-3">
               <div className="flex flex-wrap items-center gap-2">
-                <h3 className="text-sm font-medium">
-                  {sheet.clinicName} {sheet.tabTitle ? `· ${sheet.tabTitle}` : ""}
-                </h3>
+                <h3 className="text-sm font-medium">{sheetLabel(sheet)}</h3>
                 {sheet.error === null ? (
                   <Badge variant="secondary" className="tabular-nums">
                     {sheetRowCount(sheet)}

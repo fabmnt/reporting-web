@@ -37,6 +37,12 @@ export const reports = {
     title: "No results yet",
     body: "Choose a date range and run a report. Rows appear here, grouped by clinic and sheet tab.",
   },
+  overview: {
+    title: "Overview",
+    copy: "Copy rows",
+    copied: "Copied",
+    copyFor: (label: string) => `Copy the row numbers of ${label}`,
+  },
   results: {
     title: "Results",
     rows: (count: number) => (count === 1 ? "1 row" : `${count} rows`),

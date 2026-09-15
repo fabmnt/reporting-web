@@ -25,6 +25,7 @@ import {
 import { useTheme } from "@/components/theme/useTheme";
 
 import type { CurrentAccount } from "./AppHeader";
+import { TruncatedText } from "./TruncatedText";
 
 const THEME_ICON: Record<Theme, typeof Sun> = {
   light: Sun,
@@ -92,11 +93,13 @@ export function AccountMenu({
       <DropdownMenuContent align="end" sideOffset={6} className="w-60">
         <DropdownMenuGroup>
           <DropdownMenuLabel className="flex flex-col gap-1 px-2 py-1.5">
-            <span className="truncate text-sm font-medium text-foreground">
+            <TruncatedText isPressOnly className="text-sm font-medium text-foreground">
               {account.displayName}
-            </span>
+            </TruncatedText>
             <span className="flex items-center gap-1.5">
-              <span className="truncate text-xs font-normal">{account.username}</span>
+              <TruncatedText isPressOnly className="text-xs font-normal">
+                {account.username ?? ""}
+              </TruncatedText>
               {canAdmin ? (
                 <Badge variant="secondary" className="px-1.5">
                   {t.app.roles.admin}

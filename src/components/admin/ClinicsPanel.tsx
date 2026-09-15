@@ -7,6 +7,7 @@ import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { AdminTabs } from "@/components/app/AdminTabs";
 import { DataCard, DataCardList, DataCardRow, DataTableFrame } from "@/components/app/DataCard";
+import { TruncatedText } from "@/components/app/TruncatedText";
 import { PageHeader } from "@/components/app/PageHeader";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
@@ -857,15 +858,17 @@ export function AdminClinicsPanel() {
                   }
                 >
                   <DataCardRow label={t.admin.clinics.clinicTable.client}>
-                    <span className="truncate">{clinic.clientName}</span>
+                    <TruncatedText>{clinic.clientName}</TruncatedText>
                   </DataCardRow>
                   <DataCardRow label={t.admin.clinics.clinicTable.googleSheet}>
-                    <span className="truncate font-mono text-xs">{clinic.googleSheetId}</span>
+                    <TruncatedText className="font-mono text-xs">
+                      {clinic.googleSheetId}
+                    </TruncatedText>
                   </DataCardRow>
                   <DataCardRow label={t.admin.clinics.clinicTable.columns}>
-                    <span className="truncate font-mono text-xs">
+                    <TruncatedText className="font-mono text-xs">
                       {formatSheetColumnSummary(clinic.sheetColumns)}
-                    </span>
+                    </TruncatedText>
                   </DataCardRow>
                   <DataCardRow>
                     <ClinicActions

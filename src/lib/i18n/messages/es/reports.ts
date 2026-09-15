@@ -38,6 +38,12 @@ export const reports = {
     title: "Aún no hay resultados",
     body: "Elige un rango de fechas y ejecuta un reporte. Las filas aparecen aquí, agrupadas por clínica y pestaña de la hoja.",
   },
+  overview: {
+    title: "Resumen",
+    copy: "Copiar filas",
+    copied: "Copiado",
+    copyFor: (label: string) => `Copiar los números de fila de ${label}`,
+  },
   results: {
     title: "Resultados",
     rows: (count: number) => (count === 1 ? "1 fila" : `${count} filas`),

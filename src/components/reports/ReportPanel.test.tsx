@@ -141,11 +141,13 @@ describe("ReportRunner", () => {
 
     await user.click(screen.getByRole("button", { name: "Run report" }));
 
-    // The run total and the cell that picked the row stand in for the run here:
-    // a single group carries no heading of its own.
+    // The overview list and the cell that picked the row stand in for the run
+    // here: a single group carries no heading of its own. The overview and the
+    // results both count the run, so the total renders twice.
     const runRows = () => screen.getAllByRole("cell", { name: "DONE" });
 
-    expect(await screen.findByText("2 rows")).toBeVisible();
+    expect(await screen.findByText("'2', '3'")).toBeVisible();
+    expect(screen.getAllByText("2 rows")).toHaveLength(2);
     expect(runRows()).toHaveLength(1);
 
     // Switch the report type without running again.
@@ -153,7 +155,8 @@ describe("ReportRunner", () => {
     await user.click(await screen.findByRole("option", { name: "Late verifications" }));
 
     // The finished run still renders as it ran, not as the new control value.
-    expect(screen.getByText("2 rows")).toBeVisible();
+    expect(screen.getByText("'2', '3'")).toBeVisible();
+    expect(screen.getAllByText("2 rows")).toHaveLength(2);
     expect(runRows()).toHaveLength(1);
     expect(screen.queryByText("No matching rows.")).not.toBeInTheDocument();
     expect(runReport).toHaveBeenCalledTimes(1);
