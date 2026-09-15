@@ -3,12 +3,17 @@
 import { useQuery } from "convex/react";
 
 import { api } from "../../../convex/_generated/api";
+import { AppLink } from "@/components/app/navigation";
 import { PageHeader } from "@/components/app/PageHeader";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { buttonVariants } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useDocumentTitle, useI18n } from "@/lib/i18n/context";
+import { cn } from "@/lib/utils";
 
 import { ReportTypesPanel } from "./ReportTypesPanel";
+
+const REPORT_PATH = "/";
 
 export function ConditionsPanel() {
   const { t } = useI18n();
@@ -19,7 +24,15 @@ export function ConditionsPanel() {
   useDocumentTitle(t.app.titles.configuration);
 
   const header = (
-    <PageHeader title={t.conditions.pageTitle} description={t.conditions.pageDescription} />
+    <PageHeader
+      title={t.conditions.pageTitle}
+      description={t.conditions.pageDescription}
+      actions={
+        <AppLink href={REPORT_PATH} className={cn(buttonVariants({ variant: "outline" }))}>
+          {t.conditions.backToReports}
+        </AppLink>
+      }
+    />
   );
 
   if (current === undefined) {

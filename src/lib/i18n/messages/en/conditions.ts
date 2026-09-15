@@ -2,6 +2,7 @@ export const conditions = {
   pageTitle: "Configuration",
   pageDescription:
     "Create the report types you run. A type decides which sheet rows each report returns.",
+  backToReports: "Back to reports",
   accessDeniedTitle: "Active staff access required",
   accessDeniedBody: "Your account cannot edit report types.",
   updateFailedTitle: "Could not update the report type",
