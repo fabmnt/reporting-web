@@ -44,6 +44,15 @@ function failureOfStatus(status: number): CarrierFailure {
   return "unavailable";
 }
 
+// The sign-in path answers rejected credentials with a 400 and a body like
+// "invalid password" or "Incorrect username". Nothing about granting access to
+// a clinic is being decided there, so every 4xx means the credentials the app
+// is configured with are the problem.
+function signInFailureOfStatus(status: number): CarrierFailure {
+  if (status >= 400 && status < 500) return "unauthorized";
+  return "unavailable";
+}
+
 // One carrier request, retried while the API or the connection fails. The wait
 // never reaches past the calling action's budget, because an action killed at
 // the runtime limit loses the clinics it already read.
@@ -89,7 +98,9 @@ export async function signInCarrierApi(deadlineMs: number): Promise<CarrierResul
     deadlineMs
   );
 
-  if (response.status !== 200) return { ok: false, failure: failureOfStatus(response.status) };
+  if (response.status !== 200) {
+    return { ok: false, failure: signInFailureOfStatus(response.status) };
+  }
 
   const body = parseJson(response.text);
   const token =
