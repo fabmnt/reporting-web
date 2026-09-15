@@ -20,7 +20,9 @@ export function DataCard({
     <li className="flex flex-col gap-3 rounded-lg border p-4">
       <div className="flex items-start justify-between gap-2">
         <div className="flex min-w-0 flex-col gap-1">
-          <span className="text-sm font-medium">{title}</span>
+          {/* A record name can be one long word, so it wraps instead of painting
+              outside the card. */}
+          <span className="text-sm font-medium wrap-anywhere">{title}</span>
           {subtitle ? (
             <span className="truncate text-xs text-muted-foreground">{subtitle}</span>
           ) : null}
