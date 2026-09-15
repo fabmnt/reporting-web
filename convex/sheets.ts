@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 
 import { internalAction } from "./_generated/server";
-import { fetchSheetsJson, refreshAccessToken } from "./googleApi";
+import { fetchSheetsJson, refreshAccessToken, retryDeadline } from "./googleApi";
 import { reportSheetError, sheetErrorFrom, type ReportSheetError } from "./model/appErrors";
 import { tabsInDateRange } from "./model/reporting";
 
@@ -44,12 +44,15 @@ export const planSheetTabs = internalAction({
   }),
   handler: async (ctx, args) => {
     const token = await refreshAccessToken();
+    // One deadline for the whole action, however many clinics it covers.
+    const deadlineMs = retryDeadline();
     const tabsForClinic: Record<string, string[]> = {};
     for (const clinic of args.clinics) {
       const data = (await fetchSheetsJson(
         ctx,
         `${clinic.googleSheetId}?fields=${SHEET_TITLE_FIELDS}`,
-        token
+        token,
+        deadlineMs
       )) as SheetsTabListResponse;
       const titles = (data.sheets ?? [])
         .map((sheet) => sheet.properties?.title ?? "")
@@ -86,6 +89,7 @@ export const readSheetTabsValues = internalAction({
   ),
   handler: async (ctx, args): Promise<SheetTabValues[]> => {
     const token = await refreshAccessToken();
+    const deadlineMs = retryDeadline();
     const results: SheetTabValues[] = [];
     for (let start = 0; start < args.tabTitles.length; start += MAX_RANGES_PER_BATCH_REQUEST) {
       const chunk = args.tabTitles.slice(start, start + MAX_RANGES_PER_BATCH_REQUEST);
@@ -96,7 +100,8 @@ export const readSheetTabsValues = internalAction({
         const data = (await fetchSheetsJson(
           ctx,
           `${args.googleSheetId}/values:batchGet?${query}`,
-          token
+          token,
+          deadlineMs
         )) as SheetsBatchValuesResponse;
         const valueRanges = data.valueRanges ?? [];
         if (valueRanges.length !== chunk.length) {

@@ -12,17 +12,25 @@ const GOOGLE_SHEETS_BASE = "https://sheets.googleapis.com/v4/spreadsheets";
 // this app travels with the same refresh token, so the whole application
 // shares one budget. The bucket lets a run start with a short burst and then
 // hands out slots at 50 per minute, which keeps both the sustained rate and a
-// full burst below the quota.
+// full burst below the quota. The bucket lives in one deployment, so another
+// deployment or tool using the same refresh token is outside its view.
 const SHEETS_READS_PER_MINUTE = 50;
 const SHEETS_BURST = 8;
 
 // Google's advice for time-based quota errors: retry with a truncated
-// exponential backoff plus jitter, and stop after a few attempts.
+// exponential backoff plus jitter, and stop after a few attempts. Four attempts
+// means waits of a second, two, then four.
 const MAX_ATTEMPTS = 4;
 const INITIAL_BACKOFF_MS = 1_000;
-const MAX_BACKOFF_MS = 16_000;
 const JITTER_MS = 1_000;
 const MAX_RETRY_AFTER_MS = 60_000;
+
+// One action covers every clinic of a run, and every request in it can wait on
+// retries. Budgeting those waits per action keeps the action inside the runtime
+// limit, so a long outage reports the sheets that failed instead of losing the
+// whole run to a timeout. Pacing waits are deliberately not part of it: staying
+// under the quota is not optional.
+const RETRY_BUDGET_MS = 4 * 60_000;
 
 const DETAIL_LIMIT = 300;
 
@@ -81,30 +89,42 @@ function isQuotaRejection(status: number, detail: string): boolean {
   return status === 403 && /quota|rate ?limit/i.test(detail);
 }
 
+// Retry-After is either a number of seconds or an HTTP date. A date already in
+// the past is no use, so it falls back to the exponential wait like any other
+// unusable header.
 function retryAfterMsOf(response: Response): number | null {
   const header = response.headers.get("retry-after");
   if (header === null) return null;
   const seconds = Number(header);
-  return Number.isFinite(seconds) && seconds >= 0 ? seconds * 1_000 : null;
+  if (Number.isFinite(seconds)) return Math.max(seconds, 0) * 1_000;
+  const retryAt = Date.parse(header);
+  if (!Number.isFinite(retryAt)) return null;
+  const delayMs = retryAt - Date.now();
+  return delayMs > 0 ? delayMs : null;
 }
 
 // Honours the wait Google asked for, otherwise doubles it per attempt. The
-// jitter keeps parallel callers from retrying in step.
+// jitter keeps parallel callers from retrying in step, and the retry budget
+// bounds how long the doubling can go on.
 function backoffMs(attempt: number, retryAfterMs: number | null): number {
-  if (retryAfterMs !== null)
+  if (retryAfterMs !== null) {
     return Math.min(retryAfterMs, MAX_RETRY_AFTER_MS) + Math.random() * JITTER_MS;
-  const wait = INITIAL_BACKOFF_MS * 2 ** (attempt - 1);
-  return Math.min(wait, MAX_BACKOFF_MS) + Math.random() * JITTER_MS;
+  }
+  return INITIAL_BACKOFF_MS * 2 ** (attempt - 1) + Math.random() * JITTER_MS;
 }
 
 async function attemptGoogleRequest(request: GoogleRequest): Promise<GoogleAttempt> {
   let response: Response;
+  let text: string;
   try {
     response = await fetch(request.url, {
       method: request.method ?? "GET",
       headers: request.headers,
       body: request.body,
     });
+    // Reading the body belongs inside the guard: a connection that dies halfway
+    // through a response is as transient as one that never opened.
+    text = await response.text();
   } catch (error) {
     // A dropped connection is worth another attempt, same as a 5xx.
     return {
@@ -120,18 +140,23 @@ async function attemptGoogleRequest(request: GoogleRequest): Promise<GoogleAttem
     };
   }
   if (response.ok) {
-    return { kind: "success", body: (await response.json()) as unknown };
+    // Parsed outside the guard: a body that is not JSON will not parse on a
+    // second try either.
+    const body = parseJson(text);
+    if (body === null) throw new Error("Google answered with a body that is not JSON.");
+    return { kind: "success", body };
   }
   // Google explains rejected ranges and quota failures in the body, and the
-  // status code alone is not enough to tell them apart.
-  const detail = (await response.text()).trim().slice(0, DETAIL_LIMIT);
+  // status code alone is not enough to tell them apart. The body is truncated
+  // after parsing so a long reason still yields its fields.
+  const detail = text.trim().slice(0, DETAIL_LIMIT);
   const quotaRejection = isQuotaRejection(response.status, detail);
   return {
     kind: "failure",
     failure: {
       status: response.status,
       detail,
-      body: parseJson(detail),
+      body: parseJson(text),
       retryAfterMs: retryAfterMsOf(response),
       retryable: quotaRejection || response.status >= 500,
       quotaRejection,
@@ -139,9 +164,11 @@ async function attemptGoogleRequest(request: GoogleRequest): Promise<GoogleAttem
   };
 }
 
-// Waits for the next slot in the shared Sheets budget. Reserving instead of
-// rejecting spreads concurrent callers out in time, so a run that has to wait
-// still returns data.
+// Waits for the next slot in the shared Sheets budget. With `reserve` the
+// component never rejects: it deducts the token and answers with the wait, so
+// the bucket paces this app's requests instead of shedding them. The guard
+// below only fires if the limit ever gains a `maxReserved` cap, and failing the
+// sheet beats letting the request run over Google's quota.
 async function awaitSheetsSlot(ctx: ActionCtx): Promise<void> {
   const status = await rateLimiter.limit(ctx, "googleSheetsRead", { reserve: true });
   if (!status.ok) throw appError({ code: "SHEET_RATE_LIMITED" });
@@ -150,10 +177,15 @@ async function awaitSheetsSlot(ctx: ActionCtx): Promise<void> {
 
 // Sends one Google request, retrying the failures Google expects callers to
 // retry. `failure` builds the error for a request that cannot be saved, so
-// each endpoint keeps its own wording.
+// each endpoint keeps its own wording, and `deadlineMs` gives up on the wait
+// instead of pushing the calling action past its runtime limit.
 async function sendGoogleRequest(
   request: GoogleRequest,
-  options: { beforeAttempt?: () => Promise<void>; failure: (failure: GoogleFailure) => Error }
+  options: {
+    beforeAttempt?: () => Promise<void>;
+    failure: (failure: GoogleFailure) => Error;
+    deadlineMs: number;
+  }
 ): Promise<unknown> {
   for (let attempt = 1; ; attempt += 1) {
     await options.beforeAttempt?.();
@@ -161,6 +193,7 @@ async function sendGoogleRequest(
     if (result.kind === "success") return result.body;
     if (!result.failure.retryable || attempt >= MAX_ATTEMPTS) throw options.failure(result.failure);
     const waitMs = backoffMs(attempt, result.failure.retryAfterMs);
+    if (Date.now() + waitMs > options.deadlineMs) throw options.failure(result.failure);
     console.log(
       `Google answered ${result.failure.status}, retrying in ${Math.round(waitMs)} ms (attempt ${attempt + 1} of ${MAX_ATTEMPTS}).`
     );
@@ -189,6 +222,12 @@ function sheetsFailureMessage(failure: GoogleFailure): string {
   return `Google Sheets request failed with status ${failure.status}.${suffix}`;
 }
 
+// Absolute time by which the retry waits of one action have to stop. Call it
+// once per action, before the requests that action makes.
+export function retryDeadline(): number {
+  return Date.now() + RETRY_BUDGET_MS;
+}
+
 // The token endpoint has its own quota, so it is retried but not paced.
 export async function refreshAccessToken(): Promise<string> {
   const body = await sendGoogleRequest(
@@ -204,6 +243,7 @@ export async function refreshAccessToken(): Promise<string> {
       }).toString(),
     },
     {
+      deadlineMs: retryDeadline(),
       failure: (failure) =>
         failure.quotaRejection
           ? new Error("Google rate limited the token refresh. Try again in a minute.")
@@ -219,11 +259,13 @@ export async function refreshAccessToken(): Promise<string> {
 
 // Reads one path of the Sheets API, paced against the shared budget and
 // retried on Google's transient failures. The caller refreshes the token once
-// per action instead of once per request.
+// per action instead of once per request, and passes the deadline it computed
+// for that action.
 export async function fetchSheetsJson(
   ctx: ActionCtx,
   path: string,
-  token: string
+  token: string,
+  deadlineMs: number
 ): Promise<unknown> {
   return await sendGoogleRequest(
     {
@@ -232,6 +274,7 @@ export async function fetchSheetsJson(
     },
     {
       beforeAttempt: () => awaitSheetsSlot(ctx),
+      deadlineMs,
       failure: (failure) =>
         failure.quotaRejection
           ? appError({ code: "SHEET_RATE_LIMITED" })
