@@ -161,7 +161,10 @@ export const runSheetReport = action({
         buckets: config.buckets,
         startDate: args.startDate,
         endDate: args.endDate,
-        verificationFilter,
+        // A carrier report narrows by verification type in code, so a type
+        // that hides the picker runs with the engine default instead of a
+        // choice left over from another report type.
+        verificationFilter: config.usesVerificationFilter ? verificationFilter : "all",
         userId,
         reportTypeId: args.reportTypeId,
         reportTypeName: config.reportTypeName,
