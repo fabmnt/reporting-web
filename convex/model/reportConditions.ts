@@ -1,6 +1,9 @@
 import { v } from "convex/values";
 import type { Infer } from "convex/values";
 
+import type { ResolvedClinicSheetColumns } from "./clinicSheetColumns";
+import { columnLetterToIndex } from "./reporting";
+
 type SheetRow = string[];
 
 function cell(row: SheetRow, index: number): string {
@@ -27,6 +30,8 @@ export type ConditionColumn = Infer<typeof conditionColumn>;
 // `contains` / `notContains` work on the text inside the cell, `equals` /
 // `notEquals` on the whole cell, and the empty operators ignore `values`.
 // Several values in one clause are an OR; the negated operators negate that OR.
+// Values are plain text: no operator reads them as a pattern, so these six are
+// the whole vocabulary a rule can use.
 export const conditionOperator = v.union(
   v.literal("contains"),
   v.literal("notContains"),
@@ -136,6 +141,21 @@ export const EXECUTION_COLUMN_INDEX = 11;
 export const MESSAGE_COLUMN_INDEX = 12;
 
 export type ConditionColumnIndexes = Record<ConditionColumn, number>;
+
+// The columns a clinic's mapping points at, in the roles the conditions name.
+// L and M are fixed positions in every sheet; the rest come from the mapping.
+export function conditionColumnIndexes(
+  columns: ResolvedClinicSheetColumns
+): ConditionColumnIndexes {
+  return {
+    L: EXECUTION_COLUMN_INDEX,
+    M: MESSAGE_COLUMN_INDEX,
+    updateStatus: columnLetterToIndex(columns.updateStatus),
+    uploadStatus: columnLetterToIndex(columns.uploadStatus),
+    verificationType: columnLetterToIndex(columns.verificationType),
+    fileUrl: columnLetterToIndex(columns.fileUrl),
+  };
+}
 
 function clauseMatches(row: SheetRow, indexes: ConditionColumnIndexes, clause: ConditionClause) {
   const value = cell(row, indexes[clause.column]);

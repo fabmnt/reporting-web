@@ -148,31 +148,45 @@ function relabelBuckets(
   );
 }
 
+// The draft of a new report type plus the engine it runs on, which comes from
+// the type it copies: a copy of a carrier report stays a carrier report.
+export type ReportTypeTemplateDraft = {
+  draft: ReportTypeDraft;
+  engine: ReportEngine;
+};
+
 export async function draftFromTemplate(
   ctx: QueryCtx | MutationCtx,
   userId: Id<"users">,
   name: string,
   template: ReportTypeTemplate,
   bucketLabels: ReadonlyArray<string> | undefined
-): Promise<ReportTypeDraft> {
+): Promise<ReportTypeTemplateDraft> {
   if (template === "blank") {
     const buckets: ReportTypeBucket[] = [{ key: "b1", label: defaultBucketLabel(0) }];
     return {
-      name,
-      description: "",
-      buckets: relabelBuckets(buckets, bucketLabels),
-      conditions: conditionsForBuckets(buckets, { buckets: [] }),
-      usesVerificationFilter: false,
+      draft: {
+        name,
+        description: "",
+        buckets: relabelBuckets(buckets, bucketLabels),
+        conditions: conditionsForBuckets(buckets, { buckets: [] }),
+        usesVerificationFilter: false,
+      },
+      // A type built from nothing reads rows with the shared condition engine.
+      engine: "rows",
     };
   }
 
   const source = await loadRunnableReportType(ctx, userId, template.fromReportTypeId);
   return {
-    name,
-    description: source.description,
-    buckets: relabelBuckets(source.buckets, bucketLabels),
-    conditions: source.conditions,
-    usesVerificationFilter: source.usesVerificationFilter,
+    draft: {
+      name,
+      description: source.description,
+      buckets: relabelBuckets(source.buckets, bucketLabels),
+      conditions: source.conditions,
+      usesVerificationFilter: source.usesVerificationFilter,
+    },
+    engine: engineOf(source),
   };
 }
 

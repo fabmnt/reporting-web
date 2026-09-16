@@ -14,16 +14,15 @@ import {
   type ReportSheetResult,
 } from "./model/reportResults";
 import {
+  conditionColumnIndexes,
   evaluateConditionSet,
-  EXECUTION_COLUMN_INDEX,
   filterColumnsForBucket,
-  MESSAGE_COLUMN_INDEX,
   reportConditionSet,
   type ConditionClause,
   type ConditionColumnIndexes,
   type ReportConditionSet,
 } from "./model/reportConditions";
-import { columnLetterToIndex, listProfileClinics } from "./model/reporting";
+import { listProfileClinics } from "./model/reporting";
 import {
   engineOf,
   loadRunnableReportType,
@@ -46,17 +45,6 @@ type ClinicRunConfig = {
 
 // The engine only knows about column roles, so each clinic resolves its own
 // mapping once per run.
-function conditionColumnIndexes(columns: ResolvedClinicSheetColumns): ConditionColumnIndexes {
-  return {
-    L: EXECUTION_COLUMN_INDEX,
-    M: MESSAGE_COLUMN_INDEX,
-    updateStatus: columnLetterToIndex(columns.updateStatus),
-    uploadStatus: columnLetterToIndex(columns.uploadStatus),
-    verificationType: columnLetterToIndex(columns.verificationType),
-    fileUrl: columnLetterToIndex(columns.fileUrl),
-  };
-}
-
 type ReportRunConfig = {
   clinics: ClinicRunConfig[];
   // Row groups of the run target, in evaluation order.
@@ -164,9 +152,9 @@ export const runSheetReport = action({
       endDate: args.endDate,
     });
 
-    // The carrier engine reads its rules from the app and asks the Control
-    // Central API which bots each clinic has, so the stored conditions and the
-    // run-level narrowing below do not apply to it.
+    // The carrier engine asks the Control Central API which bots each clinic
+    // has, and reads the same stored conditions every other report reads, so
+    // it runs on its own path.
     if (config.engine === "execute") {
       return await runExecuteReport(ctx, {
         clinics: config.clinics,

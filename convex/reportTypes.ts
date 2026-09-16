@@ -72,14 +72,14 @@ async function insertType(
   ownerUserId: Id<"users"> | null,
   args: { name: string; template: ReportTypeTemplate; bucketLabels?: string[] }
 ) {
-  const template = await draftFromTemplate(
+  const { draft: templateDraft, engine } = await draftFromTemplate(
     ctx,
     userId,
     args.name,
     args.template,
     args.bucketLabels
   );
-  const draft = cleanTypeDraft(template);
+  const draft = cleanTypeDraft(templateDraft);
   await assertTypeNameAvailable(ctx, ownerUserId, draft.name, null);
 
   const now = Date.now();
@@ -90,6 +90,7 @@ async function insertType(
     buckets: draft.buckets,
     conditions: draft.conditions,
     usesVerificationFilter: draft.usesVerificationFilter,
+    engine,
     createdAt: now,
     updatedAt: now,
   });
@@ -99,6 +100,7 @@ async function insertType(
     _creationTime: now,
     ownerUserId,
     ...draft,
+    engine,
     createdAt: now,
     updatedAt: now,
   });

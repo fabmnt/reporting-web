@@ -65,10 +65,30 @@ export const PENDING_AUDIT_REPORT_TYPE: ReportTypeDraft = {
   },
 };
 
-// The carrier report the deployment starts with. Its rules live in
-// model/executeRules and its bots come from the Control Central API, so it
-// stores no conditions: the one group below is only what the results name the
-// list of rows after.
+// Execution statuses of a row that still has to run, and the message values
+// that leave it workable. Any other message means the bot already answered it.
+// The sheet writes its empty marker as the whole cell, so a value like "not
+// empty" is a status of its own and an untouched row is the literal "EMPTY".
+export const PENDING_EXECUTION_MARKERS = ["EMPTY", "UNCHECKED", "REVIEW"];
+export const WORKABLE_MESSAGE_MARKERS = [
+  "EMPTY",
+  "TWO-STEP VERIFICATION REQUIRED",
+  "NO CONTENT LOADED",
+  "REVIEW",
+  "FEDERAL",
+  "VERIFICATION WITHOUT URLS",
+  "IV PROCESS IS RUNNING",
+  "WRONG FORM DETECTED",
+  "2FA IS REQUIRED",
+  "MULTI-MARKED",
+];
+
+// The carrier report the deployment starts with. Its bots come from the
+// Control Central API, and a row reaches these rules only when its carrier cell
+// matches one of those bots. The row counts when it is still waiting for its
+// first run, or when it ran and left no file behind. Administrators edit these
+// rules like the rules of any other report type: the seed is only the starting
+// point.
 export const PENDING_EXECUTE_REPORT_TYPE: ReportTypeDraft = {
   name: "Pending to execute",
   description: "Rows a carrier bot of the clinic can still work on.",
@@ -79,7 +99,29 @@ export const PENDING_EXECUTE_REPORT_TYPE: ReportTypeDraft = {
       {
         bucketKey: "pending",
         catchAll: false,
-        expression: { filters: [], groups: [] },
+        expression: {
+          filters: [],
+          groups: [
+            {
+              match: "all",
+              clauses: [
+                { column: "L", operator: "equals", values: PENDING_EXECUTION_MARKERS },
+                { column: "M", operator: "equals", values: WORKABLE_MESSAGE_MARKERS },
+              ],
+            },
+            {
+              // The sheets write "DONE", "DONE BY DIVA", "DONE BY CC" and
+              // "*DONE BY DR", so the rule looks for the text inside the cell
+              // and not for the whole cell. A check against live rows found no
+              // value where looking for the text differs from the word.
+              match: "all",
+              clauses: [
+                { column: "L", operator: "contains", values: ["DONE"] },
+                { column: "fileUrl", operator: "equals", values: ["EMPTY"] },
+              ],
+            },
+          ],
+        },
       },
     ],
   },

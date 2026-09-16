@@ -25,9 +25,10 @@ import { ConditionSetEditor } from "./ConditionSetEditor";
 /**
  * Name, row groups, and rules of one report type, personal or built-in. Bucket
  * keys stay stable while labels, order, and rules change, so saved conditions
- * keep pointing at the right group. A carrier report reads its rules from the
- * app, so it only offers what can be changed: name, description, and whether
- * the run form asks for a verification type.
+ * keep pointing at the right group. A carrier report runs on a single row group
+ * and reads its rows through the same rules, so it offers what its engine uses:
+ * name, description, whether the run form asks for a verification type, and the
+ * conditions its rows have to match.
  */
 export function ReportTypeEditor({
   draft,
@@ -199,17 +200,17 @@ export function ReportTypeEditor({
               {t.conditions.editor.addRowGroup}
             </Button>
           </section>
-
-          <Separator />
-
-          <ConditionSetEditor
-            buckets={draft.buckets}
-            conditions={draft.conditions}
-            onChange={(conditions) => onChange({ ...draft, conditions })}
-            disabled={disabled}
-          />
         </>
       )}
+
+      <Separator />
+
+      <ConditionSetEditor
+        buckets={draft.buckets}
+        conditions={draft.conditions}
+        onChange={(conditions) => onChange({ ...draft, conditions })}
+        disabled={disabled}
+      />
     </div>
   );
 }

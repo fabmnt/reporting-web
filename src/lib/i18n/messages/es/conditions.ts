@@ -18,7 +18,7 @@ export const conditions = {
   firstMatchDescription: "Una fila entra en el primer grupo que coincide con ella.",
   dropDescription: "Las filas que no coinciden quedan fuera del reporte.",
   executeNote:
-    "Este reporte lee sus reglas desde la aplicación y le pregunta a la API de Control Central qué bots tiene cada clínica, así que aquí no hay grupos ni reglas que configurar.",
+    "Este reporte le pregunta a la API de Control Central qué bots tiene cada clínica, y solo las filas cuya celda de carrier coincide con uno de esos bots llegan a las reglas de abajo.",
   verificationFilter: "Filtrar por tipo de verificación",
   verificationFilterNote:
     "Muestra el selector de verificación en el formulario del reporte. El valor elegido allí restringe todos los grupos de filas.",
