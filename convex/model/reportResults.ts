@@ -32,9 +32,10 @@ export const reportSheetResult = v.object({
   error: v.union(reportSheetError, v.null()),
 });
 
-// A clinic with bots the report could not run. The operator reads it to know
-// why rows are missing from the results. `unsupported` marks a bot whose
-// pattern this app will not run, which has no status to show.
+// A clinic with bots the carrier API reports as not active, or whose pattern
+// this app will not run. The operator reads it to tell a short list from a
+// complete one. `unsupported` marks a bot whose pattern this app will not run,
+// which has no status to show.
 export const inactiveCarriersEntry = v.object({
   clinicId: v.id("clinics"),
   clinicName: v.string(),

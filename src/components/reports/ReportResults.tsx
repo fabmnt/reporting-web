@@ -10,7 +10,7 @@ import { TruncatedText } from "@/components/app/TruncatedText";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
   Table,
@@ -42,7 +42,8 @@ export type SheetResult = {
   error: ReportSheetError | null;
 };
 // Bots of one clinic that the carrier API reports as not active, or whose
-// pattern this app will not run, so their rows never reach the report.
+// pattern this app will not run, so the operator can tell a short list from a
+// complete one.
 export type InactiveCarriersSection = {
   clinicId: Id<"clinics">;
   clinicName: string;
@@ -380,8 +381,10 @@ function CopyRowNumbers({ label, rowNumbers }: { label: string; rowNumbers: stri
 }
 
 /**
- * The bots of each clinic that the carrier API reports as not active. Their
- * rows stay out of the report, so the card explains why a list is short.
+ * The bots of each clinic that the carrier API reports as not active, or whose
+ * pattern this app will not run, so a short list is not read as a complete one.
+ * It opens closed: the card answers a question about the results, it is not the
+ * results themselves.
  */
 export function InactiveCarriersCard({ carriers }: { carriers: InactiveCarriersSection[] }) {
   const { t } = useI18n();
@@ -390,29 +393,39 @@ export function InactiveCarriersCard({ carriers }: { carriers: InactiveCarriersS
 
   return (
     <Card>
-      <CardHeader>
-        <h2 className="font-heading text-base leading-snug font-medium">
-          {t.reports.inactiveCarriers.title}
-        </h2>
-        <CardDescription>{t.reports.inactiveCarriers.note}</CardDescription>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-4">
-        {carriers.map((clinic) => (
-          <div key={clinic.clinicId} className="flex flex-col gap-1.5">
-            <h3 className="text-sm font-medium">{clinic.clinicName}</h3>
-            <ul className="flex flex-col gap-1 text-sm text-muted-foreground">
-              {clinic.bots.map((bot) => (
-                <li key={bot.name}>
-                  {bot.name} <span aria-hidden="true">·</span>{" "}
-                  {bot.unsupported === true
-                    ? t.reports.inactiveCarriers.patternUnsupported
-                    : bot.status}
-                </li>
-              ))}
-            </ul>
+      <Collapsible>
+        <CollapsibleTrigger className="group/carriers flex w-full flex-col gap-1 px-(--card-spacing)">
+          <span className="flex items-center justify-between gap-2">
+            <span className="font-heading text-base leading-snug font-medium">
+              {t.reports.inactiveCarriers.title}
+            </span>
+            <ChevronDown
+              className="size-4 shrink-0 text-muted-foreground transition-transform group-data-[panel-open]/carriers:rotate-180"
+              aria-hidden="true"
+            />
+          </span>
+          <span className="text-sm text-muted-foreground">{t.reports.inactiveCarriers.note}</span>
+        </CollapsibleTrigger>
+        <CollapsiblePanel className="mt-(--card-spacing) border-t px-(--card-spacing) pt-(--card-spacing)">
+          <div className="flex flex-col gap-4">
+            {carriers.map((clinic) => (
+              <div key={clinic.clinicId} className="flex flex-col gap-1.5">
+                <h3 className="text-sm font-medium">{clinic.clinicName}</h3>
+                <ul className="flex flex-col gap-1 text-sm text-muted-foreground">
+                  {clinic.bots.map((bot) => (
+                    <li key={bot.name}>
+                      {bot.name} <span aria-hidden="true">·</span>{" "}
+                      {bot.unsupported === true
+                        ? t.reports.inactiveCarriers.patternUnsupported
+                        : bot.status}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
           </div>
-        ))}
-      </CardContent>
+        </CollapsiblePanel>
+      </Collapsible>
     </Card>
   );
 }
