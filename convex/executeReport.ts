@@ -21,7 +21,6 @@ import {
 import type {
   InactiveCarriersEntry,
   ReportBucketResult,
-  ReportRow,
   ReportRunResult,
   ReportSheetResult,
 } from "./model/reportResults";
@@ -135,9 +134,9 @@ export async function runExecuteReport(
   // in again once, in case the API dropped it while the run was reading.
   let token = signedIn.value;
 
-  const bucket = config.buckets[0];
-  const bucketKey = bucket?.key ?? "pending";
-  const bucketLabel = bucket?.label ?? config.reportTypeName;
+  // The labels the report type stores travel with the run, so a group it
+  // renamed still reads as the user named it.
+  const bucketLabels = new Map(config.buckets.map((bucket) => [bucket.key, bucket.label]));
 
   const {
     tabsForClinic,
@@ -215,26 +214,30 @@ export async function runExecuteReport(
 
     let indexes: ConditionColumnIndexes;
     let ruleColumns: number[];
-    let filterColumns: number[];
+    let rowLength: number;
     try {
       indexes = conditionColumnIndexes(clinic.sheetColumns);
-      const rules = clinic.conditions.buckets[0];
-      ruleColumns =
-        rules === undefined
-          ? []
-          : filterColumnsForBucket(clinic.conditions.buckets, rules, [], indexes);
-      filterColumns = [
-        ...new Set([CARRIER_COLUMN_INDEX, indexes.verificationType, ...ruleColumns]),
-      ].sort((left, right) => left - right);
+      const columns = new Set<number>();
+      for (const bucket of clinic.conditions.buckets) {
+        const bucketColumns = filterColumnsForBucket(
+          clinic.conditions.buckets,
+          bucket,
+          [],
+          indexes
+        );
+        for (const column of bucketColumns) columns.add(column);
+      }
+      ruleColumns = [...columns].sort((left, right) => left - right);
+      // A row is compared up to the last column any rule reads, so the sheet
+      // leaving trailing empty cells out of a short row still has them compared
+      // as empty instead of losing the row on the length check.
+      rowLength = Math.max(CARRIER_COLUMN_INDEX, indexes.verificationType, ...ruleColumns) + 1;
     } catch (error) {
       // A clinic with an unusable sheet-column mapping fails on its own
       // instead of stopping the run before the remaining clinics.
       failClinic(sheetErrorFrom(error));
       continue;
     }
-    // The conditions read these columns, so a row is compared up to the last
-    // of them.
-    const rowLength = Math.max(...filterColumns) + 1;
 
     const planningError = errorsForClinic[clinic.clinicId];
     if (planningError !== undefined) {
@@ -277,7 +280,23 @@ export async function runExecuteReport(
         continue;
       }
 
-      const rows: ReportRow[] = [];
+      const bucketRows: ReportBucketResult[] = clinic.conditions.buckets.map((bucket) => ({
+        bucketKey: bucket.bucketKey,
+        // A group the type never named falls back to its key, which is what the
+        // results show for row reports too.
+        label: bucketLabels.get(bucket.bucketKey) ?? bucket.bucketKey,
+        rows: [],
+        // The carrier match and the verification choice decide every row beside
+        // the rules of the group itself.
+        filterColumns: [
+          ...new Set([
+            CARRIER_COLUMN_INDEX,
+            indexes.verificationType,
+            ...filterColumnsForBucket(clinic.conditions.buckets, bucket, [], indexes),
+          ]),
+        ].sort((left, right) => left - right),
+      }));
+      const rowsByBucket = new Map(bucketRows.map((bucket) => [bucket.bucketKey, bucket.rows]));
       let droppedByCarrier = 0;
       let droppedByVerification = 0;
       let droppedByRules = 0;
@@ -314,13 +333,14 @@ export async function runExecuteReport(
           );
           return;
         }
-        rows.push({ rowNumber, values: row, carriers });
+        rowsByBucket.get(matchedBucket)?.push({ rowNumber, values: row, carriers });
       });
+      const keptRows = bucketRows.reduce((total, bucket) => total + bucket.rows.length, 0);
       // One line per tab: what the tab held and where the rest of the rows
       // went, so the counts do not have to be read off the drop lines.
       console.log(
         `${LOG_PREFIX} ${clinic.name} ${tabResult.tabTitle}: ${tabResult.values.length} rows read, ` +
-          `${rows.length} kept, ${droppedByCarrier} dropped by the carrier filter, ` +
+          `${keptRows} kept, ${droppedByCarrier} dropped by the carrier filter, ` +
           `${droppedByVerification} by the verification filter, ${droppedByRules} by the conditions`
       );
 
@@ -328,7 +348,7 @@ export async function runExecuteReport(
         ...clinicEntry,
         tabTitle: tabResult.tabTitle,
         headers: tabResult.headers,
-        bucketRows: [{ bucketKey, label: bucketLabel, rows, filterColumns }],
+        bucketRows,
       });
     }
 

@@ -11,9 +11,10 @@ import { engineOf } from "../model/reportTypes";
 //
 // The seed stored an empty condition set, and the carrier report now reads its
 // rows through the conditions of the report type, so a type left as it is would
-// list every row of a clinic whose carrier matched a bot. Only a built-in
-// carrier type without rules is touched, and only to copy the rules of the
-// seed, so a type an administrator already edited stays as it is.
+// list every row of a clinic whose carrier matched a bot. Only the built-in the
+// seed created is touched: same name, never saved since, and without rules. A
+// type an administrator edited keeps what it holds, including one whose rules
+// were cleared on purpose to match every row.
 const SEED_BUCKETS = PENDING_EXECUTE_REPORT_TYPE.conditions.buckets;
 
 function hasRules(conditions: ReportConditionSet): boolean {
@@ -34,6 +35,10 @@ export const run = internalMutation({
     const updated: string[] = [];
     for (const row of rows) {
       if (engineOf(row) !== "execute") continue;
+      if (row.name !== PENDING_EXECUTE_REPORT_TYPE.name) continue;
+      // Saving a type touches `updatedAt`, so a row that moved on from the
+      // seed is the administrator's, whatever its rules say.
+      if (row.updatedAt !== row.createdAt) continue;
       if (hasRules(row.conditions)) continue;
 
       const conditions: ReportConditionSet = cleanConditionSet({
