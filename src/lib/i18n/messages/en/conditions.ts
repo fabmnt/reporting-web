@@ -15,7 +15,7 @@ export const conditions = {
   firstMatchDescription: "A row lands in the first group that matches it.",
   dropDescription: "Rows that do not match are left out of the report.",
   executeNote:
-    "This report reads its rules from the app and asks the Control Central API which bots each clinic has, so there are no row groups or rules to set here.",
+    "This report asks the Control Central API which bots each clinic has, and only rows whose carrier cell matches one of those bots reach the rules below.",
   verificationFilter: "Filter by verification type",
   verificationFilterNote:
     "Shows the verification picker on the run form. The value chosen there narrows every row group.",

@@ -118,8 +118,14 @@ export async function requireRunnableClient(
   };
 }
 
+// Google Sheets stops at column ZZZ, so a mapping past it names no cell. The
+// bound matters to the callers that pad a row up to the last column a rule
+// reads, which they cannot do for a column that no sheet holds.
+const MAX_SHEET_COLUMNS = 18278;
+
 // Column letters ("A", "T", "AB") become zero-based indexes. Throws on
-// anything that is not plain A-Z letters so a bad mapping fails fast.
+// anything that is not plain A-Z letters, or that points past the last column
+// of a sheet, so a bad mapping fails fast.
 export function columnLetterToIndex(column: string): number {
   const letters = column.trim().toUpperCase();
   if (!/^[A-Z]+$/.test(letters)) {
@@ -128,6 +134,9 @@ export function columnLetterToIndex(column: string): number {
   let index = 0;
   for (const char of letters) {
     index = index * 26 + (char.charCodeAt(0) - 64);
+  }
+  if (index > MAX_SHEET_COLUMNS) {
+    throw appError({ code: "INVALID_SHEET_COLUMN", column });
   }
   return index - 1;
 }

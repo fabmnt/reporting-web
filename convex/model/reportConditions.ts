@@ -1,6 +1,9 @@
 import { v } from "convex/values";
 import type { Infer } from "convex/values";
 
+import type { ResolvedClinicSheetColumns } from "./clinicSheetColumns";
+import { columnLetterToIndex } from "./reporting";
+
 type SheetRow = string[];
 
 function cell(row: SheetRow, index: number): string {
@@ -27,6 +30,8 @@ export type ConditionColumn = Infer<typeof conditionColumn>;
 // `contains` / `notContains` work on the text inside the cell, `equals` /
 // `notEquals` on the whole cell, and the empty operators ignore `values`.
 // Several values in one clause are an OR; the negated operators negate that OR.
+// Values are plain text: no operator reads them as a pattern, so these six are
+// the whole vocabulary a rule can use.
 export const conditionOperator = v.union(
   v.literal("contains"),
   v.literal("notContains"),
@@ -130,15 +135,47 @@ export function cleanConditionSet(conditions: ReportConditionSet): ReportConditi
 // Evaluation
 // ---------------------------------------------------------------------------
 
-// Column L holds the execution text and column M the message text in every
-// clinic sheet.
-export const EXECUTION_COLUMN_INDEX = 11;
-export const MESSAGE_COLUMN_INDEX = 12;
+// The sheet column (0-based) behind a role. The rules decide which roles a
+// report reads, so a clinic mapping is parsed the first time a role is asked
+// for: a field no rule reads never has to resolve.
+export type ConditionColumnResolver = (column: ConditionColumn) => number;
 
-export type ConditionColumnIndexes = Record<ConditionColumn, number>;
+/**
+ * Reads a clinic's sheet-column mapping. The roles the given rules and
+ * run-level filters read resolve while this runs, so a mapping the report
+ * cannot use is raised where the caller still handles that clinic on its own;
+ * every other role resolves on its first read, and a role nothing reads never
+ * reaches a sheet.
+ */
+export function conditionColumnResolver(
+  columns: ResolvedClinicSheetColumns,
+  buckets: ConditionBucket[],
+  extraFilters: ConditionClause[] = []
+): ConditionColumnResolver {
+  // L and M are the same cells in every sheet; every other role points at the
+  // column the clinic mapped it to.
+  const letters: Record<ConditionColumn, string> = {
+    L: "L",
+    M: "M",
+    updateStatus: columns.updateStatus,
+    uploadStatus: columns.uploadStatus,
+    verificationType: columns.verificationType,
+    fileUrl: columns.fileUrl,
+  };
+  const parsed = new Map<ConditionColumn, number>();
+  const indexOf: ConditionColumnResolver = (column) => {
+    const known = parsed.get(column);
+    if (known !== undefined) return known;
+    const index = columnLetterToIndex(letters[column]);
+    parsed.set(column, index);
+    return index;
+  };
+  for (const column of conditionColumns(buckets, extraFilters)) indexOf(column);
+  return indexOf;
+}
 
-function clauseMatches(row: SheetRow, indexes: ConditionColumnIndexes, clause: ConditionClause) {
-  const value = cell(row, indexes[clause.column]);
+function clauseMatches(row: SheetRow, indexes: ConditionColumnResolver, clause: ConditionClause) {
+  const value = cell(row, indexes(clause.column));
   switch (clause.operator) {
     case "contains":
       return clause.values.some((marker) => value.includes(marker));
@@ -155,7 +192,7 @@ function clauseMatches(row: SheetRow, indexes: ConditionColumnIndexes, clause: C
   }
 }
 
-function groupMatches(row: SheetRow, indexes: ConditionColumnIndexes, group: ConditionGroup) {
+function groupMatches(row: SheetRow, indexes: ConditionColumnResolver, group: ConditionGroup) {
   if (group.clauses.length === 0) return group.match === "all";
   const matches = (clause: ConditionClause) => clauseMatches(row, indexes, clause);
   return group.match === "all" ? group.clauses.every(matches) : group.clauses.some(matches);
@@ -163,32 +200,12 @@ function groupMatches(row: SheetRow, indexes: ConditionColumnIndexes, group: Con
 
 function expressionMatches(
   row: SheetRow,
-  indexes: ConditionColumnIndexes,
+  indexes: ConditionColumnResolver,
   expression: ConditionExpression
 ) {
   if (!expression.filters.every((clause) => clauseMatches(row, indexes, clause))) return false;
   if (expression.groups.length === 0) return true;
   return expression.groups.some((group) => groupMatches(row, indexes, group));
-}
-
-// Rows that do not reach the highest column the conditions read are skipped:
-// the legacy tool did the same, and a missing cell would otherwise look empty.
-function shortestUsableLength(
-  buckets: ConditionBucket[],
-  extraFilters: ConditionClause[],
-  indexes: ConditionColumnIndexes
-): number {
-  let highest = -1;
-  const consider = (clause: ConditionClause) => {
-    highest = Math.max(highest, indexes[clause.column]);
-  };
-  for (const bucket of buckets) {
-    if (bucket.catchAll) continue;
-    bucket.expression.filters.forEach(consider);
-    for (const group of bucket.expression.groups) group.clauses.forEach(consider);
-  }
-  extraFilters.forEach(consider);
-  return highest + 1;
 }
 
 // Columns an expression reads, in clause order and with repeats.
@@ -198,6 +215,35 @@ function expressionColumns(expression: ConditionExpression): ConditionColumn[] {
     columns.push(...group.clauses.map((clause) => clause.column));
   }
   return columns;
+}
+
+// The roles a condition set reads: the clauses of every bucket that filters by
+// itself, which leaves out a catch-all bucket (it takes the rows no earlier
+// bucket took), plus the run-level filters that narrow the whole set.
+export function conditionColumns(
+  buckets: ConditionBucket[],
+  extraFilters: ConditionClause[] = []
+): ConditionColumn[] {
+  const columns = new Set<ConditionColumn>(extraFilters.map((clause) => clause.column));
+  for (const bucket of buckets) {
+    if (bucket.catchAll) continue;
+    for (const column of expressionColumns(bucket.expression)) columns.add(column);
+  }
+  return [...columns];
+}
+
+// Rows that do not reach the highest column the conditions read are skipped:
+// the legacy tool did the same, and a missing cell would otherwise look empty.
+function shortestUsableLength(
+  buckets: ConditionBucket[],
+  extraFilters: ConditionClause[],
+  indexes: ConditionColumnResolver
+): number {
+  let highest = -1;
+  for (const column of conditionColumns(buckets, extraFilters)) {
+    highest = Math.max(highest, indexes(column));
+  }
+  return highest + 1;
 }
 
 /**
@@ -211,12 +257,12 @@ export function filterColumnsForBucket(
   buckets: ConditionBucket[],
   bucket: ConditionBucket,
   extraFilters: ConditionClause[],
-  indexes: ConditionColumnIndexes
+  indexes: ConditionColumnResolver
 ): number[] {
   const sources = bucket.catchAll ? buckets.filter((item) => !item.catchAll) : [bucket];
-  const columns = new Set<number>(extraFilters.map((clause) => indexes[clause.column]));
+  const columns = new Set<number>(extraFilters.map((clause) => indexes(clause.column)));
   for (const source of sources) {
-    for (const column of expressionColumns(source.expression)) columns.add(indexes[column]);
+    for (const column of expressionColumns(source.expression)) columns.add(indexes(column));
   }
   return [...columns].sort((left, right) => left - right);
 }
@@ -228,7 +274,7 @@ export function filterColumnsForBucket(
  */
 export function evaluateConditionSet(
   row: SheetRow,
-  indexes: ConditionColumnIndexes,
+  indexes: ConditionColumnResolver,
   conditions: ReportConditionSet,
   extraFilters: ConditionClause[] = []
 ): string | null {

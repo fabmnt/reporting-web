@@ -14,16 +14,15 @@ import {
   type ReportSheetResult,
 } from "./model/reportResults";
 import {
+  conditionColumnResolver,
   evaluateConditionSet,
-  EXECUTION_COLUMN_INDEX,
   filterColumnsForBucket,
-  MESSAGE_COLUMN_INDEX,
   reportConditionSet,
   type ConditionClause,
-  type ConditionColumnIndexes,
+  type ConditionColumnResolver,
   type ReportConditionSet,
 } from "./model/reportConditions";
-import { columnLetterToIndex, listProfileClinics } from "./model/reporting";
+import { listProfileClinics } from "./model/reporting";
 import {
   engineOf,
   loadRunnableReportType,
@@ -46,17 +45,6 @@ type ClinicRunConfig = {
 
 // The engine only knows about column roles, so each clinic resolves its own
 // mapping once per run.
-function conditionColumnIndexes(columns: ResolvedClinicSheetColumns): ConditionColumnIndexes {
-  return {
-    L: EXECUTION_COLUMN_INDEX,
-    M: MESSAGE_COLUMN_INDEX,
-    updateStatus: columnLetterToIndex(columns.updateStatus),
-    uploadStatus: columnLetterToIndex(columns.uploadStatus),
-    verificationType: columnLetterToIndex(columns.verificationType),
-    fileUrl: columnLetterToIndex(columns.fileUrl),
-  };
-}
-
 type ReportRunConfig = {
   clinics: ClinicRunConfig[];
   // Row groups of the run target, in evaluation order.
@@ -164,16 +152,19 @@ export const runSheetReport = action({
       endDate: args.endDate,
     });
 
-    // The carrier engine reads its rules from the app and asks the Control
-    // Central API which bots each clinic has, so the stored conditions and the
-    // run-level narrowing below do not apply to it.
+    // The carrier engine asks the Control Central API which bots each clinic
+    // has, and reads the same stored conditions every other report reads, so
+    // it runs on its own path.
     if (config.engine === "execute") {
       return await runExecuteReport(ctx, {
         clinics: config.clinics,
         buckets: config.buckets,
         startDate: args.startDate,
         endDate: args.endDate,
-        verificationFilter,
+        // A carrier report narrows by verification type in code, so a type
+        // that hides the picker runs with the engine default instead of a
+        // choice left over from another report type.
+        verificationFilter: config.usesVerificationFilter ? verificationFilter : "all",
         userId,
         reportTypeId: args.reportTypeId,
         reportTypeName: config.reportTypeName,
@@ -245,9 +236,13 @@ export const runSheetReport = action({
         });
         continue;
       }
-      let indexes: ConditionColumnIndexes;
+      let indexes: ConditionColumnResolver;
       try {
-        indexes = conditionColumnIndexes(clinic.sheetColumns);
+        indexes = conditionColumnResolver(
+          clinic.sheetColumns,
+          clinic.conditions.buckets,
+          extraFilters
+        );
       } catch (error) {
         // A clinic with an unusable sheet-column mapping fails on its own
         // instead of stopping the run before the remaining clinics.
