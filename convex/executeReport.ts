@@ -101,17 +101,13 @@ function describeCells(row: string[], columns: number[], headers: string[]): str
     .join(", ");
 }
 
-// This report keeps a trace of every filter, so a row that is missing from the
-// results can be followed through the run.
-const LOG_PREFIX = "[pending-to-execute]";
-
 /**
- * The pending-to-execute report: the rows of a clinic that a carrier bot can
- * still work on. A row counts when its carrier cell matches one of the clinic
- * bots, the verification filter takes it, and the conditions stored on the
- * report type match it, the same conditions the configuration panels edit. The
- * bot list comes from the Control Central API, so a clinic whose bots cannot be
- * read keeps its own error and the remaining clinics still return their rows.
+ * The carrier report: the rows of a clinic that a carrier bot can still work
+ * on. A row counts when its carrier cell matches one of the clinic bots, the
+ * verification filter takes it, and the conditions stored on the report type
+ * match it, the same conditions the configuration panels edit. The bot list
+ * comes from the Control Central API, so a clinic whose bots cannot be read
+ * keeps its own error and the remaining clinics still return their rows.
  *
  * Every filter logs the rows it drops, which is what makes a missing row
  * explainable while the conditions are being tuned.
@@ -137,6 +133,11 @@ export async function runExecuteReport(
   // The labels the report type stores travel with the run, so a group it
   // renamed still reads as the user named it.
   const bucketLabels = new Map(config.buckets.map((bucket) => [bucket.key, bucket.label]));
+  // This report keeps a trace of every filter, so a row that is missing from
+  // the results can be followed through the run. The tag names the report type
+  // being run, because a copy of the built-in type keeps the engine and a
+  // deployment can hold several carrier reports.
+  const logTag = `[${config.reportTypeName}]`;
 
   const {
     tabsForClinic,
@@ -306,7 +307,7 @@ export async function runExecuteReport(
         if (carriers.length === 0) {
           droppedByCarrier += 1;
           console.log(
-            `${LOG_PREFIX} dropped by the carrier filter: ${clinic.name} ${tabResult.tabTitle} ` +
+            `${logTag} dropped by the carrier filter: ${clinic.name} ${tabResult.tabTitle} ` +
               `row ${rowNumber}, carrier="${(row[CARRIER_COLUMN_INDEX] ?? "").trim()}"`
           );
           return;
@@ -315,7 +316,7 @@ export async function runExecuteReport(
         if (!verificationMatches(verification, config.verificationFilter)) {
           droppedByVerification += 1;
           console.log(
-            `${LOG_PREFIX} dropped by the verification filter: ${clinic.name} ${tabResult.tabTitle} ` +
+            `${logTag} dropped by the verification filter: ${clinic.name} ${tabResult.tabTitle} ` +
               `row ${rowNumber}, verification="${verification}", the run asks for "${config.verificationFilter}"`
           );
           return;
@@ -328,7 +329,7 @@ export async function runExecuteReport(
         if (matchedBucket === null) {
           droppedByRules += 1;
           console.log(
-            `${LOG_PREFIX} dropped by the conditions: ${clinic.name} ${tabResult.tabTitle} ` +
+            `${logTag} dropped by the conditions: ${clinic.name} ${tabResult.tabTitle} ` +
               `row ${rowNumber}, ${describeCells(row, ruleColumns, tabResult.headers)}`
           );
           return;
@@ -339,7 +340,7 @@ export async function runExecuteReport(
       // One line per tab: what the tab held and where the rest of the rows
       // went, so the counts do not have to be read off the drop lines.
       console.log(
-        `${LOG_PREFIX} ${clinic.name} ${tabResult.tabTitle}: ${tabResult.values.length} rows read, ` +
+        `${logTag} ${clinic.name} ${tabResult.tabTitle}: ${tabResult.values.length} rows read, ` +
           `${keptRows} kept, ${droppedByCarrier} dropped by the carrier filter, ` +
           `${droppedByVerification} by the verification filter, ${droppedByRules} by the conditions`
       );
