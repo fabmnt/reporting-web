@@ -14,12 +14,12 @@ import {
   type ReportSheetResult,
 } from "./model/reportResults";
 import {
-  conditionColumnIndexes,
+  conditionColumnResolver,
   evaluateConditionSet,
   filterColumnsForBucket,
   reportConditionSet,
   type ConditionClause,
-  type ConditionColumnIndexes,
+  type ConditionColumnResolver,
   type ReportConditionSet,
 } from "./model/reportConditions";
 import { listProfileClinics } from "./model/reporting";
@@ -236,9 +236,13 @@ export const runSheetReport = action({
         });
         continue;
       }
-      let indexes: ConditionColumnIndexes;
+      let indexes: ConditionColumnResolver;
       try {
-        indexes = conditionColumnIndexes(clinic.sheetColumns);
+        indexes = conditionColumnResolver(
+          clinic.sheetColumns,
+          clinic.conditions.buckets,
+          extraFilters
+        );
       } catch (error) {
         // A clinic with an unusable sheet-column mapping fails on its own
         // instead of stopping the run before the remaining clinics.

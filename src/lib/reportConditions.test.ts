@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   cleanConditionSet,
+  conditionColumnResolver,
   evaluateConditionSet,
   filterColumnsForBucket,
   MAX_CLAUSES_PER_SECTION,
@@ -9,7 +10,6 @@ import {
   MAX_MARKER_LENGTH,
   MAX_MARKERS_PER_RULE,
   type ConditionClause,
-  type ConditionColumnIndexes,
   type ConditionExpression,
   type ReportConditionSet,
 } from "../../convex/model/reportConditions";
@@ -30,18 +30,14 @@ const PENDING_AUDIT_CONDITIONS = PENDING_AUDIT_REPORT_TYPE.conditions;
 
 // Legacy sheet layout: L = 11, M = 12, then the column mapping of the test
 // clinic. L and M are fixed, the rest come from the clinic configuration.
-const COLUMNS: ConditionColumnIndexes = {
-  L: 11,
-  M: 12,
-  updateStatus: 13,
-  uploadStatus: 14,
-  verificationType: 15,
-  fileUrl: 16,
-};
+const COLUMNS = conditionColumnResolver(
+  { updateStatus: "N", uploadStatus: "O", verificationType: "P", fileUrl: "Q" },
+  []
+);
 
 // One column more than the highest mapped column, so every clause can read its
 // column. Tests that want a short row build their own array.
-const ROW_LENGTH = COLUMNS.fileUrl + 1;
+const ROW_LENGTH = COLUMNS("fileUrl") + 1;
 
 type RowValues = {
   l?: string;
@@ -54,12 +50,12 @@ type RowValues = {
 
 function sheetRow(values: RowValues): string[] {
   const row = Array.from({ length: ROW_LENGTH }, () => "");
-  row[COLUMNS.L] = values.l ?? "";
-  row[COLUMNS.M] = values.m ?? "";
-  row[COLUMNS.updateStatus] = values.updateStatus ?? "";
-  row[COLUMNS.uploadStatus] = values.uploadStatus ?? "";
-  row[COLUMNS.verificationType] = values.verification ?? "";
-  row[COLUMNS.fileUrl] = values.fileUrl ?? "";
+  row[COLUMNS("L")] = values.l ?? "";
+  row[COLUMNS("M")] = values.m ?? "";
+  row[COLUMNS("updateStatus")] = values.updateStatus ?? "";
+  row[COLUMNS("uploadStatus")] = values.uploadStatus ?? "";
+  row[COLUMNS("verificationType")] = values.verification ?? "";
+  row[COLUMNS("fileUrl")] = values.fileUrl ?? "";
   return row;
 }
 
@@ -205,7 +201,7 @@ describe("evaluateConditionSet with the pending audit rules", () => {
   });
 
   it("drops rows that do not reach the mapped columns", () => {
-    const shortRow = Array.from({ length: COLUMNS.uploadStatus }, () => "DONE");
+    const shortRow = Array.from({ length: COLUMNS("uploadStatus") }, () => "DONE");
     expect(evaluateConditionSet(shortRow, COLUMNS, conditions)).toBeNull();
   });
 });
@@ -284,6 +280,49 @@ describe("filterColumnsForBucket", () => {
     expect(
       filterColumnsForBucket(buckets, buckets[1]!, verificationFilters("elg"), COLUMNS)
     ).toEqual([13, 15]);
+  });
+});
+
+describe("conditionColumnResolver", () => {
+  const clinic = { updateStatus: "T", uploadStatus: "R", verificationType: "N", fileUrl: "U" };
+
+  it("resolves the fixed columns and the mapped roles the rules read", () => {
+    const indexes = conditionColumnResolver(clinic, PENDING_AUDIT_CONDITIONS.buckets);
+
+    expect(indexes("L")).toBe(11);
+    expect(indexes("M")).toBe(12);
+    expect(indexes("updateStatus")).toBe(19);
+    expect(indexes("uploadStatus")).toBe(17);
+  });
+
+  it("does not resolve a role no rule reads", () => {
+    const rules = singleBucket({ filters: [clause("L", "contains", ["DONE"])], groups: [] });
+    // A typo in a field the report never reads cannot fail the report.
+    const indexes = conditionColumnResolver({ ...clinic, uploadStatus: "R2" }, rules.buckets);
+
+    expect(evaluateConditionSet(sheetRow({ l: "DONE" }), indexes, rules)).toBe("audit");
+  });
+
+  it("fails a role the rules read whose mapping is not a column", () => {
+    const rules = singleBucket({
+      filters: [clause("uploadStatus", "equals", ["EMPTY"])],
+      groups: [],
+    });
+
+    expect(() =>
+      conditionColumnResolver({ ...clinic, uploadStatus: "R2" }, rules.buckets)
+    ).toThrow();
+  });
+
+  it("fails a mapping past the last column of a sheet", () => {
+    // ZZZ is the last column a sheet holds, so nothing can be read past it.
+    expect(() =>
+      conditionColumnResolver(
+        { ...clinic, verificationType: "ZZZZZZZ" },
+        [],
+        verificationFilters("fbd")
+      )
+    ).toThrow();
   });
 });
 
@@ -561,7 +600,7 @@ describe("expressions", () => {
 
   it("requires the columns of the extra filters to exist", () => {
     const set = singleBucket({ filters: [], groups: [] });
-    const shortRow = Array.from({ length: COLUMNS.verificationType }, () => "FBD");
+    const shortRow = Array.from({ length: COLUMNS("verificationType") }, () => "FBD");
     expect(evaluateConditionSet(shortRow, COLUMNS, set, verificationFilters("fbd"))).toBeNull();
   });
 });

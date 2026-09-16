@@ -12,10 +12,10 @@ import {
   type ExecuteVerificationFilter,
 } from "./model/executeRules";
 import {
-  conditionColumnIndexes,
+  conditionColumnResolver,
   evaluateConditionSet,
   filterColumnsForBucket,
-  type ConditionColumnIndexes,
+  type ConditionColumnResolver,
   type ReportConditionSet,
 } from "./model/reportConditions";
 import type {
@@ -213,11 +213,11 @@ export async function runExecuteReport(
       continue;
     }
 
-    let indexes: ConditionColumnIndexes;
+    let indexes: ConditionColumnResolver;
     let ruleColumns: number[];
     let rowLength: number;
     try {
-      indexes = conditionColumnIndexes(clinic.sheetColumns);
+      indexes = conditionColumnResolver(clinic.sheetColumns, clinic.conditions.buckets);
       const columns = new Set<number>();
       for (const bucket of clinic.conditions.buckets) {
         const bucketColumns = filterColumnsForBucket(
@@ -232,7 +232,7 @@ export async function runExecuteReport(
       // A row is compared up to the last column any rule reads, so the sheet
       // leaving trailing empty cells out of a short row still has them compared
       // as empty instead of losing the row on the length check.
-      rowLength = Math.max(CARRIER_COLUMN_INDEX, indexes.verificationType, ...ruleColumns) + 1;
+      rowLength = Math.max(CARRIER_COLUMN_INDEX, indexes("verificationType"), ...ruleColumns) + 1;
     } catch (error) {
       // A clinic with an unusable sheet-column mapping fails on its own
       // instead of stopping the run before the remaining clinics.
@@ -292,7 +292,7 @@ export async function runExecuteReport(
         filterColumns: [
           ...new Set([
             CARRIER_COLUMN_INDEX,
-            indexes.verificationType,
+            indexes("verificationType"),
             ...filterColumnsForBucket(clinic.conditions.buckets, bucket, [], indexes),
           ]),
         ].sort((left, right) => left - right),
@@ -312,7 +312,7 @@ export async function runExecuteReport(
           );
           return;
         }
-        const verification = (row[indexes.verificationType] ?? "").trim();
+        const verification = (row[indexes("verificationType")] ?? "").trim();
         if (!verificationMatches(verification, config.verificationFilter)) {
           droppedByVerification += 1;
           console.log(
