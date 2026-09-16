@@ -25,9 +25,14 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
-import { todayIso } from "@/lib/dates";
 import { useDocumentTitle, useI18n } from "@/lib/i18n/context";
 import { localizedError, localizedMessage, type LocalizedMessage } from "@/lib/i18n/errors";
+import {
+  readReportFilters,
+  replaceReportFilters,
+  type ReportFilters,
+  type VerificationFilter,
+} from "@/lib/reportFilters";
 import { cn } from "@/lib/utils";
 
 import {
@@ -140,9 +145,11 @@ export function ReportRunner() {
   const typeData = useQuery(api.reportTypes.listRunnable, {});
   const runReport = useAction(api.reports.runSheetReport);
 
-  const [typeKey, setTypeKey] = useState<string | null>(null);
-  const [dateRange, setDateRange] = useState({ startDate: todayIso(), endDate: todayIso() });
-  const [verification, setVerification] = useState<"all" | "fbd" | "elg">("all");
+  // The controls live in the address bar, so a reload, a bookmark, or a link
+  // sent to a colleague comes back to the same report settings.
+  const [filters, setFilters] = useState<ReportFilters>(() =>
+    readReportFilters(window.location.search)
+  );
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<LocalizedMessage | null>(null);
   const [result, setResult] = useState<ReportResult | null>(null);
@@ -150,9 +157,14 @@ export function ReportRunner() {
   useDocumentTitle(t.app.titles.report);
 
   const types = typeData?.types ?? [];
-  const selectedType = types.find((item) => item.reportTypeId === typeKey) ?? types[0];
+  const selectedType = types.find((item) => item.reportTypeId === filters.reportTypeId) ?? types[0];
   const builtinTypes = types.filter((item) => item.owner === "builtin");
   const ownTypes = types.filter((item) => item.owner === "mine");
+
+  function updateFilters(next: ReportFilters) {
+    setFilters(next);
+    replaceReportFilters(next);
+  }
 
   async function handleRun() {
     if ((assignment?.clinics.length ?? 0) === 0) {
@@ -163,11 +175,11 @@ export function ReportRunner() {
       setError(localizedMessage((t) => t.reports.outcomes.noReportType));
       return;
     }
-    if (!dateRange.startDate || !dateRange.endDate) {
+    if (!filters.startDate || !filters.endDate) {
       setError(localizedMessage((t) => t.reports.outcomes.pickDates));
       return;
     }
-    if (dateRange.startDate > dateRange.endDate) {
+    if (filters.startDate > filters.endDate) {
       setError(localizedMessage((t) => t.reports.outcomes.invalidRange));
       return;
     }
@@ -177,9 +189,9 @@ export function ReportRunner() {
     try {
       const data = await runReport({
         reportTypeId: selectedType.reportTypeId,
-        startDate: dateRange.startDate,
-        endDate: dateRange.endDate,
-        verificationFilter: verification,
+        startDate: filters.startDate,
+        endDate: filters.endDate,
+        verificationFilter: filters.verification,
       });
       setResult(data);
     } catch (cause) {
@@ -217,8 +229,8 @@ export function ReportRunner() {
               <FieldLabel htmlFor="report-date-range">{t.reports.dateRange}</FieldLabel>
               <DateRangePicker
                 id="report-date-range"
-                value={dateRange}
-                onChange={setDateRange}
+                value={filters}
+                onChange={(value) => updateFilters({ ...filters, ...value })}
                 disabled={running}
               />
             </Field>
@@ -231,7 +243,9 @@ export function ReportRunner() {
                 <Select
                   items={types.map((item) => ({ value: item.reportTypeId, label: item.name }))}
                   value={selectedType?.reportTypeId ?? ""}
-                  onValueChange={(value) => setTypeKey((value as string) ?? null)}
+                  onValueChange={(value) =>
+                    updateFilters({ ...filters, reportTypeId: (value as string) ?? null })
+                  }
                   disabled={running}
                 >
                   <SelectTrigger aria-label={t.reports.reportType} className="w-full">
@@ -273,9 +287,12 @@ export function ReportRunner() {
                     { value: "fbd", label: "FBD" },
                     { value: "elg", label: "ELG" },
                   ]}
-                  value={verification}
+                  value={filters.verification}
                   onValueChange={(value) =>
-                    setVerification((value as typeof verification) ?? "all")
+                    updateFilters({
+                      ...filters,
+                      verification: (value as VerificationFilter) ?? "all",
+                    })
                   }
                   disabled={running}
                 >
