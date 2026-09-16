@@ -30,7 +30,12 @@ import { useDocumentTitle, useI18n } from "@/lib/i18n/context";
 import { localizedError, localizedMessage, type LocalizedMessage } from "@/lib/i18n/errors";
 import { cn } from "@/lib/utils";
 
-import { OverviewCard, ResultsCard, type ReportResult } from "./ReportResults";
+import {
+  InactiveCarriersCard,
+  OverviewCard,
+  ResultsCard,
+  type ReportResult,
+} from "./ReportResults";
 
 function ReportRunnerSkeleton() {
   const { t } = useI18n();
@@ -335,6 +340,7 @@ export function ReportRunner() {
           ) : (
             <>
               <OverviewCard result={result} />
+              <InactiveCarriersCard carriers={result.inactiveCarriers ?? []} />
               <ResultsCard result={result} />
             </>
           )}

@@ -24,7 +24,7 @@ import { useI18n } from "@/lib/i18n/context";
 import { sheetErrorText } from "@/lib/i18n/errors";
 import { cn } from "@/lib/utils";
 
-export type ReportRow = { rowNumber: number; values: string[] };
+export type ReportRow = { rowNumber: number; values: string[]; carriers?: string[] };
 export type BucketResult = {
   bucketKey: string;
   label: string;
@@ -41,15 +41,28 @@ export type SheetResult = {
   bucketRows: BucketResult[];
   error: ReportSheetError | null;
 };
+// Bots of one clinic that the carrier API reports as not active, or whose
+// pattern this app will not run, so the operator can tell a short list from a
+// complete one.
+export type InactiveCarriersSection = {
+  clinicId: Id<"clinics">;
+  clinicName: string;
+  bots: Array<{ name: string; status: string; unsupported?: boolean }>;
+};
 export type ReportResult = {
   reportRunId: Id<"reportRuns"> | null;
   assignedClinicCount: number;
   sheets: SheetResult[];
+  inactiveCarriers?: InactiveCarriersSection[];
 };
 
 // Leading data columns shown beside the row number; the rest of the sheet is
 // read from the sheet itself.
 const LEADING_COLUMN_COUNT = 8;
+
+// The carriers a row matched belong to no sheet column, so they travel under
+// a column number of their own.
+const CARRIER_CELL_COLUMN = -1;
 
 // Sheet columns of a result table, in reading order: the columns the conditions
 // read come first so every row shows the cells that put it in the bucket, then
@@ -157,7 +170,21 @@ function ResultRowCard({
   filterColumns: number[];
 }) {
   const { t } = useI18n();
-  const filterCells = cellsOf(headers, row, filterColumns, t.common.columnFallback);
+  // The carriers that matched the row explain it as much as the cells behind
+  // the filter, so the open row lists them beside those cells.
+  const carrierCells: RowCell[] = row.carriers?.length
+    ? [
+        {
+          column: CARRIER_CELL_COLUMN,
+          label: t.reports.results.carriers,
+          value: row.carriers.join(", "),
+        },
+      ]
+    : [];
+  const filterCells = [
+    ...cellsOf(headers, row, filterColumns, t.common.columnFallback),
+    ...carrierCells,
+  ];
   const restCells = cellsOf(
     headers,
     row,
@@ -287,6 +314,7 @@ function ResultTable({
   const emptyColumns = new Set(
     columnIndexes.filter((index) => rows.every((row) => (row.values[index] ?? "").trim() === ""))
   );
+  const showsCarriers = rows.some((row) => (row.carriers?.length ?? 0) > 0);
 
   return (
     <DataTableFrame>
@@ -294,6 +322,7 @@ function ResultTable({
         <TableHeader className="bg-muted/40">
           <TableRow>
             <TableHead>{t.common.row}</TableHead>
+            {showsCarriers ? <TableHead>{t.reports.results.carriers}</TableHead> : null}
             {columnIndexes.map((index) => (
               <ColumnHead
                 key={index}
@@ -307,6 +336,11 @@ function ResultTable({
           {rows.map((row) => (
             <TableRow key={row.rowNumber}>
               <TableCell className="font-mono tabular-nums">{row.rowNumber}</TableCell>
+              {showsCarriers ? (
+                <TableCell className="max-w-40">
+                  <TruncatedText>{(row.carriers ?? []).join(", ")}</TruncatedText>
+                </TableCell>
+              ) : null}
               {columnIndexes.map((index) => (
                 <TableCell key={index} className="max-w-40">
                   <TruncatedText>{row.values[index] ?? ""}</TruncatedText>
@@ -377,6 +411,56 @@ function CopyRowNumbers({ label, rowNumbers }: { label: string; rowNumbers: stri
         <Copy data-icon="inline-start" aria-hidden="true" />
       )}
     </Button>
+  );
+}
+
+/**
+ * The bots of each clinic that the carrier API reports as not active, or whose
+ * pattern this app will not run, so a short list is not read as a complete one.
+ * It opens closed: the card answers a question about the results, it is not the
+ * results themselves.
+ */
+export function InactiveCarriersCard({ carriers }: { carriers: InactiveCarriersSection[] }) {
+  const { t } = useI18n();
+
+  if (carriers.length === 0) return null;
+
+  return (
+    <Card>
+      <Collapsible>
+        <CollapsibleTrigger className="group/carriers flex w-full flex-col gap-1 px-(--card-spacing)">
+          <span className="flex items-center justify-between gap-2">
+            <span className="font-heading text-base leading-snug font-medium">
+              {t.reports.inactiveCarriers.title}
+            </span>
+            <ChevronDown
+              className="size-4 shrink-0 text-muted-foreground transition-transform group-data-[panel-open]/carriers:rotate-180"
+              aria-hidden="true"
+            />
+          </span>
+          <span className="text-sm text-muted-foreground">{t.reports.inactiveCarriers.note}</span>
+        </CollapsibleTrigger>
+        <CollapsiblePanel className="mt-(--card-spacing) border-t px-(--card-spacing) pt-(--card-spacing)">
+          <div className="flex flex-col gap-4">
+            {carriers.map((clinic) => (
+              <div key={clinic.clinicId} className="flex flex-col gap-1.5">
+                <h3 className="text-sm font-medium">{clinic.clinicName}</h3>
+                <ul className="flex flex-col gap-1 text-sm text-muted-foreground">
+                  {clinic.bots.map((bot) => (
+                    <li key={bot.name}>
+                      {bot.name} <span aria-hidden="true">·</span>{" "}
+                      {bot.unsupported === true
+                        ? t.reports.inactiveCarriers.patternUnsupported
+                        : bot.status}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        </CollapsiblePanel>
+      </Collapsible>
+    </Card>
   );
 }
 

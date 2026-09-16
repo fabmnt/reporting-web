@@ -9,6 +9,16 @@ import { cleanConditionSet, type ReportConditionSet } from "./reportConditions";
 export const reportTypeBucket = v.object({ key: v.string(), label: v.string() });
 export type ReportTypeBucket = Infer<typeof reportTypeBucket>;
 
+// Which engine reads a report type. `rows` applies the stored conditions,
+// while `execute` runs the rules the app ships in code and asks the Control
+// Central API which bots the clinic has.
+export const reportEngine = v.union(v.literal("rows"), v.literal("execute"));
+export type ReportEngine = Infer<typeof reportEngine>;
+
+export function engineOf(row: { engine?: ReportEngine }): ReportEngine {
+  return row.engine ?? "rows";
+}
+
 export const MAX_BUCKETS_PER_TYPE = 5;
 export const MAX_TYPE_NAME_LENGTH = 60;
 export const MAX_TYPE_DESCRIPTION_LENGTH = 200;

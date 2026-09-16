@@ -52,6 +52,7 @@ const BLANK = "blank";
 export function NewReportTypeDialog({
   scope,
   sources,
+  existingNames,
   open,
   onOpenChange,
   onCreated,
@@ -60,6 +61,9 @@ export function NewReportTypeDialog({
   scope: ReportTypeScope;
   // Report types the caller can run, offered as a starting point.
   sources: ReadonlyArray<{ reportTypeId: Id<"reportTypes">; name: string }>;
+  // Every name the caller can already run, whether or not it is a starting
+  // point, because the backend refuses a duplicate among them.
+  existingNames: ReadonlyArray<string>;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onCreated: (created: CreatedReportType) => void;
@@ -83,7 +87,7 @@ export function NewReportTypeDialog({
   const trimmedName = name.trim();
   const nameTaken =
     trimmedName !== "" &&
-    sources.some((item) => item.name.toLowerCase() === trimmedName.toLowerCase());
+    existingNames.some((existing) => existing.toLowerCase() === trimmedName.toLowerCase());
 
   async function handleCreate() {
     setSaving(true);

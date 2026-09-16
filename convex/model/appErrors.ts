@@ -42,7 +42,9 @@ export type AppErrorPayload =
   | { code: "REPORT_TYPE_GROUP_REQUIRED" }
   | { code: "REPORT_TYPE_GROUP_LIMIT"; limit: number }
   | { code: "REPORT_TYPE_GROUP_KEYS" }
-  | { code: "SHEET_RATE_LIMITED" };
+  | { code: "SHEET_RATE_LIMITED" }
+  | { code: "CARRIER_SIGN_IN_REJECTED" }
+  | { code: "CARRIER_API_UNAVAILABLE" };
 
 export type AppErrorCode = AppErrorPayload["code"];
 
@@ -69,7 +71,14 @@ export const reportSheetError = v.union(
   v.object({ code: v.literal("SHEET_NO_TABS"), startDate: v.string(), endDate: v.string() }),
   v.object({ code: v.literal("SHEET_INVALID_COLUMN"), column: v.string() }),
   v.object({ code: v.literal("SHEET_RATE_LIMITED") }),
-  v.object({ code: v.literal("SHEET_FAILED"), message: v.string() })
+  v.object({ code: v.literal("SHEET_FAILED"), message: v.string() }),
+  // A clinic the carrier engine could not work: it has no Control Central id,
+  // the API turned the app away, or the clinic has no bot left to run a row.
+  v.object({ code: v.literal("SHEET_CARRIER_ID_MISSING") }),
+  v.object({ code: v.literal("SHEET_CARRIER_ACCESS_DENIED") }),
+  v.object({ code: v.literal("SHEET_CARRIER_CLINIC_UNKNOWN") }),
+  v.object({ code: v.literal("SHEET_CARRIER_UNAVAILABLE") }),
+  v.object({ code: v.literal("SHEET_NO_CARRIER_BOTS") })
 );
 
 export type ReportSheetError = Infer<typeof reportSheetError>;

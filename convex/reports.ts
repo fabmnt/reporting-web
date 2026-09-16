@@ -4,13 +4,15 @@ import type { Id } from "./_generated/dataModel";
 import type { QueryCtx } from "./_generated/server";
 import { action, internalMutation, internalQuery } from "./_generated/server";
 import { internal } from "./_generated/api.js";
-import {
-  appError,
-  reportSheetError,
-  sheetErrorFrom,
-  type ReportSheetError,
-} from "./model/appErrors";
+import { runExecuteReport } from "./executeReport";
+import { appError, sheetErrorFrom, type ReportSheetError } from "./model/appErrors";
 import type { ResolvedClinicSheetColumns } from "./model/clinicSheetColumns";
+import {
+  reportRunResult,
+  type ReportRow,
+  type ReportRunResult,
+  type ReportSheetResult,
+} from "./model/reportResults";
 import {
   evaluateConditionSet,
   EXECUTION_COLUMN_INDEX,
@@ -22,56 +24,22 @@ import {
   type ReportConditionSet,
 } from "./model/reportConditions";
 import { columnLetterToIndex, listProfileClinics } from "./model/reporting";
-import { loadRunnableReportType, type ReportTypeBucket } from "./model/reportTypes";
+import {
+  engineOf,
+  loadRunnableReportType,
+  reportEngine,
+  type ReportEngine,
+  type ReportTypeBucket,
+} from "./model/reportTypes";
 
 type SheetRow = string[];
-type ReportRow = { rowNumber: number; values: string[] };
-
-const reportRow = v.object({ rowNumber: v.number(), values: v.array(v.string()) });
-
-// One entry per bucket of a report type, in bucket order. `filterColumns` are
-// the 0-based sheet columns its conditions read, so the results view can show
-// the cells behind the filter next to each row.
-const reportBucketResult = v.object({
-  bucketKey: v.string(),
-  label: v.string(),
-  rows: v.array(reportRow),
-  filterColumns: v.array(v.number()),
-});
-
-const reportSheetResult = v.object({
-  clinicId: v.id("clinics"),
-  clinicName: v.string(),
-  googleSheetId: v.string(),
-  tabTitle: v.string(),
-  headers: v.array(v.string()),
-  // One entry per bucket of the report type, in bucket order.
-  bucketRows: v.array(reportBucketResult),
-  error: v.union(reportSheetError, v.null()),
-});
-
-type BucketResultEntry = {
-  bucketKey: string;
-  label: string;
-  rows: ReportRow[];
-  filterColumns: number[];
-};
-
-type SheetResultEntry = {
-  clinicId: Id<"clinics">;
-  clinicName: string;
-  googleSheetId: string;
-  tabTitle: string;
-  headers: string[];
-  bucketRows: BucketResultEntry[];
-  error: ReportSheetError | null;
-};
 
 type ClinicRunConfig = {
   clinicId: Id<"clinics">;
   clientId: Id<"clients">;
   name: string;
   googleSheetId: string;
+  externalClinicId: string | null;
   sheetColumns: ResolvedClinicSheetColumns;
   conditions: ReportConditionSet;
 };
@@ -97,6 +65,8 @@ type ReportRunConfig = {
   reportTypeName: string;
   // Whether the run form offers the verification-type picker for this type.
   usesVerificationFilter: boolean;
+  // Which engine reads the rows, so the run knows which one to call.
+  engine: ReportEngine;
 };
 
 async function reportRunConfigForUser(
@@ -125,12 +95,14 @@ async function reportRunConfigForUser(
       clientId: clinic.clientId,
       name: clinic.name,
       googleSheetId: clinic.googleSheetId,
+      externalClinicId: clinic.externalClinicId,
       sheetColumns: clinic.sheetColumns,
       conditions: reportType.conditions,
     })),
     buckets: reportType.buckets,
     reportTypeName: reportType.name,
     usesVerificationFilter: reportType.usesVerificationFilter,
+    engine: engineOf(reportType),
   };
 }
 
@@ -167,8 +139,8 @@ export const recordReportRun = internalMutation({
   },
 });
 
-// v1: the row reports. The execute operation needs carrier API data and comes
-// later.
+// Both engines answer with the same result shape, so the run form does not
+// have to know which one reads the rows of the type the user picked.
 export const runSheetReport = action({
   args: {
     reportTypeId: v.id("reportTypes"),
@@ -176,19 +148,8 @@ export const runSheetReport = action({
     endDate: v.string(),
     verificationFilter: v.optional(v.union(v.literal("all"), v.literal("fbd"), v.literal("elg"))),
   },
-  returns: v.object({
-    reportRunId: v.union(v.id("reportRuns"), v.null()),
-    assignedClinicCount: v.number(),
-    sheets: v.array(reportSheetResult),
-  }),
-  handler: async (
-    ctx,
-    args
-  ): Promise<{
-    reportRunId: Id<"reportRuns"> | null;
-    assignedClinicCount: number;
-    sheets: SheetResultEntry[];
-  }> => {
+  returns: reportRunResult,
+  handler: async (ctx, args): Promise<ReportRunResult> => {
     const { userId }: { userId: Id<"users"> } = await ctx.runQuery(
       internal.staffAuth.currentOperator,
       {}
@@ -202,6 +163,23 @@ export const runSheetReport = action({
       startDate: args.startDate,
       endDate: args.endDate,
     });
+
+    // The carrier engine reads its rules from the app and asks the Control
+    // Central API which bots each clinic has, so the stored conditions and the
+    // run-level narrowing below do not apply to it.
+    if (config.engine === "execute") {
+      return await runExecuteReport(ctx, {
+        clinics: config.clinics,
+        buckets: config.buckets,
+        startDate: args.startDate,
+        endDate: args.endDate,
+        verificationFilter,
+        userId,
+        reportTypeId: args.reportTypeId,
+        reportTypeName: config.reportTypeName,
+        startedAt,
+      });
+    }
 
     // The verification choice is a run-level narrowing, not part of the stored
     // rules: it becomes one more clause every bucket has to satisfy. Only the
@@ -219,23 +197,40 @@ export const runSheetReport = action({
 
     const bucketLabels = new Map(config.buckets.map((bucket) => [bucket.key, bucket.label]));
 
-    const { tabsForClinic }: { tabsForClinic: Record<string, string[]> } = await ctx.runAction(
-      internal.sheets.planSheetTabs,
-      {
-        clinics: config.clinics.map((c) => ({
-          clinicId: c.clinicId,
-          googleSheetId: c.googleSheetId,
-        })),
-        startDate: args.startDate,
-        endDate: args.endDate,
-      }
-    );
+    const {
+      tabsForClinic,
+      errorsForClinic,
+    }: {
+      tabsForClinic: Record<string, string[]>;
+      errorsForClinic: Record<string, ReportSheetError>;
+    } = await ctx.runAction(internal.sheets.planSheetTabs, {
+      clinics: config.clinics.map((c) => ({
+        clinicId: c.clinicId,
+        googleSheetId: c.googleSheetId,
+      })),
+      startDate: args.startDate,
+      endDate: args.endDate,
+    });
 
-    const sheets: SheetResultEntry[] = [];
+    const sheets: ReportSheetResult[] = [];
 
     let succeededClinics = 0;
     let failedClinics = 0;
     for (const clinic of config.clinics) {
+      const planningError = errorsForClinic[clinic.clinicId];
+      if (planningError !== undefined) {
+        failedClinics += 1;
+        sheets.push({
+          clinicId: clinic.clinicId,
+          clinicName: clinic.name,
+          googleSheetId: clinic.googleSheetId,
+          tabTitle: "",
+          headers: [],
+          bucketRows: [],
+          error: planningError,
+        });
+        continue;
+      }
       const tabs = tabsForClinic[clinic.clinicId] ?? [];
       if (tabs.length === 0) {
         failedClinics += 1;
@@ -389,6 +384,7 @@ export const runSheetReportConfig = internalQuery({
         clientId: v.id("clients"),
         name: v.string(),
         googleSheetId: v.string(),
+        externalClinicId: v.union(v.string(), v.null()),
         sheetColumns: v.object({
           updateStatus: v.string(),
           uploadStatus: v.string(),
@@ -401,6 +397,7 @@ export const runSheetReportConfig = internalQuery({
     buckets: v.array(v.object({ key: v.string(), label: v.string() })),
     reportTypeName: v.string(),
     usesVerificationFilter: v.boolean(),
+    engine: reportEngine,
   }),
   handler: async (ctx, args) => {
     if (args.startDate > args.endDate) {
