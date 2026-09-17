@@ -34,15 +34,33 @@ export function useSearchText(): SearchText {
   return { text, query, change };
 }
 
-export type CursorPages = {
+/** The page on screen, handed over when the reader moves to another one. */
+export type PageHold<T> = {
+  rows: T[];
+  canGoNext: boolean;
+};
+
+export type HeldPage<T> = PageHold<T> & {
+  // The page the rows belong to, which is the one the reader was reading.
+  index: number;
+};
+
+export type CursorPages<T> = {
   // What the query reads from; null asks for the first page.
   cursor: string | null;
   // How many pages the reader has moved forward, 0 being the first.
   index: number;
   canGoPrevious: boolean;
-  goPrevious: () => void;
+  // Which way the reader moved while that page loads, so the control they
+  // pressed is the one that says so.
+  pending: "previous" | "next" | null;
+  // The page to keep showing while the next one loads. A cursor change empties
+  // the query result, and a table that unmounts for it collapses the page and
+  // jumps the reader to the top.
+  held: HeldPage<T> | null;
+  goPrevious: (hold: PageHold<T>) => void;
   // Called with the cursor of the page that was just read.
-  goNext: (continueCursor: string) => void;
+  goNext: (continueCursor: string, hold: PageHold<T>) => void;
   // Back to the first page, which is where a list whose filters changed starts.
   reset: () => void;
 };
@@ -51,30 +69,40 @@ export type CursorPages = {
  * The pages a reader has walked through in a list the server pages with a
  * cursor. Convex cursors only move forward, so the pages already read are kept
  * and Previous walks back through them; a list whose filters changed starts
- * over at the first page.
+ * over at the first page, and keeps showing the rows it had until the new ones
+ * arrive.
  */
-export function useCursorPages(): CursorPages {
+export function useCursorPages<T>(): CursorPages<T> {
   const [cursors, setCursors] = useState<(string | null)[]>([null]);
   const [index, setIndex] = useState(0);
+  const [pending, setPending] = useState<"previous" | "next" | null>(null);
+  const [held, setHeld] = useState<HeldPage<T> | null>(null);
 
-  function goNext(continueCursor: string) {
+  function goNext(continueCursor: string, hold: PageHold<T>) {
+    setHeld({ ...hold, index });
+    setPending("next");
     setCursors((current) => [...current.slice(0, index + 1), continueCursor]);
     setIndex((current) => current + 1);
   }
 
-  function goPrevious() {
+  function goPrevious(hold: PageHold<T>) {
+    setHeld({ ...hold, index });
+    setPending("previous");
     setIndex((current) => Math.max(0, current - 1));
   }
 
   function reset() {
     setCursors([null]);
     setIndex(0);
+    setPending(null);
   }
 
   return {
     cursor: cursors[index] ?? null,
     index,
     canGoPrevious: index > 0,
+    pending,
+    held,
     goPrevious,
     goNext,
     reset,

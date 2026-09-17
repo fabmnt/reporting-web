@@ -1,6 +1,7 @@
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/spinner";
 import { useI18n } from "@/lib/i18n/context";
 
 /**
@@ -18,6 +19,7 @@ export function TablePagination({
   last,
   canPrevious,
   canNext,
+  pending,
   onPrevious,
   onNext,
 }: {
@@ -25,6 +27,10 @@ export function TablePagination({
   last: number;
   canPrevious: boolean;
   canNext: boolean;
+  // The control the reader pressed, while the page behind it loads. The rows on
+  // screen stay where they are, so the wait shows here instead of the table
+  // emptying and the reader being sent back to the top.
+  pending: "previous" | "next" | null;
   onPrevious: () => void;
   onNext: () => void;
 }) {
@@ -40,13 +46,31 @@ export function TablePagination({
         </p>
       )}
       <div className="flex items-center gap-2">
-        <Button variant="outline" size="sm" disabled={!canPrevious} onClick={onPrevious}>
-          <ChevronLeft data-icon="inline-start" aria-hidden="true" />
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={!canPrevious || pending !== null}
+          onClick={onPrevious}
+        >
+          {pending === "previous" ? (
+            <Spinner data-icon="inline-start" />
+          ) : (
+            <ChevronLeft data-icon="inline-start" aria-hidden="true" />
+          )}
           {t.common.pagination.previous}
         </Button>
-        <Button variant="outline" size="sm" disabled={!canNext} onClick={onNext}>
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={!canNext || pending !== null}
+          onClick={onNext}
+        >
           {t.common.pagination.next}
-          <ChevronRight data-icon="inline-end" aria-hidden="true" />
+          {pending === "next" ? (
+            <Spinner data-icon="inline-end" />
+          ) : (
+            <ChevronRight data-icon="inline-end" aria-hidden="true" />
+          )}
         </Button>
       </div>
     </div>

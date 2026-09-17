@@ -197,7 +197,7 @@ function ClientForm({
 export function AdminClientsPanel() {
   const { t } = useI18n();
   const search = useSearchText();
-  const pages = useCursorPages();
+  const pages = useCursorPages<ClientView>();
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const status = statusFilterArg(statusFilter);
   const isSearching = search.query !== "";
@@ -239,13 +239,21 @@ export function AdminClientsPanel() {
   const [assigningClient, setAssigningClient] = useState<ClientView | null>(null);
 
   const isReady = isSearching ? searchData !== undefined : clientsData !== undefined;
+  // While a change loads, the table keeps the rows it had: emptying it would
+  // collapse the page and send the reader back to the top.
   const clients = isSearching ? (searchData?.clients ?? []) : (clientsData?.page ?? []);
+  const shownRows = isReady ? clients : (pages.held?.rows ?? clients);
+  const shownIndex = isReady ? pages.index : (pages.held?.index ?? pages.index);
   // The rows on screen, which is all a cursor can tell: the pages behind them
   // were read and the ones ahead are not known.
-  const firstRow = pages.index * TABLE_PAGE_SIZE + 1;
-  const lastRow = firstRow + clients.length - 1;
+  const firstRow = shownIndex * TABLE_PAGE_SIZE + 1;
+  const lastRow = firstRow + shownRows.length - 1;
   const hasFilters = isSearching || statusFilter !== "all";
-  const canGoNext = !isSearching && clientsData !== undefined && !clientsData.isDone;
+  const canGoNext =
+    clientsData !== undefined ? !clientsData.isDone : (pages.held?.canGoNext ?? false);
+  // Only a page the reader asked for shows a spinner on its own control; a
+  // filter or a search leaves the table as it is until its rows arrive.
+  const paging = !isSearching && clientsData === undefined ? pages.pending : null;
 
   function openCreate() {
     setFormError(null);
@@ -370,9 +378,9 @@ export function AdminClientsPanel() {
           </div>
         ) : null}
 
-        {!isReady ? (
+        {!isReady && shownRows.length === 0 ? (
           <Skeleton className="h-40 w-full" />
-        ) : clients.length === 0 ? (
+        ) : shownRows.length === 0 ? (
           <p className="text-sm text-muted-foreground">
             {hasFilters ? t.admin.clients.noMatches : t.admin.clients.noClients}
           </p>
@@ -390,7 +398,7 @@ export function AdminClientsPanel() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {clients.map((client) => {
+                  {shownRows.map((client) => {
                     const isPending = pendingClientId === client.clientId;
                     return (
                       <TableRow key={client.clientId}>
@@ -421,7 +429,7 @@ export function AdminClientsPanel() {
             </DataTableFrame>
 
             <DataCardList>
-              {clients.map((client) => (
+              {shownRows.map((client) => (
                 <DataCard
                   key={client.clientId}
                   title={client.name}
@@ -460,8 +468,11 @@ export function AdminClientsPanel() {
             last={lastRow}
             canPrevious={pages.canGoPrevious}
             canNext={canGoNext}
-            onPrevious={pages.goPrevious}
-            onNext={() => pages.goNext(clientsData?.continueCursor ?? "")}
+            pending={paging}
+            onPrevious={() => pages.goPrevious({ rows: shownRows, canGoNext })}
+            onNext={() =>
+              pages.goNext(clientsData?.continueCursor ?? "", { rows: shownRows, canGoNext })
+            }
           />
         )}
       </section>

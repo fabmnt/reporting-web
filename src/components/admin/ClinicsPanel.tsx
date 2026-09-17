@@ -296,7 +296,7 @@ function ClinicForm({
 export function AdminClinicsPanel() {
   const { t } = useI18n();
   const search = useSearchText();
-  const pages = useCursorPages();
+  const pages = useCursorPages<ClinicView>();
   const [clientFilter, setClientFilter] = useState(ALL_CLIENTS);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const status = statusFilterArg(statusFilter);
@@ -345,13 +345,21 @@ export function AdminClinicsPanel() {
 
   const clients = clientsData?.clients ?? [];
   const isReady = isSearching ? searchData !== undefined : clinicsData !== undefined;
+  // While a change loads, the table keeps the rows it had: emptying it would
+  // collapse the page and send the reader back to the top.
   const clinics = isSearching ? (searchData?.clinics ?? []) : (clinicsData?.page ?? []);
+  const shownRows = isReady ? clinics : (pages.held?.rows ?? clinics);
+  const shownIndex = isReady ? pages.index : (pages.held?.index ?? pages.index);
   // The rows on screen, which is all a cursor can tell: the pages behind them
   // were read and the ones ahead are not known.
-  const firstRow = pages.index * TABLE_PAGE_SIZE + 1;
-  const lastRow = firstRow + clinics.length - 1;
+  const firstRow = shownIndex * TABLE_PAGE_SIZE + 1;
+  const lastRow = firstRow + shownRows.length - 1;
   const hasFilters = isSearching || clientFilter !== ALL_CLIENTS || statusFilter !== "all";
-  const canGoNext = !isSearching && clinicsData !== undefined && !clinicsData.isDone;
+  const canGoNext =
+    clinicsData !== undefined ? !clinicsData.isDone : (pages.held?.canGoNext ?? false);
+  // Only a page the reader asked for shows a spinner on its own control; a
+  // filter or a search leaves the table as it is until its rows arrive.
+  const paging = !isSearching && clinicsData === undefined ? pages.pending : null;
 
   // Both the client filter and the clinic form pick from the capped client
   // list, which is every client the directory holds at the size the cap allows.
@@ -547,9 +555,9 @@ export function AdminClinicsPanel() {
           </div>
         ) : null}
 
-        {!isReady ? (
+        {!isReady && shownRows.length === 0 ? (
           <Skeleton className="h-64 w-full" />
-        ) : clinics.length === 0 ? (
+        ) : shownRows.length === 0 ? (
           <p className="text-sm text-muted-foreground">
             {hasFilters ? t.admin.clinics.noMatches : t.admin.clinics.noClinics}
           </p>
@@ -569,7 +577,7 @@ export function AdminClinicsPanel() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {clinics.map((clinic) => {
+                  {shownRows.map((clinic) => {
                     const isPending = pendingClinicId === clinic.clinicId;
                     return (
                       <TableRow key={clinic.clinicId}>
@@ -621,7 +629,7 @@ export function AdminClinicsPanel() {
             </DataTableFrame>
 
             <DataCardList>
-              {clinics.map((clinic) => (
+              {shownRows.map((clinic) => (
                 <DataCard
                   key={clinic.clinicId}
                   title={clinic.name}
@@ -680,8 +688,11 @@ export function AdminClinicsPanel() {
             last={lastRow}
             canPrevious={pages.canGoPrevious}
             canNext={canGoNext}
-            onPrevious={pages.goPrevious}
-            onNext={() => pages.goNext(clinicsData?.continueCursor ?? "")}
+            pending={paging}
+            onPrevious={() => pages.goPrevious({ rows: shownRows, canGoNext })}
+            onNext={() =>
+              pages.goNext(clinicsData?.continueCursor ?? "", { rows: shownRows, canGoNext })
+            }
           />
         )}
       </section>
