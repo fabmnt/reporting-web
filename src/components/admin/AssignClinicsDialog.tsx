@@ -100,6 +100,10 @@ export function AssignClinicsDialog({
 
   const [profileId, setProfileId] = useState("");
   const [selected, setSelected] = useState<Set<Id<"clinics">>>(new Set());
+  // The assignment the ticks started from. Saving diffs against this rather
+  // than against the account as it stands now, so a clinic another screen
+  // assigned while this dialog was open is not read as one the admin unticked.
+  const [initialAssigned, setInitialAssigned] = useState<Set<Id<"clinics">>>(new Set());
   const [search, setSearch] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<LocalizedMessage | null>(null);
@@ -123,14 +127,13 @@ export function AssignClinicsDialog({
   function chooseAccount(nextProfileId: string) {
     const account = accounts.find((entry) => entry.profileId === nextProfileId);
     const assigned = new Set<Id<"clinics">>(account?.assignedClinicIds ?? []);
+    const assignedHere = assignable
+      .filter((clinic) => assigned.has(clinic.clinicId))
+      .map((clinic) => clinic.clinicId);
+
     setProfileId(nextProfileId);
-    setSelected(
-      new Set(
-        assignable
-          .filter((clinic) => assigned.has(clinic.clinicId))
-          .map((clinic) => clinic.clinicId)
-      )
-    );
+    setInitialAssigned(new Set(assignedHere));
+    setSelected(new Set(assignedHere));
   }
 
   function toggleClinic(clinicId: Id<"clinics">) {
@@ -164,20 +167,20 @@ export function AssignClinicsDialog({
   async function save() {
     if (profileId === "" || isSaving) return;
 
-    const account = accounts.find((entry) => entry.profileId === profileId);
-    const assigned = new Set<Id<"clinics">>(account?.assignedClinicIds ?? []);
-
     setError(null);
     setIsSaving(true);
     try {
       await setClientAssignment({
         profileId: profileId as Id<"staffProfiles">,
         clientId: client.clientId,
-        // Only what the dialog changes travels: a clinic it cannot show, or an
-        // inactive one it cannot tick, keeps the assignment it had.
-        addClinicIds: [...selected].filter((clinicId) => !assigned.has(clinicId)),
+        // Only what the dialog changes travels: a clinic it cannot show, an
+        // inactive one it cannot tick, and one another screen assigned while it
+        // was open all keep the assignment they had.
+        addClinicIds: [...selected].filter((clinicId) => !initialAssigned.has(clinicId)),
         removeClinicIds: assignable
-          .filter((clinic) => assigned.has(clinic.clinicId) && !selected.has(clinic.clinicId))
+          .filter(
+            (clinic) => initialAssigned.has(clinic.clinicId) && !selected.has(clinic.clinicId)
+          )
           .map((clinic) => clinic.clinicId),
       });
       onClose();
