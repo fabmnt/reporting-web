@@ -148,8 +148,34 @@ export const runSheetReport = action({
 
 // What the form is answered with when the operator stopped the run before it
 // read a sheet. Nothing was read, so there is nothing to show beside the notice.
-function stoppedRun(runId: Id<"reportRuns">): ReportRunResult {
-  return { reportRunId: runId, assignedClinicCount: 0, cancelled: true, sheets: [] };
+function stoppedRun(runId: Id<"reportRuns">, assignedClinicCount = 0): ReportRunResult {
+  return { reportRunId: runId, assignedClinicCount, cancelled: true, sheets: [] };
+}
+
+/**
+ * Closes a run the operator stopped while its settings were being read. Both
+ * engines open with an external call — the carrier sign-in, the Sheets token —
+ * and neither is worth making for a run that will read nothing, so the run is
+ * ended here instead of being handed to one.
+ */
+async function closeStoppedRun(
+  ctx: ActionCtx,
+  runId: Id<"reportRuns">,
+  config: ReportRunConfig
+): Promise<ReportRunResult> {
+  const clientIds = new Set(config.clinics.map((clinic) => clinic.clientId));
+
+  await ctx.runMutation(internal.reportRuns.finishReportRun, {
+    runId,
+    clientId: clientIds.size === 1 ? config.clinics[0]?.clientId : undefined,
+    status: "cancelled",
+    completedAt: Date.now(),
+    processedClinicCount: 0,
+    succeededClinicCount: 0,
+    failedClinicCount: 0,
+  });
+
+  return stoppedRun(runId, config.clinics.length);
 }
 
 /**
@@ -169,6 +195,11 @@ async function runReportSheets(
     startDate: params.startDate,
     endDate: params.endDate,
   });
+
+  // The operator may have stopped the run while its settings were being read.
+  // Both engines below open with an external call, and neither is worth making
+  // for a run that will read nothing.
+  if (await reportRunCancelled(ctx, runId)) return await closeStoppedRun(ctx, runId, config);
 
   // The carrier engine asks the Control Central API which bots each clinic
   // has, and reads the same stored conditions every other report reads, so
