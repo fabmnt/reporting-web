@@ -2,29 +2,6 @@ import { v } from "convex/values";
 
 import type { Id } from "../_generated/dataModel";
 import { internalMutation } from "../_generated/server";
-import type { QueryCtx } from "../_generated/server";
-
-// One index page per read, so counting one client never asks the database for
-// more rows than it needs.
-const COUNT_PAGE = 200;
-
-async function countClinics(ctx: QueryCtx, clientId: Id<"clients">): Promise<number> {
-  let count = 0;
-  let cursor: string | null = null;
-  let isDone = false;
-
-  while (!isDone) {
-    const page = await ctx.db
-      .query("clinics")
-      .withIndex("by_clientId_and_name", (query) => query.eq("clientId", clientId))
-      .paginate({ cursor, numItems: COUNT_PAGE });
-    count += page.page.length;
-    cursor = page.continueCursor;
-    isDone = page.isDone;
-  }
-
-  return count;
-}
 
 /**
  * One-shot fill of `clients.clinicCount` for a deployment that holds clinics
@@ -36,6 +13,10 @@ async function countClinics(ctx: QueryCtx, clientId: Id<"clients">): Promise<num
  * here on. It is always recounted from the clinics table, so running this twice
  * changes nothing.
  *
+ * The clinics are counted in one pass rather than one client at a time: a
+ * function may run a single paginated query, and a page per client is a
+ * paginated query per client.
+ *
  * The run is a single transaction: a deployment whose directory is too large to
  * count in one fails the run and writes none of it, which leaves the counts as
  * they were. Tighten `clients.clinicCount` to `v.number()` in convex/schema.ts
@@ -45,11 +26,16 @@ export const run = internalMutation({
   args: {},
   returns: v.object({ updated: v.number() }),
   handler: async (ctx) => {
+    const countsByClient = new Map<Id<"clients">, number>();
+    for await (const clinic of ctx.db.query("clinics")) {
+      countsByClient.set(clinic.clientId, (countsByClient.get(clinic.clientId) ?? 0) + 1);
+    }
+
     const clients = await ctx.db.query("clients").withIndex("by_key").collect();
     let updated = 0;
 
     for (const client of clients) {
-      const count = await countClinics(ctx, client._id);
+      const count = countsByClient.get(client._id) ?? 0;
       if (client.clinicCount === count) continue;
 
       await ctx.db.patch(client._id, { clinicCount: count });
