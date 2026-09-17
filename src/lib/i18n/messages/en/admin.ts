@@ -57,6 +57,7 @@ export const admin = {
         `Choose which of ${name}'s clinics this account runs reports on.`,
       user: "Account",
       chooseUser: "Choose an account",
+      accountLimit: (limit: number) => `Showing the first ${limit} accounts.`,
       search: "Search clinics",
       selectAll: "Select all",
       selected: (count: number, total: number) => `${count} of ${total} selected.`,

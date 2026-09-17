@@ -28,7 +28,9 @@ const managedAccount = currentAccount.extend({
 });
 
 const MAX_ASSIGNED_CLINICS = 200;
-const MAX_MANAGED_ACCOUNTS = 100;
+// Matches the cap the rest of the app reads profiles under, so an account that
+// exists is an account the admin screens can list and assign.
+const MAX_MANAGED_ACCOUNTS = 500;
 
 export const ensureCurrentProfile = mutation({
   args: {},
@@ -208,13 +210,15 @@ export const setStatus = mutation({
 });
 
 /**
- * Writes what one account runs reports on for a single client: the clinics of
- * that client the caller sends are the ones the account keeps, and every other
- * client keeps what it held. The assignment screens work client by client, so
- * an edit can neither widen nor shrink another client by accident.
+ * Adds and removes clinics of one client for one account, so the assignment
+ * screens can work client by client without holding the whole assignment: a
+ * clinic the caller does not mention keeps the state it had, whichever client
+ * it belongs to. A screen that shows part of a client's clinics, or only the
+ * active ones, therefore cannot drop the rest by saving.
  *
- * Only an active clinic of that client can be assigned: the reports skip the
- * rest, so keeping them would fill the cap with clinics nothing reads.
+ * Only an active clinic of that client can be added: the reports skip the rest,
+ * so one could only hold room in the cap. Removals are not checked against the
+ * clinics table, so an id whose clinic is gone can still leave a list.
  *
  * The cap covers the whole assignment, not the client's share, because a report
  * reads at most that many clinics. A caller that would pass it gets an error
@@ -224,7 +228,8 @@ export const setClientAssignment = mutation({
   args: {
     profileId: v.id("staffProfiles"),
     clientId: v.id("clients"),
-    clinicIds: v.array(v.id("clinics")),
+    addClinicIds: v.array(v.id("clinics")),
+    removeClinicIds: v.array(v.id("clinics")),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
@@ -239,9 +244,9 @@ export const setClientAssignment = mutation({
       throw appError({ code: "CLIENT_NOT_FOUND" });
     }
 
-    const requested: Id<"clinics">[] = [];
+    const added: Id<"clinics">[] = [];
     const seen = new Set<string>();
-    for (const clinicId of args.clinicIds) {
+    for (const clinicId of args.addClinicIds) {
       if (seen.has(clinicId)) continue;
       seen.add(clinicId);
 
@@ -249,21 +254,19 @@ export const setClientAssignment = mutation({
       if (clinic === null || clinic.clientId !== args.clientId || !clinic.isActive) {
         throw appError({ code: "CLINIC_NOT_FOUND" });
       }
-      requested.push(clinicId);
+      added.push(clinicId);
     }
 
-    const kept: Id<"clinics">[] = [];
-    for (const clinicId of target.assignedClinicIds ?? []) {
-      const clinic = await ctx.db.get("clinics", clinicId);
-      // A clinic deleted since it was assigned can never be read again, so it
-      // leaves with this write instead of holding room in the cap. An inactive
-      // one stays: enabling it again restores the assignment.
-      if (clinic === null) continue;
-      if (clinic.clientId === args.clientId) continue;
-      kept.push(clinicId);
+    const removed = new Set<string>(args.removeClinicIds);
+    const assignedClinicIds = (target.assignedClinicIds ?? []).filter(
+      (clinicId) => !removed.has(clinicId)
+    );
+    for (const clinicId of added) {
+      if (!assignedClinicIds.includes(clinicId)) {
+        assignedClinicIds.push(clinicId);
+      }
     }
 
-    const assignedClinicIds = [...kept, ...requested];
     if (assignedClinicIds.length > MAX_ASSIGNED_CLINICS) {
       throw appError({ code: "CLINIC_ASSIGNMENT_LIMIT", limit: MAX_ASSIGNED_CLINICS });
     }

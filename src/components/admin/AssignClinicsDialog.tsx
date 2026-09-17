@@ -81,9 +81,10 @@ function ClinicOption({
 }
 
 /**
- * Writes which of one client's clinics an account runs reports on. The account
- * keeps every other client it already had, so the dialog never has to read or
- * send them, and the ticks start as what the account holds of this client.
+ * Changes which of one client's clinics an account runs reports on. Only the
+ * ticks the admin moved are sent: the account keeps every other client, and the
+ * clinics this dialog cannot show or tick keep the assignment they had. The
+ * ticks start as what the account holds of this client.
  */
 export function AssignClinicsDialog({
   client,
@@ -163,13 +164,21 @@ export function AssignClinicsDialog({
   async function save() {
     if (profileId === "" || isSaving) return;
 
+    const account = accounts.find((entry) => entry.profileId === profileId);
+    const assigned = new Set<Id<"clinics">>(account?.assignedClinicIds ?? []);
+
     setError(null);
     setIsSaving(true);
     try {
       await setClientAssignment({
         profileId: profileId as Id<"staffProfiles">,
         clientId: client.clientId,
-        clinicIds: [...selected],
+        // Only what the dialog changes travels: a clinic it cannot show, or an
+        // inactive one it cannot tick, keeps the assignment it had.
+        addClinicIds: [...selected].filter((clinicId) => !assigned.has(clinicId)),
+        removeClinicIds: assignable
+          .filter((clinic) => assigned.has(clinic.clinicId) && !selected.has(clinic.clinicId))
+          .map((clinic) => clinic.clinicId),
       });
       onClose();
     } catch (cause) {
@@ -229,6 +238,11 @@ export function AssignClinicsDialog({
                   </SelectGroup>
                 </SelectContent>
               </Select>
+              {accountsData.hasMore ? (
+                <p className="text-xs text-muted-foreground">
+                  {t.admin.clients.assignDialog.accountLimit(accountsData.limit)}
+                </p>
+              ) : null}
             </Field>
 
             <Field>

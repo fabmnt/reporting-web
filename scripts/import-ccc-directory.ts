@@ -35,6 +35,10 @@ import { homedir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+// A client row is stored under the key its name normalizes to, so the plan has
+// to read client names the way the import writes them.
+import { clientKeyFromName } from "../convex/model/clients.ts";
+
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptDir, "..");
 
@@ -330,6 +334,16 @@ function buildPlan(directory: Directory, configBySheet: Map<string, SheetConfig>
       });
       continue;
     }
+    // `insertClinics` refuses a client name that normalizes to no key, and the
+    // wipe would take the row of a clinic the plan counted on rebuilding.
+    if (clientKeyFromName(clientName) === "") {
+      skipped.push({
+        name: clinic.name,
+        externalClinicId: clinic.externalClinicId,
+        reason: "no client key",
+      });
+      continue;
+    }
 
     candidates.push({
       clientName,
@@ -373,11 +387,9 @@ function buildPlan(directory: Directory, configBySheet: Map<string, SheetConfig>
       continue;
     }
 
-    // Clients are stored under the key their name normalizes to, and the app
-    // looks a clinic up by that key and the clinic name. Two spellings the key
-    // rule would join are not joined here, so the collision is caught for the
-    // names the directory repeats as they are written.
-    const nameKey = `${clinic.clientName.toLowerCase()}\n${clinic.name}`;
+    // The app looks a clinic up by its client's key and the clinic name, so two
+    // client names that normalize to one client collide here as well.
+    const nameKey = `${clientKeyFromName(clinic.clientName)}\n${clinic.name}`;
     const keptByName = byClientAndName.get(nameKey);
     if (keptByName !== undefined) {
       const group = sharedNames.find(
@@ -557,6 +569,7 @@ function printPlan(plan: DirectoryPlan, outputPath: string) {
     "no name": "Clinics Control Central lists without a name (not imported)",
     "no client":
       "Clinics with a spreadsheet that Control Central places under no client (not imported)",
+    "no client key": "Clinics under a client whose name has no letters or numbers (not imported)",
     "no spreadsheet": "Clinics with no spreadsheet (not imported)",
   };
   for (const reason of Object.keys(skipLabels)) {
