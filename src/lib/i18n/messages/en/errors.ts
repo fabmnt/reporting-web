@@ -51,6 +51,8 @@ export const errors = {
   CARRIER_SIGN_IN_REJECTED:
     "The carrier API rejected the app credentials. Ask an administrator to check them.",
   CARRIER_API_UNAVAILABLE: "The carrier API did not answer. Try again in a moment.",
+  SHEET_CARRIER_ID_MISSING:
+    "This clinic has no Control Central id, so its carriers cannot be read.",
   SHEET_CARRIER_ACCESS_DENIED: "The carrier API gives the app no access to this clinic.",
   SHEET_CARRIER_CLINIC_UNKNOWN: "The carrier API does not know this clinic.",
   SHEET_CARRIER_UNAVAILABLE:

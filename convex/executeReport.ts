@@ -174,6 +174,14 @@ export async function runExecuteReport(
       sheets.push({ ...clinicEntry, error });
     };
 
+    // A clinic stored before the directory import ran has no Control Central id
+    // yet, which is the one state the carrier engine cannot read. It goes away
+    // with the import, and with the schema tightening that follows it.
+    if (clinic.externalClinicId === "") {
+      failClinic({ code: "SHEET_CARRIER_ID_MISSING" });
+      continue;
+    }
+
     let botsResult = await fetchClinicBots(clinic.externalClinicId, token, deadlineMs);
     if (!botsResult.ok && botsResult.failure === "unauthorized") {
       const renewed = await signInCarrierApi(deadlineMs);
