@@ -1,6 +1,7 @@
 "use client";
 
 import { useAction, useMutation, useQuery } from "convex/react";
+import type { FunctionReturnType } from "convex/server";
 import { FileText } from "lucide-react";
 import { useState } from "react";
 
@@ -42,6 +43,17 @@ import {
   ResultsCard,
   type ReportResult,
 } from "./ReportResults";
+
+type AssignedClinic = FunctionReturnType<
+  typeof api.googleSheets.listAssignedReportClinics
+>["clinics"][number];
+
+// The clinics a run reads: every assigned clinic the operator left enabled.
+function clinicsToRun(assigned: AssignedClinic[], excludedClinicIds: string[]): AssignedClinic[] {
+  if (excludedClinicIds.length === 0) return assigned;
+  const excluded = new Set(excludedClinicIds);
+  return assigned.filter((clinic) => !excluded.has(clinic.clinicId));
+}
 
 function ReportRunnerSkeleton() {
   const { t } = useI18n();
@@ -173,9 +185,28 @@ export function ReportRunner() {
     replaceReportFilters(next);
   }
 
+  // The filters keep the clinics left out instead of the ones kept in, so the
+  // default state holds none of them and a clinic assigned later runs without
+  // the operator ticking it again.
+  function toggleClinic(clinicId: Id<"clinics">) {
+    const excluded = new Set(filters.excludedClinicIds);
+    if (excluded.has(clinicId)) {
+      excluded.delete(clinicId);
+    } else {
+      excluded.add(clinicId);
+    }
+    updateFilters({ ...filters, excludedClinicIds: [...excluded] });
+  }
+
   async function handleRun() {
-    if ((assignment?.clinics.length ?? 0) === 0) {
+    const assignedClinics = assignment?.clinics ?? [];
+    if (assignedClinics.length === 0) {
       setError(localizedMessage((t) => t.reports.outcomes.noAssignedClinics));
+      return;
+    }
+    const runClinics = clinicsToRun(assignedClinics, filters.excludedClinicIds);
+    if (runClinics.length === 0) {
+      setError(localizedMessage((t) => t.reports.outcomes.noSelectedClinics));
       return;
     }
     if (selectedType === undefined) {
@@ -208,6 +239,7 @@ export function ReportRunner() {
       const data = await runReport({
         runId: reportRunId,
         verificationFilter: filters.verification,
+        clinicIds: runClinics.map((clinic) => clinic.clinicId),
       });
       setResult(data);
     } catch (cause) {
@@ -242,10 +274,11 @@ export function ReportRunner() {
 
   if (assignment === undefined || typeData === undefined) return <ReportRunnerSkeleton />;
 
-  const assignedClinicCount = assignment.clinics.length;
   // A run stopped before it read anything has nothing to show under the notice
   // that says it was stopped.
   const showsResults = result !== null && (!result.cancelled || result.sheets.length > 0);
+  const excludedClinicIds = new Set(filters.excludedClinicIds);
+  const runClinics = clinicsToRun(assignment.clinics, filters.excludedClinicIds);
 
   return (
     <div className="flex flex-col gap-6">
@@ -358,16 +391,27 @@ export function ReportRunner() {
               <div className="flex items-center justify-between gap-2">
                 <h3 className="text-sm font-medium">{t.reports.includedClinics}</h3>
                 <Badge variant="secondary" className="tabular-nums">
-                  {assignedClinicCount}
+                  {runClinics.length}
                 </Badge>
               </div>
-              {assignedClinicCount === 0 ? (
+              {assignment.clinics.length === 0 ? (
                 <p className="text-sm text-muted-foreground">{t.reports.noAssignedClinics}</p>
               ) : (
-                <ul className="flex max-h-56 flex-col gap-1 overflow-y-auto text-sm text-muted-foreground">
+                <ul className="flex max-h-56 flex-col gap-2 overflow-y-auto text-sm">
                   {assignment.clinics.map((clinic) => (
                     <li key={clinic.clinicId}>
-                      {clinic.name} <span aria-hidden="true">·</span> {clinic.clientName}
+                      <label className="flex cursor-pointer items-start gap-3 has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-50">
+                        <input
+                          type="checkbox"
+                          checked={!excludedClinicIds.has(clinic.clinicId)}
+                          onChange={() => toggleClinic(clinic.clinicId)}
+                          disabled={running}
+                          className="mt-0.5 size-4 shrink-0 accent-primary"
+                        />
+                        <span className="min-w-0 flex-1">
+                          {clinic.name} <span aria-hidden="true">·</span> {clinic.clientName}
+                        </span>
+                      </label>
                     </li>
                   ))}
                 </ul>
@@ -379,7 +423,7 @@ export function ReportRunner() {
               size="lg"
               className="w-full"
               onClick={() => void handleRun()}
-              disabled={running || assignedClinicCount === 0 || selectedType === undefined}
+              disabled={running || runClinics.length === 0 || selectedType === undefined}
             >
               {running ? (
                 <>
@@ -413,7 +457,7 @@ export function ReportRunner() {
 
         <div className="flex min-w-0 flex-col gap-6">
           {result === null ? (
-            <ResultsPlaceholder running={running} clinicCount={assignedClinicCount} />
+            <ResultsPlaceholder running={running} clinicCount={runClinics.length} />
           ) : (
             <>
               {result.cancelled ? (

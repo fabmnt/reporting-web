@@ -31,6 +31,7 @@ export const reports = {
   },
   outcomes: {
     noAssignedClinics: "No hay clínicas asignadas para ejecutar.",
+    noSelectedClinics: "Selecciona al menos una clínica para ejecutar.",
     noReportType: "No hay ningún tipo de reporte para ejecutar.",
     pickDates: "Elige una fecha de inicio y una de fin.",
     invalidRange: "La fecha de inicio debe ser anterior o igual a la fecha de fin.",

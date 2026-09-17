@@ -67,7 +67,8 @@ type ReportRunConfig = {
 async function reportRunConfigForUser(
   ctx: QueryCtx,
   userId: Id<"users">,
-  reportTypeId: Id<"reportTypes">
+  reportTypeId: Id<"reportTypes">,
+  clinicIds?: Id<"clinics">[]
 ): Promise<ReportRunConfig> {
   const profile = await ctx.db
     .query("staffProfiles")
@@ -81,7 +82,15 @@ async function reportRunConfigForUser(
   }
 
   const reportType = await loadRunnableReportType(ctx, userId, reportTypeId);
-  const clinics = await listProfileClinics(ctx, profile);
+  const assignedClinics = await listProfileClinics(ctx, profile);
+  // A run covers the clinics the operator left enabled. The ids come from the
+  // client, so they are matched against the assignment instead of trusted: one
+  // the profile does not hold reads nothing.
+  const selectedIds = clinicIds === undefined ? null : new Set(clinicIds);
+  const clinics =
+    selectedIds === null
+      ? assignedClinics
+      : assignedClinics.filter((clinic) => selectedIds.has(clinic._id));
 
   return {
     // A report type has one rule set for every clinic it runs on.
@@ -112,6 +121,9 @@ export const runSheetReport = action({
   args: {
     runId: v.id("reportRuns"),
     verificationFilter: v.optional(v.union(v.literal("all"), v.literal("fbd"), v.literal("elg"))),
+    // The assigned clinics to read. Left out, the run covers every assigned
+    // clinic.
+    clinicIds: v.optional(v.array(v.id("clinics"))),
   },
   returns: reportRunResult,
   handler: async (ctx, args): Promise<ReportRunResult> => {
@@ -125,7 +137,13 @@ export const runSheetReport = action({
     if (!claim.started) return stoppedRun(args.runId);
 
     try {
-      return await runReportSheets(ctx, args.runId, claim.params, args.verificationFilter ?? "all");
+      return await runReportSheets(
+        ctx,
+        args.runId,
+        claim.params,
+        args.verificationFilter ?? "all",
+        args.clinicIds
+      );
     } catch (error) {
       // The record closes even when the run stops on its way, because a row
       // left open would read as a run that is still working. A run the operator
@@ -187,13 +205,15 @@ async function runReportSheets(
   ctx: ActionCtx,
   runId: Id<"reportRuns">,
   params: RunParams,
-  verificationFilter: ExecuteVerificationFilter
+  verificationFilter: ExecuteVerificationFilter,
+  clinicIds: Id<"clinics">[] | undefined
 ): Promise<ReportRunResult> {
   const config: ReportRunConfig = await ctx.runQuery(internal.reports.runSheetReportConfig, {
     userId: params.userId,
     reportTypeId: params.reportTypeId,
     startDate: params.startDate,
     endDate: params.endDate,
+    clinicIds,
   });
 
   // The operator may have stopped the run while its settings were being read.
@@ -427,6 +447,7 @@ export const runSheetReportConfig = internalQuery({
     reportTypeId: v.id("reportTypes"),
     startDate: v.string(),
     endDate: v.string(),
+    clinicIds: v.optional(v.array(v.id("clinics"))),
   },
   returns: v.object({
     clinics: v.array(
@@ -454,6 +475,6 @@ export const runSheetReportConfig = internalQuery({
     if (args.startDate > args.endDate) {
       throw appError({ code: "INVALID_DATE_RANGE" });
     }
-    return reportRunConfigForUser(ctx, args.userId, args.reportTypeId);
+    return reportRunConfigForUser(ctx, args.userId, args.reportTypeId, args.clinicIds);
   },
 });
