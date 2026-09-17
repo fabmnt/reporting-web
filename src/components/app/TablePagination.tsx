@@ -4,52 +4,47 @@ import { Button } from "@/components/ui/button";
 import { useI18n } from "@/lib/i18n/context";
 
 /**
- * The page controls of a list that pages in the browser. Renders nothing for
- * an empty list, where the list shows its own "nothing here" message instead.
+ * The page controls of a list the server reads one page at a time. A cursor
+ * only moves forward, so there is no page to jump to and no total to report:
+ * the control steps through the pages read so far and names the rows on screen.
+ *
+ * A page the list could not fill, or one a search left empty, still offers that
+ * step: the rows behind it were read and the ones ahead have not been, so
+ * hiding the control there would end the list early. Nothing is rendered when
+ * there is no page to move to in either direction.
  */
 export function TablePagination({
-  page,
-  pageCount,
   first,
   last,
-  total,
-  onPageChange,
+  canPrevious,
+  canNext,
+  onPrevious,
+  onNext,
 }: {
-  page: number;
-  pageCount: number;
   first: number;
   last: number;
-  total: number;
-  onPageChange: (page: number) => void;
+  canPrevious: boolean;
+  canNext: boolean;
+  onPrevious: () => void;
+  onNext: () => void;
 }) {
   const { t } = useI18n();
 
-  if (total === 0) return null;
+  if (!canPrevious && !canNext) return null;
 
   return (
     <div className="flex flex-wrap items-center justify-between gap-2">
-      <p className="text-xs text-muted-foreground tabular-nums">
-        {t.common.pagination.range(first, last, total)}
-      </p>
+      {last < first ? null : (
+        <p className="text-xs text-muted-foreground tabular-nums">
+          {t.common.pagination.rows(first, last)}
+        </p>
+      )}
       <div className="flex items-center gap-2">
-        <Button
-          variant="outline"
-          size="sm"
-          disabled={page <= 1}
-          onClick={() => onPageChange(page - 1)}
-        >
+        <Button variant="outline" size="sm" disabled={!canPrevious} onClick={onPrevious}>
           <ChevronLeft data-icon="inline-start" aria-hidden="true" />
           {t.common.pagination.previous}
         </Button>
-        <span className="text-xs text-muted-foreground tabular-nums">
-          {t.common.pagination.page(page, pageCount)}
-        </span>
-        <Button
-          variant="outline"
-          size="sm"
-          disabled={page >= pageCount}
-          onClick={() => onPageChange(page + 1)}
-        >
+        <Button variant="outline" size="sm" disabled={!canNext} onClick={onNext}>
           {t.common.pagination.next}
           <ChevronRight data-icon="inline-end" aria-hidden="true" />
         </Button>

@@ -40,6 +40,7 @@ export const admin = {
     addClient: "Añadir cliente",
     noClients: "Aún no hay clientes. Crea el primero antes de añadir clínicas.",
     noMatches: "Ningún cliente coincide con estos filtros.",
+    searchIncomplete: "Esta búsqueda puede omitir coincidencias. Acótala para ver el resto.",
     filters: {
       search: "Buscar clientes",
       status: "Filtro de estado",
@@ -67,7 +68,6 @@ export const admin = {
       saveFailed: "No se pudo guardar la asignación.",
       save: "Guardar",
     },
-    limit: (limit: number) => `Mostrando los primeros ${limit} clientes.`,
     form: {
       editTitle: "Editar cliente",
       createTitle: "Nuevo cliente",
@@ -99,6 +99,7 @@ export const admin = {
     noClinics:
       "Aún no hay clínicas. Crea un cliente en la pestaña Clientes y luego añade la primera clínica.",
     noMatches: "Ninguna clínica coincide con estos filtros.",
+    searchIncomplete: "Esta búsqueda puede omitir coincidencias. Acótala para ver el resto.",
     filters: {
       search: "Buscar clínicas",
       client: "Filtro de cliente",
@@ -113,7 +114,7 @@ export const admin = {
       status: "Estado",
       assignedTo: "Asignadas a",
     },
-    limit: (limit: number) => `Mostrando las primeras ${limit} clínicas.`,
+    clientLimit: (limit: number) => `Mostrando los primeros ${limit} clientes.`,
     form: {
       editTitle: "Editar clínica",
       createTitle: "Nueva clínica",

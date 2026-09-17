@@ -15,6 +15,7 @@ import type * as executeReport from "../executeReport.js";
 import type * as googleApi from "../googleApi.js";
 import type * as googleSheets from "../googleSheets.js";
 import type * as http from "../http.js";
+import type * as migrations_backfillClientClinicCounts from "../migrations/backfillClientClinicCounts.js";
 import type * as migrations_dataCleanup from "../migrations/dataCleanup.js";
 import type * as migrations_executeReportConditions from "../migrations/executeReportConditions.js";
 import type * as migrations_importCccDirectory from "../migrations/importCccDirectory.js";
@@ -58,6 +59,7 @@ declare const fullApi: ApiFromModules<{
   googleApi: typeof googleApi;
   googleSheets: typeof googleSheets;
   http: typeof http;
+  "migrations/backfillClientClinicCounts": typeof migrations_backfillClientClinicCounts;
   "migrations/dataCleanup": typeof migrations_dataCleanup;
   "migrations/executeReportConditions": typeof migrations_executeReportConditions;
   "migrations/importCccDirectory": typeof migrations_importCccDirectory;

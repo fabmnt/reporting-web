@@ -1,7 +1,7 @@
 import type { FunctionReturnType } from "convex/server";
 import { useMutation, useQuery } from "convex/react";
 import { Plus } from "lucide-react";
-import { useMemo, useState, type SyntheticEvent } from "react";
+import { useState, type SyntheticEvent } from "react";
 
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
@@ -54,12 +54,13 @@ import {
 } from "@/lib/clinicSheetColumns";
 import { useDocumentTitle, useI18n } from "@/lib/i18n/context";
 import { localizedError, localizedMessage, type LocalizedMessage } from "@/lib/i18n/errors";
-import { matchesStatusFilter, tablePage, type StatusFilter } from "@/lib/tableList";
+import { useCursorPages, useSearchText } from "@/lib/listControls";
+import { statusFilterArg, TABLE_PAGE_SIZE, type StatusFilter } from "@/lib/tableList";
 import { SheetColumnFields } from "@/components/clinics/SheetColumnFields";
 
 type ClinicList = FunctionReturnType<typeof api.clinics.list>;
-type ClinicView = ClinicList["clinics"][number];
-type ClientList = FunctionReturnType<typeof api.clinics.listClients>;
+type ClinicView = ClinicList["page"][number];
+type ClientList = FunctionReturnType<typeof api.clinics.listClientChoices>;
 type ClientView = ClientList["clients"][number];
 
 type ClinicFormValues = {
@@ -294,11 +295,39 @@ function ClinicForm({
 
 export function AdminClinicsPanel() {
   const { t } = useI18n();
+  const search = useSearchText();
+  const pages = useCursorPages();
+  const [clientFilter, setClientFilter] = useState(ALL_CLIENTS);
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const status = statusFilterArg(statusFilter);
+  const isSearching = search.query !== "";
+
   const current = useQuery(api.staffAccounts.current, {});
   const canManage = current?.role === "admin" && current.status === "active";
 
-  const clientsData = useQuery(api.clinics.listClients, canManage ? {} : "skip");
-  const clinicsData = useQuery(api.clinics.list, canManage ? {} : "skip");
+  const clientsData = useQuery(api.clinics.listClientChoices, canManage ? {} : "skip");
+  // A substring is not something an index can answer, so the list pages with
+  // the cursor while the box is empty and asks the bounded search otherwise.
+  const clinicsData = useQuery(
+    api.clinics.list,
+    canManage && !isSearching
+      ? {
+          paginationOpts: { numItems: TABLE_PAGE_SIZE, cursor: pages.cursor },
+          ...(status === undefined ? {} : { status }),
+          ...(clientFilter === ALL_CLIENTS ? {} : { clientId: clientFilter as Id<"clients"> }),
+        }
+      : "skip"
+  );
+  const searchData = useQuery(
+    api.clinics.search,
+    canManage && isSearching
+      ? {
+          search: search.query,
+          ...(status === undefined ? {} : { status }),
+          ...(clientFilter === ALL_CLIENTS ? {} : { clientId: clientFilter as Id<"clients"> }),
+        }
+      : "skip"
+  );
   const createClinic = useMutation(api.clinics.create);
   const updateClinic = useMutation(api.clinics.update);
   const removeClinic = useMutation(api.clinics.remove);
@@ -313,36 +342,22 @@ export function AdminClinicsPanel() {
   // draft must not leak into the next open.
   const [formSession, setFormSession] = useState(0);
   const [clinicToDelete, setClinicToDelete] = useState<ClinicView | null>(null);
-  const [search, setSearch] = useState("");
-  const [clientFilter, setClientFilter] = useState(ALL_CLIENTS);
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
-  const [page, setPage] = useState(1);
 
-  const clients = useMemo(() => clientsData?.clients ?? [], [clientsData]);
-  const clinics = useMemo(() => clinicsData?.clinics ?? [], [clinicsData]);
+  const clients = clientsData?.clients ?? [];
+  const isReady = isSearching ? searchData !== undefined : clinicsData !== undefined;
+  const clinics = isSearching ? (searchData?.clinics ?? []) : (clinicsData?.page ?? []);
+  // The rows on screen, which is all a cursor can tell: the pages behind them
+  // were read and the ones ahead are not known.
+  const firstRow = pages.index * TABLE_PAGE_SIZE + 1;
+  const lastRow = firstRow + clinics.length - 1;
+  const hasFilters = isSearching || clientFilter !== ALL_CLIENTS || statusFilter !== "all";
+  const canGoNext = !isSearching && clinicsData !== undefined && !clinicsData.isDone;
 
-  // The options come from the clinics themselves, so every client shown here
-  // has at least one clinic to filter down to.
-  const clientOptions = useMemo(() => {
-    const nameByClientId = new Map<string, string>();
-    for (const clinic of clinics) nameByClientId.set(clinic.clientId, clinic.clientName);
-    return [...nameByClientId]
-      .map(([value, label]) => ({ value, label }))
-      .sort((left, right) => left.label.localeCompare(right.label));
-  }, [clinics]);
-
-  const filteredClinics = useMemo(() => {
-    const needle = search.trim().toLowerCase();
-    return clinics.filter((clinic) => {
-      if (clientFilter !== ALL_CLIENTS && clinic.clientId !== clientFilter) return false;
-      if (!matchesStatusFilter(clinic.isActive, statusFilter)) return false;
-      if (needle === "") return true;
-      return [clinic.name, clinic.clientName, clinic.externalClinicId, clinic.googleSheetId].some(
-        (value) => value.toLowerCase().includes(needle)
-      );
-    });
-  }, [clinics, search, clientFilter, statusFilter]);
-  const clinicPage = tablePage(filteredClinics, page);
+  // Both the client filter and the clinic form pick from the capped client
+  // list, which is every client the directory holds at the size the cap allows.
+  const clientOptions = clients
+    .map((client) => ({ value: client.clientId, label: client.name }))
+    .sort((left, right) => left.label.localeCompare(right.label));
 
   function closeForm() {
     setFormMode("closed");
@@ -473,60 +488,71 @@ export function AdminClinicsPanel() {
           <p className="text-sm text-muted-foreground">{t.admin.clinics.allClinicsDescription}</p>
         </div>
 
-        {clinicsData !== undefined && clinics.length > 0 ? (
-          <div className="flex flex-wrap items-center gap-2">
-            <Input
-              value={search}
-              onChange={(event) => {
-                setSearch(event.target.value);
-                setPage(1);
-              }}
-              placeholder={t.admin.clinics.filters.search}
-              aria-label={t.admin.clinics.filters.search}
-              className="h-8 w-full max-w-64"
-            />
-            <Select
-              items={[
-                { value: ALL_CLIENTS, label: t.admin.clinics.filters.allClients },
-                ...clientOptions,
-              ]}
-              value={clientFilter}
-              onValueChange={(value) => {
-                setClientFilter(value ?? ALL_CLIENTS);
-                setPage(1);
-              }}
-            >
-              <SelectTrigger aria-label={t.admin.clinics.filters.client} className="w-48">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectGroup>
-                  <SelectItem value={ALL_CLIENTS}>{t.admin.clinics.filters.allClients}</SelectItem>
-                  {clientOptions.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>
-                      {option.label}
+        {/* A search that found nothing still has to leave the controls on
+            screen, or there is no way to change them back. */}
+        {clinics.length > 0 || hasFilters ? (
+          <div className="flex flex-col gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <Input
+                value={search.text}
+                onChange={(event) => {
+                  search.change(event.target.value);
+                  pages.reset();
+                }}
+                placeholder={t.admin.clinics.filters.search}
+                aria-label={t.admin.clinics.filters.search}
+                className="h-8 w-full max-w-64"
+              />
+              <Select
+                items={[
+                  { value: ALL_CLIENTS, label: t.admin.clinics.filters.allClients },
+                  ...clientOptions,
+                ]}
+                value={clientFilter}
+                onValueChange={(value) => {
+                  setClientFilter(value ?? ALL_CLIENTS);
+                  pages.reset();
+                }}
+              >
+                <SelectTrigger aria-label={t.admin.clinics.filters.client} className="w-48">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    <SelectItem value={ALL_CLIENTS}>
+                      {t.admin.clinics.filters.allClients}
                     </SelectItem>
-                  ))}
-                </SelectGroup>
-              </SelectContent>
-            </Select>
-            <StatusFilterSelect
-              value={statusFilter}
-              label={t.admin.clinics.filters.status}
-              onChange={(next) => {
-                setStatusFilter(next);
-                setPage(1);
-              }}
-            />
+                    {clientOptions.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+              <StatusFilterSelect
+                value={statusFilter}
+                label={t.admin.clinics.filters.status}
+                onChange={(next) => {
+                  setStatusFilter(next);
+                  pages.reset();
+                }}
+              />
+            </div>
+            {clientsData?.hasMore ? (
+              <p className="text-xs text-muted-foreground">
+                {t.admin.clinics.clientLimit(clientsData.limit)}
+              </p>
+            ) : null}
           </div>
         ) : null}
 
-        {clinicsData === undefined ? (
+        {!isReady ? (
           <Skeleton className="h-64 w-full" />
         ) : clinics.length === 0 ? (
-          <p className="text-sm text-muted-foreground">{t.admin.clinics.noClinics}</p>
-        ) : filteredClinics.length === 0 ? (
-          <p className="text-sm text-muted-foreground">{t.admin.clinics.noMatches}</p>
+          <p className="text-sm text-muted-foreground">
+            {hasFilters ? t.admin.clinics.noMatches : t.admin.clinics.noClinics}
+          </p>
         ) : (
           <>
             <DataTableFrame>
@@ -543,7 +569,7 @@ export function AdminClinicsPanel() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {clinicPage.rows.map((clinic) => {
+                  {clinics.map((clinic) => {
                     const isPending = pendingClinicId === clinic.clinicId;
                     return (
                       <TableRow key={clinic.clinicId}>
@@ -595,7 +621,7 @@ export function AdminClinicsPanel() {
             </DataTableFrame>
 
             <DataCardList>
-              {clinicPage.rows.map((clinic) => (
+              {clinics.map((clinic) => (
                 <DataCard
                   key={clinic.clinicId}
                   title={clinic.name}
@@ -641,23 +667,23 @@ export function AdminClinicsPanel() {
                 </DataCard>
               ))}
             </DataCardList>
-
-            <TablePagination
-              page={clinicPage.page}
-              pageCount={clinicPage.pageCount}
-              first={clinicPage.first}
-              last={clinicPage.last}
-              total={clinicPage.total}
-              onPageChange={setPage}
-            />
           </>
         )}
 
-        {clinicsData?.hasMore ? (
-          <p className="text-xs text-muted-foreground">
-            {t.admin.clinics.limit(clinicsData.limit)}
-          </p>
-        ) : null}
+        {isSearching ? (
+          searchData?.hasMore ? (
+            <p className="text-xs text-muted-foreground">{t.admin.clinics.searchIncomplete}</p>
+          ) : null
+        ) : (
+          <TablePagination
+            first={firstRow}
+            last={lastRow}
+            canPrevious={pages.canGoPrevious}
+            canNext={canGoNext}
+            onPrevious={pages.goPrevious}
+            onNext={() => pages.goNext(clinicsData?.continueCursor ?? "")}
+          />
+        )}
       </section>
 
       <ClinicForm

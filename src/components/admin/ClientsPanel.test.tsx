@@ -41,6 +41,7 @@ const mutations = {
 const QUERY_NAMES = {
   current: nameOf(api.staffAccounts.current),
   listClients: nameOf(api.clinics.listClients),
+  searchClients: nameOf(api.clinics.searchClients),
 } as const;
 
 const MUTATION_NAMES = {
@@ -55,7 +56,7 @@ function mockQueries() {
       case QUERY_NAMES.current:
         return ADMIN_ACCOUNT;
       case QUERY_NAMES.listClients:
-        return { clients: CLIENTS, limit: 200, hasMore: false };
+        return { page: CLIENTS, isDone: true, continueCursor: "" };
       default:
         return undefined;
     }

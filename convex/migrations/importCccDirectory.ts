@@ -2,7 +2,7 @@ import type { Id } from "../_generated/dataModel";
 import { v } from "convex/values";
 
 import { internalMutation, internalQuery } from "../_generated/server";
-import { clientKeyFromName } from "../model/clients";
+import { adjustClientClinicCount, clientKeyFromName } from "../model/clients";
 import { clinicSheetColumns } from "../model/clinicSheetColumns";
 
 // One call reads, clears or deletes at most this many rows, so a table never
@@ -149,6 +149,9 @@ export const insertClinics = internalMutation({
   returns: v.object({ inserted: v.number(), clientsCreated: v.number(), skipped: v.number() }),
   handler: async (ctx, args) => {
     const clientIdByKey = new Map<string, Id<"clients">>();
+    // The clinics this batch adds to each client, so the stored counts move
+    // once per client instead of once per clinic.
+    const insertedByClient = new Map<Id<"clients">, number>();
     let clientsCreated = 0;
     let inserted = 0;
     let skipped = 0;
@@ -195,7 +198,12 @@ export const insertClinics = internalMutation({
         sheetColumns: entry.sheetColumns,
         qaGroupKeys: entry.qaGroupKeys,
       });
+      insertedByClient.set(clientId, (insertedByClient.get(clientId) ?? 0) + 1);
       inserted += 1;
+    }
+
+    for (const [clientId, count] of insertedByClient) {
+      await adjustClientClinicCount(ctx, clientId, count);
     }
 
     return { inserted, clientsCreated, skipped };

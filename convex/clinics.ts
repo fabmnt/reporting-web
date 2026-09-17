@@ -1,18 +1,20 @@
-import { v } from "convex/values";
+import { paginationOptsValidator, paginationResultValidator } from "convex/server";
+import { type Infer, v } from "convex/values";
 
-import type { Id } from "./_generated/dataModel";
+import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { mutation, query } from "./_generated/server";
 import { appError, type AppErrorPayload } from "./model/appErrors";
 import { MAX_ASSIGNED_CLINICS, usableClinicIds } from "./model/assignments";
-import { clientKeyFromName } from "./model/clients";
+import { adjustClientClinicCount, clientKeyFromName } from "./model/clients";
 import { clinicSheetColumns } from "./model/clinicSheetColumns";
 import { listProfileClinics } from "./model/reporting";
 import { requireAdmin, requireOperator } from "./model/staff";
 
-// The Control Central directory is the whole set of clients and clinics the
-// reports can reach, and it is larger than the cap these lists started with:
-// the lists truncate in silence, so the cap has to sit above it.
+// The pickers still read one capped page, because a select cannot page: the
+// caps sit above the Control Central directory, which is larger than the 500
+// clinics and 200 clients they started with. The lists behind the admin tables
+// take a cursor instead and never truncate.
 const MAX_CLINICS = 2000;
 const MAX_CLIENTS = 500;
 const MAX_STAFF_PROFILES = 500;
@@ -20,6 +22,18 @@ const MAX_STAFF_PROFILES = 500;
 // first page of the table: filtering after a short cap would hide every clinic
 // that sits behind the pages of clinics the caller already has.
 const MAX_AVAILABLE_SCAN = 2000;
+
+// What both lists filter by. A list that is not filtered sends nothing.
+const activeFilter = v.optional(v.union(v.literal("active"), v.literal("inactive")));
+
+// A search reads this much of a table before it answers. Both tables sit inside
+// the caps the pickers use, so a search of the directory the app is built for
+// reads all of it, and one of a table larger than that says its answer is
+// partial instead of reading on.
+const MAX_SEARCH_SCAN = 2000;
+// How many matches a search returns. Past this the caller is told to narrow the
+// search rather than being handed a list nobody reads to the end.
+const MAX_SEARCH_RESULTS = 200;
 
 const clientView = v.object({
   clientId: v.id("clients"),
@@ -78,8 +92,9 @@ const clientClinicView = v.object({
 
 /**
  * The display name of every account that holds each clinic, so a clinic list
- * can say who runs it. The profiles are read once for the whole list, and an
- * account that holds no clinic costs nothing.
+ * can say who runs it. Assignments are stored on the profiles and Convex has no
+ * index over the clinics inside them, so a page costs one pass over the
+ * profiles; an account that holds no clinic costs nothing.
  */
 async function assigneeNamesByClinic(ctx: QueryCtx): Promise<Map<Id<"clinics">, string[]>> {
   const profiles = await ctx.db
@@ -128,6 +143,84 @@ async function withClientNames<T extends { clientId: Id<"clients"> }>(
   }
 
   return named;
+}
+
+/**
+ * A client as both lists of the clients table show it. The count comes from the
+ * client row, so showing it costs no clinic reads.
+ */
+function toClientListView(client: Doc<"clients">): Infer<typeof clientListView> {
+  return {
+    clientId: client._id,
+    key: client.key,
+    name: client.name,
+    isActive: client.isActive,
+    clinicCount: client.clinicCount ?? 0,
+  };
+}
+
+/**
+ * The clinic rows a table shows, with the name of each client and the accounts
+ * that hold it resolved. Both the paged list and the search go through here, so
+ * a row looks the same whichever read it.
+ */
+async function toClinicViews(
+  ctx: QueryCtx,
+  rows: Doc<"clinics">[]
+): Promise<Infer<typeof clinicView>[]> {
+  const named = await withClientNames(ctx, rows);
+  const assignees = await assigneeNamesByClinic(ctx);
+
+  return named.map((row) => ({
+    clinicId: row._id,
+    name: row.name,
+    googleSheetId: row.googleSheetId,
+    externalClinicId: row.externalClinicId ?? "",
+    isActive: row.isActive,
+    clientId: row.clientId,
+    clientName: row.clientName,
+    sheetColumns: row.sheetColumns ?? {},
+    qaGroupKeys: row.qaGroupKeys ?? [],
+    assignedTo: assignees.get(row._id) ?? [],
+  }));
+}
+
+/**
+ * Whether a client matches what the search box holds. The key is searched too,
+ * because it is the client name without its punctuation, and a person looking
+ * for "old co" is looking for the same client as one typing "Old Co.".
+ */
+function clientMatchesSearch(client: Doc<"clients">, needle: string): boolean {
+  if (needle === "") return true;
+  return client.name.toLowerCase().includes(needle) || client.key.toLowerCase().includes(needle);
+}
+
+/**
+ * Whether a clinic matches what the search box holds, over the same fields the
+ * clinics table shows. The client name is not on the row, so it is resolved on
+ * demand and remembered for the rest of the request: a search reads one client
+ * per client it scans past, not one per clinic.
+ */
+function clinicSearchPredicate(
+  ctx: QueryCtx,
+  needle: string
+): (clinic: Doc<"clinics">) => Promise<boolean> {
+  const clientNames = new Map<Id<"clients">, string>();
+
+  return async (clinic) => {
+    if (needle === "") return true;
+    if (clinic.name.toLowerCase().includes(needle)) return true;
+    if ((clinic.externalClinicId ?? "").toLowerCase().includes(needle)) return true;
+    if (clinic.googleSheetId.toLowerCase().includes(needle)) return true;
+
+    let clientName = clientNames.get(clinic.clientId);
+    if (clientName === undefined) {
+      const client = await ctx.db.get("clients", clinic.clientId);
+      clientName = client?.name ?? "";
+      clientNames.set(clinic.clientId, clientName);
+    }
+    return clientName.toLowerCase().includes(needle);
+  };
 }
 
 const clinicInputFields = {
@@ -259,10 +352,90 @@ async function requireAssignedClinic(
   return clinic;
 }
 
+/**
+ * One page of the clients table, in key order, with the clinics each client
+ * owns. The count is stored on the client, so a page costs one read per client
+ * and never reads the clinics table.
+ *
+ * Only what the index and a field comparison can answer is filtered here: a
+ * function may run one paginated query, and a substring is not something either
+ * of them can ask. Searching is `searchClients`, which reads one bounded scan.
+ */
 export const listClients = query({
-  args: {},
+  args: {
+    paginationOpts: paginationOptsValidator,
+    status: activeFilter,
+  },
+  returns: paginationResultValidator(clientListView),
+  handler: async (ctx, args) => {
+    await requireAdmin(ctx);
+
+    const status = args.status;
+    const page =
+      status === undefined
+        ? await ctx.db.query("clients").withIndex("by_key").paginate(args.paginationOpts)
+        : await ctx.db
+            .query("clients")
+            .withIndex("by_key")
+            .filter((builder) => builder.eq(builder.field("isActive"), status === "active"))
+            .paginate(args.paginationOpts);
+
+    return {
+      page: page.page.map(toClientListView),
+      isDone: page.isDone,
+      continueCursor: page.continueCursor,
+    };
+  },
+});
+
+/**
+ * The clients a search box finds, in key order. A Convex filter compares fields
+ * and cannot ask whether a name contains a substring, so this reads one bounded
+ * scan of the table and matches the rows here. `hasMore` says the scan ran out
+ * before the table did, or that more clients matched than the result holds.
+ */
+export const searchClients = query({
+  args: { search: v.string(), status: activeFilter },
   returns: v.object({
     clients: v.array(clientListView),
+    hasMore: v.boolean(),
+  }),
+  handler: async (ctx, args) => {
+    await requireAdmin(ctx);
+
+    const status = args.status;
+    const scanned =
+      status === undefined
+        ? await ctx.db
+            .query("clients")
+            .withIndex("by_key")
+            .take(MAX_SEARCH_SCAN + 1)
+        : await ctx.db
+            .query("clients")
+            .withIndex("by_key")
+            .filter((builder) => builder.eq(builder.field("isActive"), status === "active"))
+            .take(MAX_SEARCH_SCAN + 1);
+
+    const needle = args.search.trim().toLowerCase();
+    const matches = scanned
+      .slice(0, MAX_SEARCH_SCAN)
+      .filter((client) => clientMatchesSearch(client, needle));
+
+    return {
+      clients: matches.slice(0, MAX_SEARCH_RESULTS).map(toClientListView),
+      hasMore: scanned.length > MAX_SEARCH_SCAN || matches.length > MAX_SEARCH_RESULTS,
+    };
+  },
+});
+
+/**
+ * The clients a form or a filter picks from, in key order. A select cannot
+ * page, so this reads one capped page and says when the cap cut the list short.
+ */
+export const listClientChoices = query({
+  args: {},
+  returns: v.object({
+    clients: v.array(clientView),
     limit: v.number(),
     hasMore: v.boolean(),
   }),
@@ -273,23 +446,12 @@ export const listClients = query({
       .query("clients")
       .withIndex("by_key")
       .take(MAX_CLIENTS + 1);
-
-    const clients = [];
-    for (const client of rows.slice(0, MAX_CLIENTS)) {
-      // The index holds one range per client, so counting a client's clinics
-      // reads that client's rows and nothing else.
-      const clinics = await ctx.db
-        .query("clinics")
-        .withIndex("by_clientId_and_name", (query) => query.eq("clientId", client._id))
-        .take(MAX_CLINICS);
-      clients.push({
-        clientId: client._id,
-        key: client.key,
-        name: client.name,
-        isActive: client.isActive,
-        clinicCount: clinics.length,
-      });
-    }
+    const clients = rows.slice(0, MAX_CLIENTS).map((client) => ({
+      clientId: client._id,
+      key: client.key,
+      name: client.name,
+      isActive: client.isActive,
+    }));
     clients.sort((a, b) => a.name.localeCompare(b.name));
 
     return { clients, limit: MAX_CLIENTS, hasMore: rows.length > MAX_CLIENTS };
@@ -368,40 +530,115 @@ export const removeClient = mutation({
   },
 });
 
+/**
+ * One page of the clinics table, in name order: the whole directory, or the
+ * clinics of one client when the list is narrowed to one.
+ *
+ * Only what the index and a field comparison can answer is filtered here: a
+ * function may run one paginated query, and a substring is not something either
+ * of them can ask. Searching is `search`, which reads one bounded scan.
+ */
 export const list = query({
-  args: {},
-  returns: v.object({
-    clinics: v.array(clinicView),
-    limit: v.number(),
-    hasMore: v.boolean(),
-  }),
-  handler: async (ctx) => {
+  args: {
+    paginationOpts: paginationOptsValidator,
+    clientId: v.optional(v.id("clients")),
+    status: activeFilter,
+  },
+  returns: paginationResultValidator(clinicView),
+  handler: async (ctx, args) => {
     await requireAdmin(ctx);
 
-    const rows = await ctx.db
-      .query("clinics")
-      .withIndex("by_clientId_and_name")
-      .take(MAX_CLINICS + 1);
+    const { clientId, status } = args;
 
-    const named = await withClientNames(ctx, rows.slice(0, MAX_CLINICS));
-    const assignees = await assigneeNamesByClinic(ctx);
-    const clinics = named.map((row) => ({
-      clinicId: row._id,
-      name: row.name,
-      googleSheetId: row.googleSheetId,
-      externalClinicId: row.externalClinicId ?? "",
-      isActive: row.isActive,
-      clientId: row.clientId,
-      clientName: row.clientName,
-      sheetColumns: row.sheetColumns ?? {},
-      qaGroupKeys: row.qaGroupKeys ?? [],
-      assignedTo: assignees.get(row._id) ?? [],
-    }));
-    clinics.sort(
-      (a, b) => a.clientName.localeCompare(b.clientName) || a.name.localeCompare(b.name)
-    );
+    if (clientId !== undefined) {
+      const ofClient = ctx.db
+        .query("clinics")
+        .withIndex("by_clientId_and_name", (builder) => builder.eq("clientId", clientId));
+      const page =
+        status === undefined
+          ? await ofClient.paginate(args.paginationOpts)
+          : await ofClient
+              .filter((builder) => builder.eq(builder.field("isActive"), status === "active"))
+              .paginate(args.paginationOpts);
 
-    return { clinics, limit: MAX_CLINICS, hasMore: rows.length > MAX_CLINICS };
+      return {
+        page: await toClinicViews(ctx, page.page),
+        isDone: page.isDone,
+        continueCursor: page.continueCursor,
+      };
+    }
+
+    const all = ctx.db.query("clinics").withIndex("by_name");
+    const page =
+      status === undefined
+        ? await all.paginate(args.paginationOpts)
+        : await all
+            .filter((builder) => builder.eq(builder.field("isActive"), status === "active"))
+            .paginate(args.paginationOpts);
+
+    return {
+      page: await toClinicViews(ctx, page.page),
+      isDone: page.isDone,
+      continueCursor: page.continueCursor,
+    };
+  },
+});
+
+/**
+ * The clinics a search box finds, in name order: the whole directory, or the
+ * clinics of one client. A Convex filter compares fields and cannot ask whether
+ * a name contains a substring, so this reads one bounded scan and matches the
+ * rows here, over the same fields the clinics table shows. `hasMore` says the
+ * scan ran out before the table did, or that more clinics matched than the
+ * result holds.
+ */
+export const search = query({
+  args: {
+    search: v.string(),
+    clientId: v.optional(v.id("clients")),
+    status: activeFilter,
+  },
+  returns: v.object({
+    clinics: v.array(clinicView),
+    hasMore: v.boolean(),
+  }),
+  handler: async (ctx, args) => {
+    await requireAdmin(ctx);
+
+    const { clientId, status } = args;
+    const scan = MAX_SEARCH_SCAN + 1;
+    let scanned: Doc<"clinics">[];
+
+    if (clientId !== undefined) {
+      const ofClient = ctx.db
+        .query("clinics")
+        .withIndex("by_clientId_and_name", (builder) => builder.eq("clientId", clientId));
+      scanned =
+        status === undefined
+          ? await ofClient.take(scan)
+          : await ofClient
+              .filter((builder) => builder.eq(builder.field("isActive"), status === "active"))
+              .take(scan);
+    } else {
+      const all = ctx.db.query("clinics").withIndex("by_name");
+      scanned =
+        status === undefined
+          ? await all.take(scan)
+          : await all
+              .filter((builder) => builder.eq(builder.field("isActive"), status === "active"))
+              .take(scan);
+    }
+
+    const accepts = clinicSearchPredicate(ctx, args.search.trim().toLowerCase());
+    const matched: Doc<"clinics">[] = [];
+    for (const clinic of scanned.slice(0, MAX_SEARCH_SCAN)) {
+      if (await accepts(clinic)) matched.push(clinic);
+    }
+
+    return {
+      clinics: await toClinicViews(ctx, matched.slice(0, MAX_SEARCH_RESULTS)),
+      hasMore: scanned.length > MAX_SEARCH_SCAN || matched.length > MAX_SEARCH_RESULTS,
+    };
   },
 });
 
@@ -626,6 +863,7 @@ export const create = mutation({
       sheetColumns: args.sheetColumns ?? {},
       qaGroupKeys: cleanQaGroupKeys(args.qaGroupKeys ?? []),
     });
+    await adjustClientClinicCount(ctx, args.clientId, 1);
 
     return { clinicId };
   },
@@ -671,6 +909,12 @@ export const update = mutation({
           : (clinic.qaGroupKeys ?? []),
     });
 
+    // A clinic that changes hands leaves one client's count and joins another's.
+    if (clinic.clientId !== args.clientId) {
+      await adjustClientClinicCount(ctx, clinic.clientId, -1);
+      await adjustClientClinicCount(ctx, args.clientId, 1);
+    }
+
     return null;
   },
 });
@@ -688,6 +932,7 @@ export const remove = mutation({
 
     await removeClinicFromStaffProfiles(ctx, args.clinicId);
     await ctx.db.delete("clinics", args.clinicId);
+    await adjustClientClinicCount(ctx, clinic.clientId, -1);
 
     return null;
   },

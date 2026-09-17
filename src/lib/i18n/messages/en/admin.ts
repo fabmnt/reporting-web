@@ -40,6 +40,7 @@ export const admin = {
     addClient: "Add client",
     noClients: "No clients yet. Create the first one before adding clinics.",
     noMatches: "No clients match these filters.",
+    searchIncomplete: "This search may leave matches out. Narrow it down to see the rest.",
     filters: {
       search: "Search clients",
       status: "Status filter",
@@ -67,7 +68,6 @@ export const admin = {
       saveFailed: "Saving the assignment failed.",
       save: "Save",
     },
-    limit: (limit: number) => `Showing the first ${limit} clients.`,
     form: {
       editTitle: "Edit client",
       createTitle: "New client",
@@ -97,6 +97,7 @@ export const admin = {
     allClinicsDescription: "Each clinic maps to one Google Sheet and the status columns inside it.",
     noClinics: "No clinics yet. Create a client in the Clients tab, then add the first clinic.",
     noMatches: "No clinics match these filters.",
+    searchIncomplete: "This search may leave matches out. Narrow it down to see the rest.",
     filters: {
       search: "Search clinics",
       client: "Client filter",
@@ -111,7 +112,7 @@ export const admin = {
       status: "Status",
       assignedTo: "Assigned to",
     },
-    limit: (limit: number) => `Showing the first ${limit} clinics.`,
+    clientLimit: (limit: number) => `Showing the first ${limit} clients.`,
     form: {
       editTitle: "Edit clinic",
       createTitle: "New clinic",

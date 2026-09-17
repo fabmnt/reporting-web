@@ -1,7 +1,7 @@
 import type { FunctionReturnType } from "convex/server";
 import { useMutation, useQuery } from "convex/react";
 import { Plus } from "lucide-react";
-import { useMemo, useState, type SyntheticEvent } from "react";
+import { useState, type SyntheticEvent } from "react";
 
 import { api } from "../../../convex/_generated/api";
 import { AssignClinicsDialog } from "@/components/admin/AssignClinicsDialog";
@@ -36,10 +36,11 @@ import {
 } from "@/components/ui/table";
 import { useDocumentTitle, useI18n } from "@/lib/i18n/context";
 import { localizedError, localizedMessage, type LocalizedMessage } from "@/lib/i18n/errors";
-import { matchesStatusFilter, tablePage, type StatusFilter } from "@/lib/tableList";
+import { useCursorPages, useSearchText } from "@/lib/listControls";
+import { statusFilterArg, TABLE_PAGE_SIZE, type StatusFilter } from "@/lib/tableList";
 
 type ClientList = FunctionReturnType<typeof api.clinics.listClients>;
-type ClientView = ClientList["clients"][number];
+type ClientView = ClientList["page"][number];
 
 type ClientFormValues = {
   name: string;
@@ -195,10 +196,32 @@ function ClientForm({
 
 export function AdminClientsPanel() {
   const { t } = useI18n();
+  const search = useSearchText();
+  const pages = useCursorPages();
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const status = statusFilterArg(statusFilter);
+  const isSearching = search.query !== "";
+
   const current = useQuery(api.staffAccounts.current, {});
   const canManage = current?.role === "admin" && current.status === "active";
 
-  const clientsData = useQuery(api.clinics.listClients, canManage ? {} : "skip");
+  // A substring is not something an index can answer, so the list pages with
+  // the cursor while the box is empty and asks the bounded search otherwise.
+  const clientsData = useQuery(
+    api.clinics.listClients,
+    canManage && !isSearching
+      ? {
+          paginationOpts: { numItems: TABLE_PAGE_SIZE, cursor: pages.cursor },
+          ...(status === undefined ? {} : { status }),
+        }
+      : "skip"
+  );
+  const searchData = useQuery(
+    api.clinics.searchClients,
+    canManage && isSearching
+      ? { search: search.query, ...(status === undefined ? {} : { status }) }
+      : "skip"
+  );
   const createClient = useMutation(api.clinics.createClient);
   const updateClient = useMutation(api.clinics.updateClient);
   const removeClient = useMutation(api.clinics.removeClient);
@@ -214,22 +237,15 @@ export function AdminClientsPanel() {
   const [formSession, setFormSession] = useState(0);
   const [clientToDelete, setClientToDelete] = useState<ClientView | null>(null);
   const [assigningClient, setAssigningClient] = useState<ClientView | null>(null);
-  const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
-  const [page, setPage] = useState(1);
 
-  const clients = useMemo(() => clientsData?.clients ?? [], [clientsData]);
-  const filteredClients = useMemo(() => {
-    const needle = search.trim().toLowerCase();
-    return clients.filter((client) => {
-      if (!matchesStatusFilter(client.isActive, statusFilter)) return false;
-      if (needle === "") return true;
-      return (
-        client.name.toLowerCase().includes(needle) || client.key.toLowerCase().includes(needle)
-      );
-    });
-  }, [clients, search, statusFilter]);
-  const clientPage = tablePage(filteredClients, page);
+  const isReady = isSearching ? searchData !== undefined : clientsData !== undefined;
+  const clients = isSearching ? (searchData?.clients ?? []) : (clientsData?.page ?? []);
+  // The rows on screen, which is all a cursor can tell: the pages behind them
+  // were read and the ones ahead are not known.
+  const firstRow = pages.index * TABLE_PAGE_SIZE + 1;
+  const lastRow = firstRow + clients.length - 1;
+  const hasFilters = isSearching || statusFilter !== "all";
+  const canGoNext = !isSearching && clientsData !== undefined && !clientsData.isDone;
 
   function openCreate() {
     setFormError(null);
@@ -329,13 +345,15 @@ export function AdminClientsPanel() {
       <AdminTabs />
 
       <section className="flex flex-col gap-4">
-        {clients.length > 0 ? (
+        {/* A search that found nothing still has to leave the box on screen,
+            or there is no way to change it back. */}
+        {clients.length > 0 || hasFilters ? (
           <div className="flex flex-wrap items-center gap-2">
             <Input
-              value={search}
+              value={search.text}
               onChange={(event) => {
-                setSearch(event.target.value);
-                setPage(1);
+                search.change(event.target.value);
+                pages.reset();
               }}
               placeholder={t.admin.clients.filters.search}
               aria-label={t.admin.clients.filters.search}
@@ -346,18 +364,18 @@ export function AdminClientsPanel() {
               label={t.admin.clients.filters.status}
               onChange={(next) => {
                 setStatusFilter(next);
-                setPage(1);
+                pages.reset();
               }}
             />
           </div>
         ) : null}
 
-        {clientsData === undefined ? (
+        {!isReady ? (
           <Skeleton className="h-40 w-full" />
         ) : clients.length === 0 ? (
-          <p className="text-sm text-muted-foreground">{t.admin.clients.noClients}</p>
-        ) : filteredClients.length === 0 ? (
-          <p className="text-sm text-muted-foreground">{t.admin.clients.noMatches}</p>
+          <p className="text-sm text-muted-foreground">
+            {hasFilters ? t.admin.clients.noMatches : t.admin.clients.noClients}
+          </p>
         ) : (
           <>
             <DataTableFrame>
@@ -372,7 +390,7 @@ export function AdminClientsPanel() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {clientPage.rows.map((client) => {
+                  {clients.map((client) => {
                     const isPending = pendingClientId === client.clientId;
                     return (
                       <TableRow key={client.clientId}>
@@ -403,7 +421,7 @@ export function AdminClientsPanel() {
             </DataTableFrame>
 
             <DataCardList>
-              {clientPage.rows.map((client) => (
+              {clients.map((client) => (
                 <DataCard
                   key={client.clientId}
                   title={client.name}
@@ -429,23 +447,23 @@ export function AdminClientsPanel() {
                 </DataCard>
               ))}
             </DataCardList>
-
-            <TablePagination
-              page={clientPage.page}
-              pageCount={clientPage.pageCount}
-              first={clientPage.first}
-              last={clientPage.last}
-              total={clientPage.total}
-              onPageChange={setPage}
-            />
           </>
         )}
 
-        {clientsData?.hasMore ? (
-          <p className="text-xs text-muted-foreground">
-            {t.admin.clients.limit(clientsData.limit)}
-          </p>
-        ) : null}
+        {isSearching ? (
+          searchData?.hasMore ? (
+            <p className="text-xs text-muted-foreground">{t.admin.clients.searchIncomplete}</p>
+          ) : null
+        ) : (
+          <TablePagination
+            first={firstRow}
+            last={lastRow}
+            canPrevious={pages.canGoPrevious}
+            canNext={canGoNext}
+            onPrevious={pages.goPrevious}
+            onNext={() => pages.goNext(clientsData?.continueCursor ?? "")}
+          />
+        )}
       </section>
 
       <ClientForm
