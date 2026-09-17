@@ -162,13 +162,11 @@ export async function runExecuteReport(
   const inactiveCarriers: InactiveCarriersEntry[] = [];
   let succeededClinics = 0;
   let failedClinics = 0;
-  let processedClinics = 0;
 
   for (const clinic of config.clinics) {
     // The operator may have stopped the run while the clinics before this one
-    // were read, and a clinic that is not read is not counted as processed.
+    // were read, and a clinic that is not read is not counted.
     if (await reportRunCancelled(ctx, config.runId)) break;
-    processedClinics += 1;
     const clinicEntry: ClinicEntry = {
       clinicId: clinic.clinicId,
       clinicName: clinic.name,
@@ -385,7 +383,10 @@ export async function runExecuteReport(
     clientId,
     status: succeededClinics === 0 ? "failed" : "completed",
     completedAt: Date.now(),
-    processedClinicCount: processedClinics,
+    // Every clinic the run reached ended as one or the other, so the count of
+    // processed ones is their sum: a clinic the operator stopped in the middle
+    // of counts as neither.
+    processedClinicCount: succeededClinics + failedClinics,
     succeededClinicCount: succeededClinics,
     failedClinicCount: failedClinics,
   });
