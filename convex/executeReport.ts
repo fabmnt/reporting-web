@@ -366,6 +366,10 @@ export async function runExecuteReport(
       });
     }
 
+    // A clinic the operator stopped in the middle of read no sheet, so it is
+    // not counted as read: the run ends where it was stopped.
+    if (await reportRunCancelled(ctx, config.runId)) break;
+
     if (clinicFailed) {
       failedClinics += 1;
     } else {

@@ -115,16 +115,23 @@ export const runSheetReport = action({
   },
   returns: reportRunResult,
   handler: async (ctx, args): Promise<ReportRunResult> => {
-    const params: RunParams = await ctx.runQuery(internal.reportRuns.runParams, {
+    // Claiming the record is what makes a run one-shot: a second call for the
+    // same id is turned away instead of reading every sheet again, and a run
+    // the operator stopped before this call is answered as cancelled rather
+    // than started.
+    const claim = await ctx.runMutation(internal.reportRuns.claimReportRun, {
       runId: args.runId,
     });
+    if (!claim.started) return stoppedRun(args.runId);
 
     try {
-      return await runReportSheets(ctx, args.runId, params, args.verificationFilter ?? "all");
+      return await runReportSheets(ctx, args.runId, claim.params, args.verificationFilter ?? "all");
     } catch (error) {
       // The record closes even when the run stops on its way, because a row
-      // left open would read as a run that is still working.
-      await ctx.runMutation(internal.reportRuns.finishReportRun, {
+      // left open would read as a run that is still working. A run the operator
+      // stopped keeps its cancellation: the failure happened after the request,
+      // and the form asked for a stop, not for an error.
+      const closed = await ctx.runMutation(internal.reportRuns.finishReportRun, {
         runId: args.runId,
         status: "failed",
         completedAt: Date.now(),
@@ -133,10 +140,17 @@ export const runSheetReport = action({
         failedClinicCount: 0,
         errorMessage: error instanceof Error ? error.message : String(error),
       });
+      if (closed.cancelled) return stoppedRun(args.runId);
       throw error;
     }
   },
 });
+
+// What the form is answered with when the operator stopped the run before it
+// read a sheet. Nothing was read, so there is nothing to show beside the notice.
+function stoppedRun(runId: Id<"reportRuns">): ReportRunResult {
+  return { reportRunId: runId, assignedClinicCount: 0, cancelled: true, sheets: [] };
+}
 
 /**
  * Reads the sheets of one run and closes its record. The operator may stop the
@@ -342,6 +356,10 @@ async function runReportSheets(
         error: null,
       });
     }
+    // A clinic the operator stopped in the middle of read no sheet, so it is
+    // not counted as read: the run ends where it was stopped.
+    if (await reportRunCancelled(ctx, runId)) break;
+
     if (clinicFailed) {
       failedClinics += 1;
     } else {

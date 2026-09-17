@@ -30,6 +30,7 @@ const ASSIGNMENT_QUERY = nameOf(api.googleSheets.listAssignedReportClinics);
 const TYPES_QUERY = nameOf(api.reportTypes.listRunnable);
 const RUN_ACTION = nameOf(api.reports.runSheetReport);
 const START_RUN_MUTATION = nameOf(api.reportRuns.startReportRun);
+const ABANDON_RUN_MUTATION = nameOf(api.reportRuns.abandonReportRun);
 
 const ASSIGNMENT = {
   clinics: [{ clinicId: "clinic-1", name: "Downtown", clientName: "Smilist" }],
@@ -116,6 +117,7 @@ const PENDING_AUDIT_RUN = {
 
 const runReport = vi.fn();
 const startRun = vi.fn();
+const abandonRun = vi.fn();
 
 function renderRunner() {
   return render(
@@ -137,9 +139,13 @@ beforeEach(() => {
     nameOf(reference) === RUN_ACTION ? runReport : vi.fn()
   );
   startRun.mockResolvedValue({ reportRunId: "run-1" });
-  useMutationMock.mockImplementation((reference: AnyFunctionReference) =>
-    nameOf(reference) === START_RUN_MUTATION ? startRun : vi.fn()
-  );
+  abandonRun.mockResolvedValue({ abandoned: false });
+  useMutationMock.mockImplementation((reference: AnyFunctionReference) => {
+    const name = nameOf(reference);
+    if (name === START_RUN_MUTATION) return startRun;
+    if (name === ABANDON_RUN_MUTATION) return abandonRun;
+    return vi.fn();
+  });
 });
 
 describe("ReportRunner", () => {

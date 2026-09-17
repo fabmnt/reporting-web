@@ -146,6 +146,7 @@ export function ReportRunner() {
   const typeData = useQuery(api.reportTypes.listRunnable, {});
   const startRun = useMutation(api.reportRuns.startReportRun);
   const cancelRun = useMutation(api.reportRuns.cancelReportRun);
+  const abandonRun = useMutation(api.reportRuns.abandonReportRun);
   const runReport = useAction(api.reports.runSheetReport);
 
   // The controls live in the address bar, so a reload, a bookmark, or a link
@@ -193,6 +194,7 @@ export function ReportRunner() {
     setCancelling(false);
     setError(null);
     setResult(null);
+    let openedRunId: Id<"reportRuns"> | null = null;
     try {
       // The run is opened before it starts, so the cancel button has something
       // to name, and the action reads the settings back from that record.
@@ -201,6 +203,7 @@ export function ReportRunner() {
         startDate: filters.startDate,
         endDate: filters.endDate,
       });
+      openedRunId = reportRunId;
       setRunId(reportRunId);
       const data = await runReport({
         runId: reportRunId,
@@ -208,6 +211,12 @@ export function ReportRunner() {
       });
       setResult(data);
     } catch (cause) {
+      // A call that never reached the server leaves the record waiting to
+      // start, and this form is the only thing that could still close it. The
+      // mutation leaves a run the action did claim alone.
+      if (openedRunId !== null) {
+        await abandonRun({ runId: openedRunId }).catch(() => undefined);
+      }
       setError(localizedError(cause, (t) => t.reports.outcomes.failed));
     } finally {
       setRunning(false);

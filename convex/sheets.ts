@@ -57,6 +57,11 @@ export const planSheetTabs = internalAction({
     const tabsForClinic: Record<string, string[]> = {};
     const errorsForClinic: Record<string, ReportSheetError> = {};
 
+    // A stop that already landed is answered here, before the token refresh
+    // below makes the first external call of this action. A run the operator
+    // cancelled reads no sheet, so it should not pay for one either.
+    if (await reportRunCancelled(ctx, args.runId)) return { tabsForClinic, errorsForClinic };
+
     let token: string | null = null;
     try {
       token = await refreshAccessToken();
@@ -126,9 +131,13 @@ export const readSheetTabsValues = internalAction({
     })
   ),
   handler: async (ctx, args): Promise<SheetTabValues[]> => {
+    const results: SheetTabValues[] = [];
+    // Same as planning: a run the operator already stopped reads no tab, so it
+    // does not pay for the token that reading one would need.
+    if (await reportRunCancelled(ctx, args.runId)) return results;
+
     const token = await refreshAccessToken();
     const deadlineMs = actionDeadline();
-    const results: SheetTabValues[] = [];
     for (let start = 0; start < args.tabTitles.length; start += MAX_RANGES_PER_BATCH_REQUEST) {
       // The chunk already in flight finishes on its own, and no further chunk is
       // asked for once the operator has stopped the run.
