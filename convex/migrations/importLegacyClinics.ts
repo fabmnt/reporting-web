@@ -2,7 +2,8 @@ import { v } from "convex/values";
 
 import type { Id } from "../_generated/dataModel";
 import { internalMutation } from "../_generated/server";
-import { adjustClientClinicCount, clientKeyFromName } from "../model/clients";
+import { clientKeyFromName } from "../model/clientKey";
+import { adjustClientClinicCount } from "../model/clients";
 import { clinicSheetColumns } from "../model/clinicSheetColumns";
 
 const MAX_CLIENTS = 200;
