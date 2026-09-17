@@ -217,8 +217,8 @@ export const setStatus = mutation({
  * active ones, therefore cannot drop the rest by saving.
  *
  * Only an active clinic of that client can be added: the reports skip the rest,
- * so one could only hold room in the cap. Removals are not checked against the
- * clinics table, so an id whose clinic is gone can still leave a list.
+ * so one could only hold room in the cap. A removal is held to the same client,
+ * so an edit cannot reach the assignments of another one.
  *
  * The cap covers the whole assignment, not the client's share, because a report
  * reads at most that many clinics. A caller that would pass it gets an error
@@ -257,7 +257,16 @@ export const setClientAssignment = mutation({
       added.push(clinicId);
     }
 
-    const removed = new Set<string>(args.removeClinicIds);
+    const removed = new Set<string>();
+    for (const clinicId of args.removeClinicIds) {
+      const clinic = await ctx.db.get("clinics", clinicId);
+      // A clinic of another client is not this edit's to change, and an id
+      // whose clinic is gone cannot be told apart from one, so neither leaves
+      // the assignment here.
+      if (clinic === null || clinic.clientId !== args.clientId) continue;
+      removed.add(clinicId);
+    }
+
     const assignedClinicIds = (target.assignedClinicIds ?? []).filter(
       (clinicId) => !removed.has(clinicId)
     );
