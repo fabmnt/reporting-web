@@ -107,6 +107,12 @@ export default defineSchema({
     status: reportRunStatus,
     startedAt: v.number(),
     completedAt: v.optional(v.number()),
+    // The range the run covers. It is stored on the record because the run
+    // action is given the id alone and reads the rest from here, and because a
+    // run the operator cancelled is read back the same way. Runs written before
+    // the record carried a range have none.
+    startDate: v.optional(v.string()),
+    endDate: v.optional(v.string()),
     processedClinicCount: v.number(),
     succeededClinicCount: v.number(),
     failedClinicCount: v.number(),

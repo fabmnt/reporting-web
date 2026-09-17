@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { getFunctionName } from "convex/server";
-import { useAction, useQuery } from "convex/react";
+import { useAction, useMutation, useQuery } from "convex/react";
 import { beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 
 import { api } from "../../../convex/_generated/api";
@@ -12,10 +12,12 @@ import { ReportRunner } from "./ReportPanel";
 vi.mock("convex/react", () => ({
   useQuery: vi.fn(),
   useAction: vi.fn(),
+  useMutation: vi.fn(),
 }));
 
 const useQueryMock = useQuery as unknown as Mock;
 const useActionMock = useAction as unknown as Mock;
+const useMutationMock = useMutation as unknown as Mock;
 
 // `api` is a proxy, so every property access returns a new object. Compare by
 // function name instead of by reference.
@@ -27,6 +29,8 @@ function nameOf(reference: AnyFunctionReference): string {
 const ASSIGNMENT_QUERY = nameOf(api.googleSheets.listAssignedReportClinics);
 const TYPES_QUERY = nameOf(api.reportTypes.listRunnable);
 const RUN_ACTION = nameOf(api.reports.runSheetReport);
+const START_RUN_MUTATION = nameOf(api.reportRuns.startReportRun);
+const ABANDON_RUN_MUTATION = nameOf(api.reportRuns.abandonReportRun);
 
 const ASSIGNMENT = {
   clinics: [{ clinicId: "clinic-1", name: "Downtown", clientName: "Smilist" }],
@@ -84,8 +88,9 @@ function auditRow(name: string, execution: string): string[] {
 }
 
 const PENDING_AUDIT_RUN = {
-  reportRunId: null,
+  reportRunId: "run-1",
   assignedClinicCount: 1,
+  cancelled: false,
   sheets: [
     {
       clinicId: "clinic-1",
@@ -111,6 +116,8 @@ const PENDING_AUDIT_RUN = {
 };
 
 const runReport = vi.fn();
+const startRun = vi.fn();
+const abandonRun = vi.fn();
 
 function renderRunner() {
   return render(
@@ -131,6 +138,14 @@ beforeEach(() => {
   useActionMock.mockImplementation((reference: AnyFunctionReference) =>
     nameOf(reference) === RUN_ACTION ? runReport : vi.fn()
   );
+  startRun.mockResolvedValue({ reportRunId: "run-1" });
+  abandonRun.mockResolvedValue({ abandoned: false });
+  useMutationMock.mockImplementation((reference: AnyFunctionReference) => {
+    const name = nameOf(reference);
+    if (name === START_RUN_MUTATION) return startRun;
+    if (name === ABANDON_RUN_MUTATION) return abandonRun;
+    return vi.fn();
+  });
 });
 
 describe("ReportRunner", () => {

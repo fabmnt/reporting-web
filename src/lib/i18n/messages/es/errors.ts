@@ -43,6 +43,8 @@ export const errors = {
   REPORT_TYPE_GROUP_LIMIT: (limit: number) =>
     `Un tipo de reporte admite hasta ${limit} grupos de filas.`,
   REPORT_TYPE_GROUP_KEYS: "Las claves de los grupos de filas deben ser únicas y no estar vacías.",
+  REPORT_RUN_NOT_FOUND: "Esta ejecución de reporte ya no está disponible.",
+  REPORT_RUN_ALREADY_STARTED: "Esta ejecución de reporte ya se había iniciado.",
   SHEET_NO_TABS: (startDate: string, endDate: string) =>
     `No se encontraron pestañas entre ${startDate} y ${endDate}.`,
   SHEET_INVALID_COLUMN: (column: string) =>

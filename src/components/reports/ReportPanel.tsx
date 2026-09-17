@@ -1,6 +1,6 @@
 "use client";
 
-import { useAction, useQuery } from "convex/react";
+import { useAction, useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { FileText } from "lucide-react";
 import { useState } from "react";
@@ -156,6 +156,9 @@ export function ReportRunner() {
   const { t } = useI18n();
   const assignment = useQuery(api.googleSheets.listAssignedReportClinics, {});
   const typeData = useQuery(api.reportTypes.listRunnable, {});
+  const startRun = useMutation(api.reportRuns.startReportRun);
+  const cancelRun = useMutation(api.reportRuns.cancelReportRun);
+  const abandonRun = useMutation(api.reportRuns.abandonReportRun);
   const runReport = useAction(api.reports.runSheetReport);
 
   // The controls live in the address bar, so a reload, a bookmark, or a link
@@ -164,6 +167,9 @@ export function ReportRunner() {
     readReportFilters(window.location.search)
   );
   const [running, setRunning] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
+  // The record of the run in flight, which is what the cancel button names.
+  const [runId, setRunId] = useState<Id<"reportRuns"> | null>(null);
   const [error, setError] = useState<LocalizedMessage | null>(null);
   const [result, setResult] = useState<ReportResult | null>(null);
 
@@ -216,26 +222,61 @@ export function ReportRunner() {
       return;
     }
     setRunning(true);
+    setCancelling(false);
     setError(null);
     setResult(null);
+    let openedRunId: Id<"reportRuns"> | null = null;
     try {
-      const data = await runReport({
+      // The run is opened before it starts, so the cancel button has something
+      // to name, and the action reads the settings back from that record.
+      const { reportRunId } = await startRun({
         reportTypeId: selectedType.reportTypeId,
         startDate: filters.startDate,
         endDate: filters.endDate,
+      });
+      openedRunId = reportRunId;
+      setRunId(reportRunId);
+      const data = await runReport({
+        runId: reportRunId,
         verificationFilter: filters.verification,
         clinicIds: runClinics.map((clinic) => clinic.clinicId),
       });
       setResult(data);
     } catch (cause) {
+      // A call that never reached the server leaves the record waiting to
+      // start, and this form is the only thing that could still close it. The
+      // mutation leaves a run the action did claim alone.
+      if (openedRunId !== null) {
+        await abandonRun({ runId: openedRunId }).catch(() => undefined);
+      }
       setError(localizedError(cause, (t) => t.reports.outcomes.failed));
     } finally {
       setRunning(false);
+      setCancelling(false);
+      setRunId(null);
+    }
+  }
+
+  async function handleCancel() {
+    if (runId === null) return;
+    setCancelling(true);
+    try {
+      // The run answers once it reaches its next step, which is where the
+      // action below stops and returns what it had read.
+      await cancelRun({ runId });
+    } catch (cause) {
+      // Nothing was stopped, so the button goes back to being a cancel button
+      // and the reason it failed is shown instead.
+      setCancelling(false);
+      setError(localizedError(cause, (t) => t.reports.outcomes.cancelFailed));
     }
   }
 
   if (assignment === undefined || typeData === undefined) return <ReportRunnerSkeleton />;
 
+  // A run stopped before it read anything has nothing to show under the notice
+  // that says it was stopped.
+  const showsResults = result !== null && (!result.cancelled || result.sheets.length > 0);
   const excludedClinicIds = new Set(filters.excludedClinicIds);
   const runClinics = clinicsToRun(assignment.clinics, filters.excludedClinicIds);
 
@@ -377,7 +418,7 @@ export function ReportRunner() {
               )}
             </section>
           </CardContent>
-          <CardFooter>
+          <CardFooter className="flex flex-col gap-2">
             <Button
               size="lg"
               className="w-full"
@@ -393,6 +434,24 @@ export function ReportRunner() {
                 t.reports.run
               )}
             </Button>
+            {running ? (
+              <Button
+                variant="outline"
+                size="lg"
+                className="w-full"
+                onClick={() => void handleCancel()}
+                disabled={cancelling || runId === null}
+              >
+                {cancelling ? (
+                  <>
+                    <Spinner data-icon="inline-start" />
+                    {t.reports.cancelling}
+                  </>
+                ) : (
+                  t.reports.cancel
+                )}
+              </Button>
+            ) : null}
           </CardFooter>
         </Card>
 
@@ -401,9 +460,23 @@ export function ReportRunner() {
             <ResultsPlaceholder running={running} clinicCount={runClinics.length} />
           ) : (
             <>
-              <OverviewCard result={result} />
-              <InactiveCarriersCard carriers={result.inactiveCarriers ?? []} />
-              <ResultsCard result={result} />
+              {result.cancelled ? (
+                <Alert>
+                  <AlertTitle>{t.reports.cancelled.title}</AlertTitle>
+                  <AlertDescription>
+                    {result.sheets.length === 0
+                      ? t.reports.cancelled.nothing
+                      : t.reports.cancelled.body}
+                  </AlertDescription>
+                </Alert>
+              ) : null}
+              {showsResults ? (
+                <>
+                  <OverviewCard result={result} />
+                  <InactiveCarriersCard carriers={result.inactiveCarriers ?? []} />
+                  <ResultsCard result={result} />
+                </>
+              ) : null}
             </>
           )}
         </div>

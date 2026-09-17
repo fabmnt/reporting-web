@@ -86,6 +86,10 @@ function renderAppError(payload: AppErrorPayload, t: Messages): string | null {
       return e.REPORT_TYPE_GROUP_LIMIT(payload.limit);
     case "REPORT_TYPE_GROUP_KEYS":
       return e.REPORT_TYPE_GROUP_KEYS;
+    case "REPORT_RUN_NOT_FOUND":
+      return e.REPORT_RUN_NOT_FOUND;
+    case "REPORT_RUN_ALREADY_STARTED":
+      return e.REPORT_RUN_ALREADY_STARTED;
     case "SHEET_RATE_LIMITED":
       return e.SHEET_RATE_LIMITED;
     case "CARRIER_SIGN_IN_REJECTED":

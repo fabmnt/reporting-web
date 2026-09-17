@@ -52,6 +52,9 @@ export type InactiveCarriersSection = {
 export type ReportResult = {
   reportRunId: Id<"reportRuns"> | null;
   assignedClinicCount: number;
+  // A run the operator stopped answers with the sheets it read before the
+  // request landed, which is a short list and not a failed one.
+  cancelled: boolean;
   sheets: SheetResult[];
   inactiveCarriers?: InactiveCarriersSection[];
 };
