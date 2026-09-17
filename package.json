@@ -21,6 +21,7 @@
     "e2e": "playwright test",
     "typecheck": "astro check",
     "google:token": "node --env-file-if-exists=.env.local scripts/generate-google-token.ts",
+    "import:ccc-directory": "node --env-file-if-exists=.env.local scripts/import-ccc-directory.ts",
     "import:legacy-clinics": "node --env-file-if-exists=.env.local scripts/import-legacy-clinics.ts",
     "import:legacy-staff": "node --env-file-if-exists=.env.local scripts/import-legacy-staff.ts"
   },

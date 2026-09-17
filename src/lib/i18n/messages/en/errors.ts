@@ -17,7 +17,6 @@ export const errors = {
   PASSWORD_TOO_SHORT: "The password must be at least 8 characters long.",
   PASSWORD_SETUP_LINK_INVALID:
     "This link is not valid any more. Ask an administrator for a new one.",
-  SELECTED_CLINIC_NOT_FOUND: "One of the selected clinics was not found.",
   CLIENT_NOT_FOUND: "Client was not found.",
   CLIENT_DISABLED: "This client is disabled.",
   CLINIC_NOT_FOUND: "Clinic was not found.",
@@ -35,6 +34,7 @@ export const errors = {
   CLIENT_NAME_REQUIRED: "Client name is required.",
   CLINIC_NAME_REQUIRED: "Clinic name is required.",
   GOOGLE_SHEET_REQUIRED: "Google Sheet ID is required.",
+  CARRIER_ID_REQUIRED: "Control Central clinic ID is required.",
   INVALID_DATE_RANGE: "The start date must be on or before the end date.",
   INVALID_DATE_FORMAT: "Dates must use the YYYY-MM-DD format.",
   REPORT_TYPE_NAME_TAKEN: (name: string) => `A report type named "${name}" already exists.`,

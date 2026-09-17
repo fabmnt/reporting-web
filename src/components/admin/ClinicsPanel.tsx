@@ -1,7 +1,7 @@
 import type { FunctionReturnType } from "convex/server";
 import { useMutation, useQuery } from "convex/react";
 import { Plus } from "lucide-react";
-import { useMemo, useState, type SyntheticEvent } from "react";
+import { useState, type SyntheticEvent } from "react";
 
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
@@ -54,12 +54,13 @@ import {
 } from "@/lib/clinicSheetColumns";
 import { useDocumentTitle, useI18n } from "@/lib/i18n/context";
 import { localizedError, localizedMessage, type LocalizedMessage } from "@/lib/i18n/errors";
-import { matchesStatusFilter, tablePage, type StatusFilter } from "@/lib/tableList";
+import { useCursorPages, useSearchText } from "@/lib/listControls";
+import { statusFilterArg, TABLE_PAGE_SIZE, type StatusFilter } from "@/lib/tableList";
 import { SheetColumnFields } from "@/components/clinics/SheetColumnFields";
 
 type ClinicList = FunctionReturnType<typeof api.clinics.list>;
-type ClinicView = ClinicList["clinics"][number];
-type ClientList = FunctionReturnType<typeof api.clinics.listClients>;
+type ClinicView = ClinicList["page"][number];
+type ClientList = FunctionReturnType<typeof api.clinics.listClientChoices>;
 type ClientView = ClientList["clients"][number];
 
 type ClinicFormValues = {
@@ -161,6 +162,10 @@ function ClinicForm({
     }
     if (values.clientId === "") {
       setValidationError(localizedMessage((t) => t.admin.clinics.form.clientRequired));
+      return;
+    }
+    if (values.externalClinicId.trim() === "") {
+      setValidationError(localizedMessage((t) => t.admin.clinics.form.externalIdRequired));
       return;
     }
 
@@ -290,11 +295,39 @@ function ClinicForm({
 
 export function AdminClinicsPanel() {
   const { t } = useI18n();
+  const search = useSearchText();
+  const pages = useCursorPages<ClinicView>();
+  const [clientFilter, setClientFilter] = useState(ALL_CLIENTS);
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const status = statusFilterArg(statusFilter);
+  const isSearching = search.query !== "";
+
   const current = useQuery(api.staffAccounts.current, {});
   const canManage = current?.role === "admin" && current.status === "active";
 
-  const clientsData = useQuery(api.clinics.listClients, canManage ? {} : "skip");
-  const clinicsData = useQuery(api.clinics.list, canManage ? {} : "skip");
+  const clientsData = useQuery(api.clinics.listClientChoices, canManage ? {} : "skip");
+  // A substring is not something an index can answer, so the list pages with
+  // the cursor while the box is empty and asks the bounded search otherwise.
+  const clinicsData = useQuery(
+    api.clinics.list,
+    canManage && !isSearching
+      ? {
+          paginationOpts: { numItems: TABLE_PAGE_SIZE, cursor: pages.cursor },
+          ...(status === undefined ? {} : { status }),
+          ...(clientFilter === ALL_CLIENTS ? {} : { clientId: clientFilter as Id<"clients"> }),
+        }
+      : "skip"
+  );
+  const searchData = useQuery(
+    api.clinics.search,
+    canManage && isSearching
+      ? {
+          search: search.query,
+          ...(status === undefined ? {} : { status }),
+          ...(clientFilter === ALL_CLIENTS ? {} : { clientId: clientFilter as Id<"clients"> }),
+        }
+      : "skip"
+  );
   const createClinic = useMutation(api.clinics.create);
   const updateClinic = useMutation(api.clinics.update);
   const removeClinic = useMutation(api.clinics.remove);
@@ -309,39 +342,31 @@ export function AdminClinicsPanel() {
   // draft must not leak into the next open.
   const [formSession, setFormSession] = useState(0);
   const [clinicToDelete, setClinicToDelete] = useState<ClinicView | null>(null);
-  const [search, setSearch] = useState("");
-  const [clientFilter, setClientFilter] = useState(ALL_CLIENTS);
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
-  const [page, setPage] = useState(1);
 
-  const clients = useMemo(() => clientsData?.clients ?? [], [clientsData]);
-  const clinics = useMemo(() => clinicsData?.clinics ?? [], [clinicsData]);
+  const clients = clientsData?.clients ?? [];
+  const isReady = isSearching ? searchData !== undefined : clinicsData !== undefined;
+  // While a change loads, the table keeps the rows it had: emptying it would
+  // collapse the page and send the reader back to the top.
+  const clinics = isSearching ? (searchData?.clinics ?? []) : (clinicsData?.page ?? []);
+  const shownRows = isReady ? clinics : (pages.held?.rows ?? clinics);
+  const shownIndex = isReady ? pages.index : (pages.held?.index ?? pages.index);
+  // The rows on screen, which is all a cursor can tell: the pages behind them
+  // were read and the ones ahead are not known.
+  const firstRow = shownIndex * TABLE_PAGE_SIZE + 1;
+  const lastRow = firstRow + shownRows.length - 1;
+  const hasFilters = isSearching || clientFilter !== ALL_CLIENTS || statusFilter !== "all";
+  // A page ahead is one the server just read and said it has, with the cursor
+  // that asks for it: a page held from before cannot stand in for that.
+  const canGoNext = clinicsData !== undefined && !clinicsData.isDone;
+  // Only a page the reader asked for shows a spinner on its own control; a
+  // filter or a search leaves the table as it is until its rows arrive.
+  const paging = !isSearching && clinicsData === undefined ? pages.pending : null;
 
-  // The options come from the clinics themselves, so every client shown here
-  // has at least one clinic to filter down to.
-  const clientOptions = useMemo(() => {
-    const nameByClientId = new Map<string, string>();
-    for (const clinic of clinics) nameByClientId.set(clinic.clientId, clinic.clientName);
-    return [...nameByClientId]
-      .map(([value, label]) => ({ value, label }))
-      .sort((left, right) => left.label.localeCompare(right.label));
-  }, [clinics]);
-
-  const filteredClinics = useMemo(() => {
-    const needle = search.trim().toLowerCase();
-    return clinics.filter((clinic) => {
-      if (clientFilter !== ALL_CLIENTS && clinic.clientId !== clientFilter) return false;
-      if (!matchesStatusFilter(clinic.isActive, statusFilter)) return false;
-      if (needle === "") return true;
-      return [
-        clinic.name,
-        clinic.clientName,
-        clinic.externalClinicId ?? "",
-        clinic.googleSheetId,
-      ].some((value) => value.toLowerCase().includes(needle));
-    });
-  }, [clinics, search, clientFilter, statusFilter]);
-  const clinicPage = tablePage(filteredClinics, page);
+  // Both the client filter and the clinic form pick from the capped client
+  // list, which is every client the directory holds at the size the cap allows.
+  const clientOptions = clients
+    .map((client) => ({ value: client.clientId, label: client.name }))
+    .sort((left, right) => left.label.localeCompare(right.label));
 
   function closeForm() {
     setFormMode("closed");
@@ -375,7 +400,7 @@ export function AdminClinicsPanel() {
           name: values.name,
           googleSheetId: values.sheetInput,
           clientId,
-          externalClinicId: values.externalClinicId === "" ? null : values.externalClinicId,
+          externalClinicId: values.externalClinicId.trim(),
           isActive: values.isActive,
           sheetColumns,
         });
@@ -384,7 +409,7 @@ export function AdminClinicsPanel() {
           name: values.name,
           googleSheetId: values.sheetInput,
           clientId,
-          externalClinicId: values.externalClinicId === "" ? undefined : values.externalClinicId,
+          externalClinicId: values.externalClinicId.trim(),
           isActive: values.isActive,
           sheetColumns,
         });
@@ -455,7 +480,7 @@ export function AdminClinicsPanel() {
           name: editingClinic.name,
           sheetInput: editingClinic.googleSheetId,
           clientId: editingClinic.clientId,
-          externalClinicId: editingClinic.externalClinicId ?? "",
+          externalClinicId: editingClinic.externalClinicId,
           isActive: editingClinic.isActive,
           sheetColumns: sheetColumnsToFormValues(editingClinic.sheetColumns),
         }
@@ -472,60 +497,71 @@ export function AdminClinicsPanel() {
           <p className="text-sm text-muted-foreground">{t.admin.clinics.allClinicsDescription}</p>
         </div>
 
-        {clinicsData !== undefined && clinics.length > 0 ? (
-          <div className="flex flex-wrap items-center gap-2">
-            <Input
-              value={search}
-              onChange={(event) => {
-                setSearch(event.target.value);
-                setPage(1);
-              }}
-              placeholder={t.admin.clinics.filters.search}
-              aria-label={t.admin.clinics.filters.search}
-              className="h-8 w-full max-w-64"
-            />
-            <Select
-              items={[
-                { value: ALL_CLIENTS, label: t.admin.clinics.filters.allClients },
-                ...clientOptions,
-              ]}
-              value={clientFilter}
-              onValueChange={(value) => {
-                setClientFilter(value ?? ALL_CLIENTS);
-                setPage(1);
-              }}
-            >
-              <SelectTrigger aria-label={t.admin.clinics.filters.client} className="w-48">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectGroup>
-                  <SelectItem value={ALL_CLIENTS}>{t.admin.clinics.filters.allClients}</SelectItem>
-                  {clientOptions.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>
-                      {option.label}
+        {/* A search that found nothing still has to leave the controls on
+            screen, or there is no way to change them back. */}
+        {clinics.length > 0 || hasFilters ? (
+          <div className="flex flex-col gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <Input
+                value={search.text}
+                onChange={(event) => {
+                  search.change(event.target.value);
+                  pages.reset({ rows: shownRows, index: shownIndex });
+                }}
+                placeholder={t.admin.clinics.filters.search}
+                aria-label={t.admin.clinics.filters.search}
+                className="h-8 w-full max-w-64"
+              />
+              <Select
+                items={[
+                  { value: ALL_CLIENTS, label: t.admin.clinics.filters.allClients },
+                  ...clientOptions,
+                ]}
+                value={clientFilter}
+                onValueChange={(value) => {
+                  setClientFilter(value ?? ALL_CLIENTS);
+                  pages.reset({ rows: shownRows, index: shownIndex });
+                }}
+              >
+                <SelectTrigger aria-label={t.admin.clinics.filters.client} className="w-48">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    <SelectItem value={ALL_CLIENTS}>
+                      {t.admin.clinics.filters.allClients}
                     </SelectItem>
-                  ))}
-                </SelectGroup>
-              </SelectContent>
-            </Select>
-            <StatusFilterSelect
-              value={statusFilter}
-              label={t.admin.clinics.filters.status}
-              onChange={(next) => {
-                setStatusFilter(next);
-                setPage(1);
-              }}
-            />
+                    {clientOptions.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+              <StatusFilterSelect
+                value={statusFilter}
+                label={t.admin.clinics.filters.status}
+                onChange={(next) => {
+                  setStatusFilter(next);
+                  pages.reset({ rows: shownRows, index: shownIndex });
+                }}
+              />
+            </div>
+            {clientsData?.hasMore ? (
+              <p className="text-xs text-muted-foreground">
+                {t.admin.clinics.clientLimit(clientsData.limit)}
+              </p>
+            ) : null}
           </div>
         ) : null}
 
-        {clinicsData === undefined ? (
+        {!isReady && shownRows.length === 0 ? (
           <Skeleton className="h-64 w-full" />
-        ) : clinics.length === 0 ? (
-          <p className="text-sm text-muted-foreground">{t.admin.clinics.noClinics}</p>
-        ) : filteredClinics.length === 0 ? (
-          <p className="text-sm text-muted-foreground">{t.admin.clinics.noMatches}</p>
+        ) : shownRows.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            {hasFilters ? t.admin.clinics.noMatches : t.admin.clinics.noClinics}
+          </p>
         ) : (
           <>
             <DataTableFrame>
@@ -537,22 +573,21 @@ export function AdminClinicsPanel() {
                     <TableHead>{t.admin.clinics.table.googleSheet}</TableHead>
                     <TableHead>{t.admin.clinics.table.columns}</TableHead>
                     <TableHead>{t.admin.clinics.table.status}</TableHead>
+                    <TableHead>{t.admin.clinics.table.assignedTo}</TableHead>
                     <TableHead>{t.common.actions}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {clinicPage.rows.map((clinic) => {
+                  {shownRows.map((clinic) => {
                     const isPending = pendingClinicId === clinic.clinicId;
                     return (
                       <TableRow key={clinic.clinicId}>
                         <TableCell>
                           <div className="flex flex-col gap-1">
                             <span>{clinic.name}</span>
-                            {clinic.externalClinicId ? (
-                              <span className="text-xs text-muted-foreground">
-                                {t.clinics.externalId(clinic.externalClinicId)}
-                              </span>
-                            ) : null}
+                            <span className="text-xs text-muted-foreground">
+                              {t.clinics.externalId(clinic.externalClinicId)}
+                            </span>
                           </div>
                         </TableCell>
                         <TableCell>{clinic.clientName}</TableCell>
@@ -570,6 +605,15 @@ export function AdminClinicsPanel() {
                             {clinic.isActive ? t.common.active : t.common.inactive}
                           </Badge>
                         </TableCell>
+                        <TableCell className="max-w-48">
+                          {clinic.assignedTo.length === 0 ? (
+                            <span className="text-muted-foreground">{t.common.none}</span>
+                          ) : (
+                            <span className="block truncate" title={clinic.assignedTo.join(", ")}>
+                              {clinic.assignedTo.join(", ")}
+                            </span>
+                          )}
+                        </TableCell>
                         <TableCell>
                           <ClinicActions
                             clinic={clinic}
@@ -586,15 +630,11 @@ export function AdminClinicsPanel() {
             </DataTableFrame>
 
             <DataCardList>
-              {clinicPage.rows.map((clinic) => (
+              {shownRows.map((clinic) => (
                 <DataCard
                   key={clinic.clinicId}
                   title={clinic.name}
-                  subtitle={
-                    clinic.externalClinicId
-                      ? t.clinics.externalId(clinic.externalClinicId)
-                      : undefined
-                  }
+                  subtitle={t.clinics.externalId(clinic.externalClinicId)}
                   badge={
                     <Badge variant={clinic.isActive ? "secondary" : "outline"}>
                       {clinic.isActive ? t.common.active : t.common.inactive}
@@ -614,6 +654,17 @@ export function AdminClinicsPanel() {
                       {formatSheetColumnSummary(clinic.sheetColumns)}
                     </TruncatedText>
                   </DataCardRow>
+                  <DataCardRow label={t.admin.clinics.table.assignedTo}>
+                    <TruncatedText
+                      className={
+                        clinic.assignedTo.length === 0 ? "text-muted-foreground" : undefined
+                      }
+                    >
+                      {clinic.assignedTo.length === 0
+                        ? t.common.none
+                        : clinic.assignedTo.join(", ")}
+                    </TruncatedText>
+                  </DataCardRow>
                   <DataCardRow>
                     <ClinicActions
                       clinic={clinic}
@@ -625,23 +676,29 @@ export function AdminClinicsPanel() {
                 </DataCard>
               ))}
             </DataCardList>
-
-            <TablePagination
-              page={clinicPage.page}
-              pageCount={clinicPage.pageCount}
-              first={clinicPage.first}
-              last={clinicPage.last}
-              total={clinicPage.total}
-              onPageChange={setPage}
-            />
           </>
         )}
 
-        {clinicsData?.hasMore ? (
-          <p className="text-xs text-muted-foreground">
-            {t.admin.clinics.limit(clinicsData.limit)}
-          </p>
-        ) : null}
+        {isSearching ? (
+          searchData?.hasMore ? (
+            <p className="text-xs text-muted-foreground">{t.admin.clinics.searchIncomplete}</p>
+          ) : null
+        ) : (
+          <TablePagination
+            first={firstRow}
+            last={lastRow}
+            canPrevious={pages.canGoPrevious}
+            canNext={canGoNext}
+            pending={paging}
+            onPrevious={() => pages.goPrevious({ rows: shownRows, index: shownIndex })}
+            onNext={() =>
+              pages.goNext(clinicsData?.continueCursor ?? "", {
+                rows: shownRows,
+                index: shownIndex,
+              })
+            }
+          />
+        )}
       </section>
 
       <ClinicForm

@@ -46,9 +46,22 @@ export default defineSchema({
     key: v.string(),
     name: v.string(),
     isActive: v.boolean(),
+    // How many clinics the client owns, so the client list does not have to
+    // read the clinics table to count them. Every mutation that adds, moves or
+    // deletes a clinic writes it in the same transaction. It stays optional
+    // until migrations/backfillClientClinicCounts has run: Convex refuses a
+    // push whose schema rejects documents the deployment already holds. Tighten
+    // this to v.number() after the backfill.
+    clinicCount: v.optional(v.number()),
   }).index("by_key", ["key"]),
 
   clinics: defineTable({
+    // The Control Central id the carrier API reads a clinic's bots with. Every
+    // write sets it and the screens ask for it, but the field stays optional
+    // until the directory import has backfilled the rows that predate it: Convex
+    // refuses a push whose schema rejects documents the deployment already
+    // holds, and the import can only run once this schema is live. Tighten this
+    // to v.string() after the import has run everywhere.
     externalClinicId: v.optional(v.string()),
     clientId: v.id("clients"),
     name: v.string(),
@@ -59,6 +72,9 @@ export default defineSchema({
   })
     .index("by_externalClinicId", ["externalClinicId"])
     .index("by_clientId_and_name", ["clientId", "name"])
+    // The clinics list pages through this one when it is not narrowed to a
+    // client, so the whole directory is listed in name order.
+    .index("by_name", ["name"])
     .index("by_googleSheetId", ["googleSheetId"]),
 
   // Report types the row-report pipeline runs. A row lands in the first bucket

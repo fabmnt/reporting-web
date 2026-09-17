@@ -10,6 +10,7 @@ export const common = {
   loading: "Loading",
   active: "Active",
   inactive: "Inactive",
+  none: "—",
   status: "Status",
   actions: "Actions",
   you: "You",
@@ -19,8 +20,7 @@ export const common = {
   allStatuses: "All statuses",
   deleteFailedTitle: "Delete failed",
   pagination: {
-    range: (first: number, last: number, total: number) => `Showing ${first}–${last} of ${total}`,
-    page: (page: number, pageCount: number) => `Page ${page} of ${pageCount}`,
+    rows: (first: number, last: number) => `Showing rows ${first}–${last}`,
     previous: "Previous",
     next: "Next",
   },

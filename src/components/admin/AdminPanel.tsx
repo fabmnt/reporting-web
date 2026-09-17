@@ -87,34 +87,6 @@ function RoleSelect({
   );
 }
 
-function ClinicAssignment({
-  account,
-  disabled,
-  onAssign,
-}: {
-  account: ManagedAccountView;
-  disabled: boolean;
-  onAssign: (profileId: Id<"staffProfiles">, assignedClinicIds: Id<"clinics">[]) => void;
-}) {
-  const { t } = useI18n();
-
-  return (
-    <>
-      <Badge variant="secondary" className="tabular-nums">
-        {account.assignedClinicIds.length}
-      </Badge>
-      <Button
-        variant="outline"
-        size="sm"
-        disabled={disabled}
-        onClick={() => onAssign(account.profileId, account.assignedClinicIds)}
-      >
-        {t.admin.accounts.assign}
-      </Button>
-    </>
-  );
-}
-
 function PasswordLink({
   account,
   disabled,
@@ -179,18 +151,12 @@ export function AdminAccountsPanel() {
   const { t } = useI18n();
   const setRole = useMutation(api.staffAccounts.setRole);
   const setStatus = useMutation(api.staffAccounts.setStatus);
-  const setAssignedClinics = useMutation(api.staffAccounts.setAssignedClinics);
   const createLink = useMutation(api.passwordSetup.createLink);
   const current = useQuery(api.staffAccounts.current, {});
   const canManage = current?.role === "admin" && current.status === "active";
   const managed = useQuery(api.staffAccounts.listManaged, canManage ? {} : "skip");
-  const clinicDirectory = useQuery(api.clinics.list, canManage ? {} : "skip");
   const [pendingProfileId, setPendingProfileId] = useState<Id<"staffProfiles"> | null>(null);
-  const [editingProfileId, setEditingProfileId] = useState<Id<"staffProfiles"> | null>(null);
-  const [draftClinicIds, setDraftClinicIds] = useState<Id<"clinics">[]>([]);
   const [error, setError] = useState<LocalizedMessage | null>(null);
-  const [assignmentError, setAssignmentError] = useState<LocalizedMessage | null>(null);
-  const [isSavingAssignment, setIsSavingAssignment] = useState(false);
   const [linkProfileId, setLinkProfileId] = useState<Id<"staffProfiles"> | null>(null);
   const [generatedLink, setGeneratedLink] = useState<string | null>(null);
   const [linkError, setLinkError] = useState<LocalizedMessage | null>(null);
@@ -218,49 +184,6 @@ export function AdminAccountsPanel() {
       setError(localizedError(cause, (t) => t.admin.accounts.failures.status));
     } finally {
       setPendingProfileId(null);
-    }
-  }
-
-  function startClinicAssignment(
-    profileId: Id<"staffProfiles">,
-    assignedClinicIds: Id<"clinics">[]
-  ) {
-    setError(null);
-    setAssignmentError(null);
-    setEditingProfileId(profileId);
-    setDraftClinicIds(assignedClinicIds);
-  }
-
-  function toggleDraftClinic(clinicId: Id<"clinics">) {
-    setDraftClinicIds((current) =>
-      current.includes(clinicId) ? current.filter((id) => id !== clinicId) : [...current, clinicId]
-    );
-  }
-
-  function resetClinicAssignment() {
-    setEditingProfileId(null);
-    setDraftClinicIds([]);
-    setAssignmentError(null);
-  }
-
-  function cancelClinicAssignment() {
-    if (isSavingAssignment) return;
-    resetClinicAssignment();
-  }
-
-  async function saveClinicAssignment() {
-    if (editingProfileId === null || isSavingAssignment) return;
-
-    setError(null);
-    setAssignmentError(null);
-    setIsSavingAssignment(true);
-    try {
-      await setAssignedClinics({ profileId: editingProfileId, clinicIds: draftClinicIds });
-      resetClinicAssignment();
-    } catch (cause) {
-      setAssignmentError(localizedError(cause, (t) => t.admin.accounts.failures.assignment));
-    } finally {
-      setIsSavingAssignment(false);
     }
   }
 
@@ -330,10 +253,6 @@ export function AdminAccountsPanel() {
     );
   }
 
-  const editingAccount =
-    editingProfileId !== null
-      ? (managed?.accounts.find((account) => account.profileId === editingProfileId) ?? null)
-      : null;
   const linkAccount =
     linkProfileId !== null
       ? (managed?.accounts.find((account) => account.profileId === linkProfileId) ?? null)
@@ -359,7 +278,7 @@ export function AdminAccountsPanel() {
           </p>
         </div>
 
-        {managed === undefined || clinicDirectory === undefined ? (
+        {managed === undefined ? (
           <Skeleton className="h-64 w-full" />
         ) : (
           <>
@@ -369,7 +288,6 @@ export function AdminAccountsPanel() {
                   <TableRow>
                     <TableHead>{t.admin.accounts.table.account}</TableHead>
                     <TableHead>{t.admin.accounts.table.role}</TableHead>
-                    <TableHead>{t.admin.accounts.table.clinics}</TableHead>
                     <TableHead>{t.admin.accounts.table.password}</TableHead>
                     <TableHead>{t.admin.accounts.table.enabled}</TableHead>
                   </TableRow>
@@ -393,15 +311,6 @@ export function AdminAccountsPanel() {
                         </TableCell>
                         <TableCell>
                           <RoleSelect account={account} disabled={locked} onChange={updateRole} />
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <ClinicAssignment
-                              account={account}
-                              disabled={isPending || isSavingAssignment}
-                              onAssign={startClinicAssignment}
-                            />
-                          </div>
                         </TableCell>
                         <TableCell>
                           <PasswordLink
@@ -442,13 +351,6 @@ export function AdminAccountsPanel() {
                     <DataCardRow label={t.admin.accounts.table.role}>
                       <RoleSelect account={account} disabled={locked} onChange={updateRole} />
                     </DataCardRow>
-                    <DataCardRow label={t.admin.accounts.table.clinics}>
-                      <ClinicAssignment
-                        account={account}
-                        disabled={isPending || isSavingAssignment}
-                        onAssign={startClinicAssignment}
-                      />
-                    </DataCardRow>
                     <DataCardRow label={t.admin.accounts.table.password}>
                       <PasswordLink
                         account={account}
@@ -471,76 +373,6 @@ export function AdminAccountsPanel() {
           </>
         )}
       </section>
-
-      <Dialog
-        open={editingProfileId !== null}
-        onOpenChange={(open, eventDetails) => {
-          if (open) return;
-          // The dialog owns an in-flight mutation. Dismissing it now would drop
-          // the draft and could apply the result to a different profile's dialog.
-          if (isSavingAssignment) {
-            eventDetails.cancel();
-            return;
-          }
-          cancelClinicAssignment();
-        }}
-      >
-        <DialogContent className="sm:max-w-lg" showCloseButton={!isSavingAssignment}>
-          <DialogHeader>
-            <DialogTitle>{t.admin.accounts.assignment.title}</DialogTitle>
-            <DialogDescription>
-              {editingAccount
-                ? t.admin.accounts.assignment.descriptionFor(editingAccount.displayName)
-                : t.admin.accounts.assignment.descriptionGeneric}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="flex max-h-72 flex-col gap-3 overflow-y-auto">
-            {clinicDirectory === undefined ? (
-              <Skeleton className="h-40 w-full" />
-            ) : clinicDirectory.clinics.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                {t.admin.accounts.assignment.noneAvailable}
-              </p>
-            ) : (
-              clinicDirectory.clinics.map((clinic) => (
-                <label
-                  key={clinic.clinicId}
-                  className="flex cursor-pointer items-center gap-2 text-sm has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-50"
-                >
-                  <input
-                    type="checkbox"
-                    checked={draftClinicIds.includes(clinic.clinicId)}
-                    onChange={() => toggleDraftClinic(clinic.clinicId)}
-                    disabled={isSavingAssignment}
-                    className="size-4 accent-primary"
-                  />
-                  <span>
-                    {clinic.name} <span aria-hidden="true">·</span> {clinic.clientName}
-                  </span>
-                </label>
-              ))
-            )}
-          </div>
-          {assignmentError ? (
-            <Alert variant="destructive">
-              <AlertTitle>{t.admin.accounts.assignment.failedTitle}</AlertTitle>
-              <AlertDescription>{assignmentError.resolve(t)}</AlertDescription>
-            </Alert>
-          ) : null}
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={cancelClinicAssignment}
-              disabled={isSavingAssignment}
-            >
-              {t.common.cancel}
-            </Button>
-            <Button onClick={() => void saveClinicAssignment()} disabled={isSavingAssignment}>
-              {t.admin.accounts.assignment.save}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       <Dialog
         open={linkProfileId !== null}

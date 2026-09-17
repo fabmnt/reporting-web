@@ -38,7 +38,7 @@ type ClinicRunConfig = {
   clientId: Id<"clients">;
   name: string;
   googleSheetId: string;
-  externalClinicId: string | null;
+  externalClinicId: string;
   sheetColumns: ResolvedClinicSheetColumns;
   conditions: ReportConditionSet;
 };
@@ -379,7 +379,7 @@ export const runSheetReportConfig = internalQuery({
         clientId: v.id("clients"),
         name: v.string(),
         googleSheetId: v.string(),
-        externalClinicId: v.union(v.string(), v.null()),
+        externalClinicId: v.string(),
         sheetColumns: v.object({
           updateStatus: v.string(),
           uploadStatus: v.string(),

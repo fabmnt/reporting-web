@@ -40,8 +40,6 @@ function renderAppError(payload: AppErrorPayload, t: Messages): string | null {
       return e.PASSWORD_TOO_SHORT;
     case "PASSWORD_SETUP_LINK_INVALID":
       return e.PASSWORD_SETUP_LINK_INVALID;
-    case "SELECTED_CLINIC_NOT_FOUND":
-      return e.SELECTED_CLINIC_NOT_FOUND;
     case "CLIENT_NOT_FOUND":
       return e.CLIENT_NOT_FOUND;
     case "CLIENT_DISABLED":
@@ -70,6 +68,8 @@ function renderAppError(payload: AppErrorPayload, t: Messages): string | null {
       return e.CLINIC_NAME_REQUIRED;
     case "GOOGLE_SHEET_REQUIRED":
       return e.GOOGLE_SHEET_REQUIRED;
+    case "CARRIER_ID_REQUIRED":
+      return e.CARRIER_ID_REQUIRED;
     case "INVALID_DATE_RANGE":
       return e.INVALID_DATE_RANGE;
     case "INVALID_DATE_FORMAT":

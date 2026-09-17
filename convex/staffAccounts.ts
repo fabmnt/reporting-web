@@ -3,6 +3,7 @@ import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
 import { mutation, query } from "./_generated/server";
 import { appError } from "./model/appErrors";
+import { MAX_ASSIGNED_CLINICS, usableClinicIds } from "./model/assignments";
 import { getStaffProfile, requireAdmin, requireCurrentUserId } from "./model/staff";
 import { staffLanguage, staffRole, staffStatus } from "./schema";
 
@@ -27,21 +28,9 @@ const managedAccount = currentAccount.extend({
   assignedClinicIds: v.array(v.id("clinics")),
 });
 
-const MAX_ASSIGNED_CLINICS = 200;
-const MAX_MANAGED_ACCOUNTS = 100;
-
-function cleanAssignedClinicIds(clinicIds: Id<"clinics">[]): Id<"clinics">[] {
-  const seen = new Set<string>();
-  const cleaned: Id<"clinics">[] = [];
-  for (const clinicId of clinicIds) {
-    const key = clinicId as string;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    cleaned.push(clinicId);
-    if (cleaned.length >= MAX_ASSIGNED_CLINICS) break;
-  }
-  return cleaned;
-}
+// Matches the cap the rest of the app reads profiles under, so an account that
+// exists is an account the admin screens can list and assign.
+const MAX_MANAGED_ACCOUNTS = 500;
 
 export const ensureCurrentProfile = mutation({
   args: {},
@@ -220,28 +209,85 @@ export const setStatus = mutation({
   },
 });
 
-export const setAssignedClinics = mutation({
+/**
+ * Adds and removes clinics of one client for one account, so the assignment
+ * screens can work client by client without holding the whole assignment: a
+ * clinic the caller does not mention keeps the state it had, whichever client
+ * it belongs to. A screen that shows part of a client's clinics, or only the
+ * active ones, therefore cannot drop the rest by saving.
+ *
+ * Only an active clinic of that client can be added: the reports skip the rest,
+ * so one could only hold room in the cap. A removal is held to the same client,
+ * so an edit cannot reach the assignments of another one.
+ *
+ * The cap covers the whole assignment, not the client's share, because a report
+ * reads at most that many clinics. A caller that would pass it gets an error
+ * instead of a list that silently drops the clinics at the end.
+ */
+export const setClientAssignment = mutation({
   args: {
     profileId: v.id("staffProfiles"),
-    clinicIds: v.array(v.id("clinics")),
+    clientId: v.id("clients"),
+    addClinicIds: v.array(v.id("clinics")),
+    removeClinicIds: v.array(v.id("clinics")),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
     await requireAdmin(ctx);
+
     const target = await ctx.db.get("staffProfiles", args.profileId);
     if (target === null) {
       throw appError({ code: "PROFILE_NOT_FOUND" });
     }
+    const client = await ctx.db.get("clients", args.clientId);
+    if (client === null) {
+      throw appError({ code: "CLIENT_NOT_FOUND" });
+    }
 
-    const clinicIds = cleanAssignedClinicIds(args.clinicIds);
-    for (const clinicId of clinicIds) {
+    const added: Id<"clinics">[] = [];
+    const seen = new Set<string>();
+    for (const clinicId of args.addClinicIds) {
+      if (seen.has(clinicId)) continue;
+      seen.add(clinicId);
+
       const clinic = await ctx.db.get("clinics", clinicId);
-      if (clinic === null) {
-        throw appError({ code: "SELECTED_CLINIC_NOT_FOUND" });
+      if (clinic === null || clinic.clientId !== args.clientId || !clinic.isActive) {
+        throw appError({ code: "CLINIC_NOT_FOUND" });
+      }
+      added.push(clinicId);
+    }
+
+    const removed = new Set<string>();
+    for (const clinicId of args.removeClinicIds) {
+      const clinic = await ctx.db.get("clinics", clinicId);
+      // A clinic of another client is not this edit's to change, and an id
+      // whose clinic is gone cannot be told apart from one, so neither leaves
+      // the assignment here.
+      if (clinic === null || clinic.clientId !== args.clientId) continue;
+      removed.add(clinicId);
+    }
+
+    let assignedClinicIds = (target.assignedClinicIds ?? []).filter(
+      (clinicId) => !removed.has(clinicId)
+    );
+    for (const clinicId of added) {
+      if (!assignedClinicIds.includes(clinicId)) {
+        assignedClinicIds.push(clinicId);
       }
     }
 
-    await ctx.db.patch("staffProfiles", args.profileId, { assignedClinicIds: clinicIds });
+    if (assignedClinicIds.length > MAX_ASSIGNED_CLINICS) {
+      // A list that only looks full, because it holds clinics that were
+      // disabled or deleted since they were assigned, still takes another
+      // clinic: a report skips those, so the ids that hold no room leave with
+      // the same write instead of blocking the edit.
+      assignedClinicIds = await usableClinicIds(ctx, assignedClinicIds);
+      if (assignedClinicIds.length > MAX_ASSIGNED_CLINICS) {
+        throw appError({ code: "CLINIC_ASSIGNMENT_LIMIT", limit: MAX_ASSIGNED_CLINICS });
+      }
+    }
+
+    await ctx.db.patch(args.profileId, { assignedClinicIds });
     return null;
   },
 });

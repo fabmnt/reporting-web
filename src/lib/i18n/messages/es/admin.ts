@@ -9,19 +9,16 @@ export const admin = {
     table: {
       account: "Cuenta",
       role: "Rol",
-      clinics: "Clínicas",
       password: "Contraseña",
       enabled: "Habilitada",
     },
     roleFor: (name: string) => `Rol de ${name}`,
     statusFor: (name: string) => `Estado de la cuenta de ${name}`,
-    assign: "Asignar",
     enabled: "Habilitada",
     disabled: "Deshabilitada",
     failures: {
       role: "Falló la actualización del rol.",
       status: "Falló la actualización del estado.",
-      assignment: "Falló la asignación de clínicas.",
       passwordLink: "Falló la creación del enlace de contraseña.",
     },
     passwordLink: {
@@ -36,15 +33,6 @@ export const admin = {
       copied: "Copiado",
       failedTitle: "No se pudo crear el enlace",
     },
-    assignment: {
-      title: "Asignar clínicas",
-      descriptionFor: (name: string) =>
-        `${name} ejecuta reportes solo en las clínicas que selecciones.`,
-      descriptionGeneric: "Elige en qué clínicas puede ejecutar reportes esta cuenta.",
-      noneAvailable: "Aún no hay clínicas. Añádelas antes de asignarlas.",
-      failedTitle: "No se pudieron asignar las clínicas",
-      save: "Guardar clínicas",
-    },
   },
   clients: {
     pageTitle: "Clientes",
@@ -52,16 +40,34 @@ export const admin = {
     addClient: "Añadir cliente",
     noClients: "Aún no hay clientes. Crea el primero antes de añadir clínicas.",
     noMatches: "Ningún cliente coincide con estos filtros.",
+    searchIncomplete: "Esta búsqueda puede omitir coincidencias. Acótala para ver el resto.",
     filters: {
       search: "Buscar clientes",
       status: "Filtro de estado",
     },
     table: {
       client: "Cliente",
+      clinics: "Clínicas",
       key: "Clave",
       status: "Estado",
     },
-    limit: (limit: number) => `Mostrando los primeros ${limit} clientes.`,
+    assign: "Asignar",
+    assignDialog: {
+      title: "Asignar clínicas",
+      descriptionFor: (name: string) =>
+        `Elige en qué clínicas de ${name} puede ejecutar reportes esta cuenta.`,
+      user: "Cuenta",
+      chooseUser: "Elige una cuenta",
+      accountLimit: (limit: number) => `Mostrando las primeras ${limit} cuentas.`,
+      search: "Buscar clínicas",
+      selectAll: "Seleccionar todas",
+      selected: (count: number, total: number) => `${count} de ${total} seleccionadas.`,
+      noneAvailable: "Este cliente no tiene clínicas para asignar.",
+      noMatches: "Ninguna clínica coincide con esta búsqueda.",
+      failedTitle: "No se pudieron asignar las clínicas",
+      saveFailed: "No se pudo guardar la asignación.",
+      save: "Guardar",
+    },
     form: {
       editTitle: "Editar cliente",
       createTitle: "Nuevo cliente",
@@ -93,6 +99,7 @@ export const admin = {
     noClinics:
       "Aún no hay clínicas. Crea un cliente en la pestaña Clientes y luego añade la primera clínica.",
     noMatches: "Ninguna clínica coincide con estos filtros.",
+    searchIncomplete: "Esta búsqueda puede omitir coincidencias. Acótala para ver el resto.",
     filters: {
       search: "Buscar clínicas",
       client: "Filtro de cliente",
@@ -105,8 +112,9 @@ export const admin = {
       googleSheet: "Hoja de Google",
       columns: "Columnas",
       status: "Estado",
+      assignedTo: "Asignadas a",
     },
-    limit: (limit: number) => `Mostrando las primeras ${limit} clínicas.`,
+    clientLimit: (limit: number) => `Mostrando los primeros ${limit} clientes.`,
     form: {
       editTitle: "Editar clínica",
       createTitle: "Nueva clínica",
@@ -117,7 +125,7 @@ export const admin = {
       client: "Cliente",
       chooseClient: "Elige un cliente",
       sheetLabel: "URL o ID de la hoja de Google",
-      externalId: "ID externo de la clínica (opcional)",
+      externalId: "ID de la clínica en Control Central",
       active: "Activa",
       inactiveSuffix: "(inactivo)",
       saveFailedTitle: "No se pudo guardar la clínica",
@@ -125,6 +133,7 @@ export const admin = {
       nameRequired: "El nombre de la clínica es obligatorio.",
       invalidSheet: "Pega una URL o un ID de hoja de Google.",
       clientRequired: "Elige un cliente.",
+      externalIdRequired: "El ID de la clínica en Control Central es obligatorio.",
       saveFailed: "No se pudo guardar la clínica.",
     },
     delete: {

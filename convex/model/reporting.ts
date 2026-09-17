@@ -1,6 +1,7 @@
 import type { Id } from "../_generated/dataModel";
 import type { QueryCtx } from "../_generated/server";
 import { appError } from "./appErrors";
+import { MAX_ASSIGNED_CLINICS } from "./assignments";
 import { resolveClinicSheetColumns, type ResolvedClinicSheetColumns } from "./clinicSheetColumns";
 
 export type StaffProfileForReporting = {
@@ -19,7 +20,7 @@ export type ReportingClinicDoc = {
   clientId: Id<"clients">;
   name: string;
   googleSheetId: string;
-  externalClinicId: string | null;
+  externalClinicId: string;
   isActive: boolean;
   sheetColumns: ResolvedClinicSheetColumns;
   qaGroupKeys: string[];
@@ -28,13 +29,14 @@ export type ReportingClinicDoc = {
 type ReportingCtx = QueryCtx;
 
 const MAX_CLIENT_CLINICS = 200;
-const MAX_ASSIGNED_CLINICS = 200;
 
 function toReportingClinic(clinic: {
   _id: Id<"clinics">;
   clientId: Id<"clients">;
   name: string;
   googleSheetId: string;
+  // Optional in the table until the directory import has backfilled every row,
+  // and empty for a clinic that has not been imported yet.
   externalClinicId?: string;
   isActive: boolean;
   sheetColumns?: Parameters<typeof resolveClinicSheetColumns>[0];
@@ -45,7 +47,7 @@ function toReportingClinic(clinic: {
     clientId: clinic.clientId,
     name: clinic.name,
     googleSheetId: clinic.googleSheetId,
-    externalClinicId: clinic.externalClinicId ?? null,
+    externalClinicId: clinic.externalClinicId ?? "",
     isActive: clinic.isActive,
     sheetColumns: resolveClinicSheetColumns(clinic.sheetColumns),
     qaGroupKeys: clinic.qaGroupKeys ?? [],

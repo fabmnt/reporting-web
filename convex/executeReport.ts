@@ -30,7 +30,7 @@ type ExecuteClinic = {
   clientId: Id<"clients">;
   name: string;
   googleSheetId: string;
-  externalClinicId: string | null;
+  externalClinicId: string;
   sheetColumns: ResolvedClinicSheetColumns;
   conditions: ReportConditionSet;
 };
@@ -174,7 +174,10 @@ export async function runExecuteReport(
       sheets.push({ ...clinicEntry, error });
     };
 
-    if (clinic.externalClinicId === null) {
+    // A clinic stored before the directory import ran has no Control Central id
+    // yet, which is the one state the carrier engine cannot read. It goes away
+    // with the import, and with the schema tightening that follows it.
+    if (clinic.externalClinicId === "") {
       failClinic({ code: "SHEET_CARRIER_ID_MISSING" });
       continue;
     }

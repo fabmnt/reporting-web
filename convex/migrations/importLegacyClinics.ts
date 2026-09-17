@@ -2,7 +2,7 @@ import { v } from "convex/values";
 
 import type { Id } from "../_generated/dataModel";
 import { internalMutation } from "../_generated/server";
-import { clientKeyFromName } from "../model/clients";
+import { adjustClientClinicCount, clientKeyFromName } from "../model/clients";
 import { clinicSheetColumns } from "../model/clinicSheetColumns";
 
 const MAX_CLIENTS = 200;
@@ -48,6 +48,12 @@ export const applyLegacyClinics = internalMutation({
 
     const createdClientKeys = new Set<string>();
     const reusedClientKeys = new Set<string>();
+    // What each client's stored clinic count gains or loses in this run. A dry
+    // run writes neither the clinics nor the counts.
+    const countDeltas = new Map<Id<"clients">, number>();
+    const bumpCount = (clientId: Id<"clients">, delta: number) => {
+      countDeltas.set(clientId, (countDeltas.get(clientId) ?? 0) + delta);
+    };
     let created = 0;
     let updated = 0;
     let skipped = 0;
@@ -59,10 +65,18 @@ export const applyLegacyClinics = internalMutation({
       const clientKey = clientKeyFromName(clientName);
       const name = entry.name.trim();
       const googleSheetId = entry.googleSheetId.trim();
-      if (clientName === "" || clientKey === "" || name === "" || googleSheetId === "") {
+      // A clinic row needs the Control Central id the carrier API is read with,
+      // so entries whose legacy config carried no CLINIC_ID are skipped.
+      const externalClinicId = entry.externalClinicId?.trim() ?? "";
+      if (
+        clientName === "" ||
+        clientKey === "" ||
+        name === "" ||
+        googleSheetId === "" ||
+        externalClinicId === ""
+      ) {
         continue;
       }
-      const externalClinicId = entry.externalClinicId?.trim() || undefined;
       const nextQaGroupKeys = entry.qaGroupKeys ?? [];
 
       let clientId =
@@ -111,6 +125,7 @@ export const applyLegacyClinics = internalMutation({
               sheetColumns: entry.sheetColumns,
               qaGroupKeys: nextQaGroupKeys,
             });
+            bumpCount(clientId, 1);
           }
         }
         created += 1;
@@ -124,7 +139,7 @@ export const applyLegacyClinics = internalMutation({
         JSON.stringify(clinic.qaGroupKeys ?? []) === JSON.stringify(nextQaGroupKeys);
       const nameUnchanged = clinic.name === name;
       const activeUnchanged = clinic.isActive === entry.isActive;
-      const externalIdUnchanged = (clinic.externalClinicId ?? undefined) === externalClinicId;
+      const externalIdUnchanged = clinic.externalClinicId === externalClinicId;
 
       if (
         !willMove &&
@@ -160,11 +175,19 @@ export const applyLegacyClinics = internalMutation({
           sheetColumns: entry.sheetColumns,
           qaGroupKeys: nextQaGroupKeys,
         });
+        if (willMove) {
+          bumpCount(clinic.clientId, -1);
+          bumpCount(clientId, 1);
+        }
       }
       if (willMove) {
         moved += 1;
       }
       updated += 1;
+    }
+
+    for (const [clientId, delta] of countDeltas) {
+      await adjustClientClinicCount(ctx, clientId, delta);
     }
 
     return {

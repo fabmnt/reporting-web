@@ -160,9 +160,7 @@ function AvailableClinicRow({
       <div className="flex min-w-0 flex-col">
         <span className="text-sm">{clinic.name}</span>
         <span className="text-xs text-muted-foreground">
-          {clinic.externalClinicId
-            ? `${clinic.clientName} · ${t.clinics.externalId(clinic.externalClinicId)}`
-            : clinic.clientName}
+          {`${clinic.clientName} · ${t.clinics.externalId(clinic.externalClinicId)}`}
         </span>
       </div>
       <Button
@@ -395,11 +393,9 @@ export function AssignedClinicsPanel() {
                       <TableCell>
                         <div className="flex flex-col gap-1">
                           <span>{clinic.name}</span>
-                          {clinic.externalClinicId ? (
-                            <span className="text-xs text-muted-foreground">
-                              {t.clinics.externalId(clinic.externalClinicId)}
-                            </span>
-                          ) : null}
+                          <span className="text-xs text-muted-foreground">
+                            {t.clinics.externalId(clinic.externalClinicId)}
+                          </span>
                         </div>
                       </TableCell>
                       <TableCell>{clinic.clientName}</TableCell>
@@ -440,11 +436,7 @@ export function AssignedClinicsPanel() {
               <DataCard
                 key={clinic.clinicId}
                 title={clinic.name}
-                subtitle={
-                  clinic.externalClinicId
-                    ? t.clinics.externalId(clinic.externalClinicId)
-                    : undefined
-                }
+                subtitle={t.clinics.externalId(clinic.externalClinicId)}
               >
                 <DataCardRow label={t.clinics.table.client}>
                   <TruncatedText>{clinic.clientName}</TruncatedText>
