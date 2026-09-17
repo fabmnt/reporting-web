@@ -1,9 +1,10 @@
 import { v } from "convex/values";
 
 import type { Id } from "./_generated/dataModel";
+import type { MutationCtx } from "./_generated/server";
 import { mutation, query } from "./_generated/server";
 import { appError } from "./model/appErrors";
-import { MAX_ASSIGNED_CLINICS, usableClinicIds } from "./model/assignments";
+import { resolveAssignedClinicIds } from "./model/assignments";
 import { getStaffProfile, requireAdmin, requireCurrentUserId } from "./model/staff";
 import { staffLanguage, staffRole, staffStatus } from "./schema";
 
@@ -209,6 +210,15 @@ export const setStatus = mutation({
   },
 });
 
+/** The account a change is about, or the error that says it is missing. */
+async function requireAssignableProfile(ctx: MutationCtx, profileId: Id<"staffProfiles">) {
+  const target = await ctx.db.get("staffProfiles", profileId);
+  if (target === null) {
+    throw appError({ code: "PROFILE_NOT_FOUND" });
+  }
+  return target;
+}
+
 /**
  * Adds and removes clinics of one client for one account, so the assignment
  * screens can work client by client without holding the whole assignment: a
@@ -216,13 +226,8 @@ export const setStatus = mutation({
  * it belongs to. A screen that shows part of a client's clinics, or only the
  * active ones, therefore cannot drop the rest by saving.
  *
- * Only an active clinic of that client can be added: the reports skip the rest,
- * so one could only hold room in the cap. A removal is held to the same client,
- * so an edit cannot reach the assignments of another one.
- *
- * The cap covers the whole assignment, not the client's share, because a report
- * reads at most that many clinics. A caller that would pass it gets an error
- * instead of a list that silently drops the clinics at the end.
+ * Only an active clinic of that client can be added, and a removal is held to
+ * the same client, so an edit cannot reach the assignments of another one.
  */
 export const setClientAssignment = mutation({
   args: {
@@ -235,57 +240,49 @@ export const setClientAssignment = mutation({
   handler: async (ctx, args) => {
     await requireAdmin(ctx);
 
-    const target = await ctx.db.get("staffProfiles", args.profileId);
-    if (target === null) {
-      throw appError({ code: "PROFILE_NOT_FOUND" });
-    }
+    const target = await requireAssignableProfile(ctx, args.profileId);
     const client = await ctx.db.get("clients", args.clientId);
     if (client === null) {
       throw appError({ code: "CLIENT_NOT_FOUND" });
     }
 
-    const added: Id<"clinics">[] = [];
-    const seen = new Set<string>();
-    for (const clinicId of args.addClinicIds) {
-      if (seen.has(clinicId)) continue;
-      seen.add(clinicId);
+    const assignedClinicIds = await resolveAssignedClinicIds(ctx, target.assignedClinicIds ?? [], {
+      clientId: args.clientId,
+      addClinicIds: args.addClinicIds,
+      removeClinicIds: args.removeClinicIds,
+    });
 
-      const clinic = await ctx.db.get("clinics", clinicId);
-      if (clinic === null || clinic.clientId !== args.clientId || !clinic.isActive) {
-        throw appError({ code: "CLINIC_NOT_FOUND" });
-      }
-      added.push(clinicId);
-    }
+    await ctx.db.patch(args.profileId, { assignedClinicIds });
+    return null;
+  },
+});
 
-    const removed = new Set<string>();
-    for (const clinicId of args.removeClinicIds) {
-      const clinic = await ctx.db.get("clinics", clinicId);
-      // A clinic of another client is not this edit's to change, and an id
-      // whose clinic is gone cannot be told apart from one, so neither leaves
-      // the assignment here.
-      if (clinic === null || clinic.clientId !== args.clientId) continue;
-      removed.add(clinicId);
-    }
+/**
+ * Adds and removes clinics for one account across every client, so the accounts
+ * screen can change a whole assignment in one write: that screen shows all of
+ * the account's clinics at once, and a save that landed client by client would
+ * leave half of the ticks applied when one of them failed.
+ *
+ * As in the client-scoped edit, a clinic the caller does not mention keeps the
+ * state it had, so a clinic the screen cannot show or tick is never dropped by
+ * saving. A removal that names a clinic which no longer exists still leaves the
+ * assignment: that id is a leftover nothing can be said about.
+ */
+export const setAssignments = mutation({
+  args: {
+    profileId: v.id("staffProfiles"),
+    addClinicIds: v.array(v.id("clinics")),
+    removeClinicIds: v.array(v.id("clinics")),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await requireAdmin(ctx);
 
-    let assignedClinicIds = (target.assignedClinicIds ?? []).filter(
-      (clinicId) => !removed.has(clinicId)
-    );
-    for (const clinicId of added) {
-      if (!assignedClinicIds.includes(clinicId)) {
-        assignedClinicIds.push(clinicId);
-      }
-    }
-
-    if (assignedClinicIds.length > MAX_ASSIGNED_CLINICS) {
-      // A list that only looks full, because it holds clinics that were
-      // disabled or deleted since they were assigned, still takes another
-      // clinic: a report skips those, so the ids that hold no room leave with
-      // the same write instead of blocking the edit.
-      assignedClinicIds = await usableClinicIds(ctx, assignedClinicIds);
-      if (assignedClinicIds.length > MAX_ASSIGNED_CLINICS) {
-        throw appError({ code: "CLINIC_ASSIGNMENT_LIMIT", limit: MAX_ASSIGNED_CLINICS });
-      }
-    }
+    const target = await requireAssignableProfile(ctx, args.profileId);
+    const assignedClinicIds = await resolveAssignedClinicIds(ctx, target.assignedClinicIds ?? [], {
+      addClinicIds: args.addClinicIds,
+      removeClinicIds: args.removeClinicIds,
+    });
 
     await ctx.db.patch(args.profileId, { assignedClinicIds });
     return null;

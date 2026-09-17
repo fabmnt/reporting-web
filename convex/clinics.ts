@@ -686,10 +686,74 @@ export const listByClient = query({
   },
 });
 
+// What the accounts screen needs of a clinic: enough to tell it apart inside
+// its client and to say whether it can still be assigned.
+const directoryClinicView = v.object({
+  clinicId: v.id("clinics"),
+  name: v.string(),
+  isActive: v.boolean(),
+});
+
+// The same, under the client that owns it, so a screen can group the
+// directory by client.
+const clientDirectoryView = v.object({
+  clientId: v.id("clients"),
+  name: v.string(),
+  isActive: v.boolean(),
+  clinics: v.array(directoryClinicView),
+});
+
 /**
- * The clinics the caller may still add to their own assignment: every active
- * clinic that is not already assigned to them.
+ * The clinic directory grouped by client, in client name order and, inside a
+ * client, in clinic name order. The accounts screen changes the assignment of
+ * one account across every client at once, so it reads them together instead of
+ * calling `listByClient` once per client.
+ *
+ * A client that owns no clinic is left out, because there is nothing to assign
+ * from it. A client that no longer exists takes its clinics with it: an
+ * assignment to them could not be shown anywhere.
  */
+export const listDirectoryByClient = query({
+  args: {},
+  returns: v.object({
+    clients: v.array(clientDirectoryView),
+    limit: v.number(),
+    hasMore: v.boolean(),
+  }),
+  handler: async (ctx) => {
+    await requireAdmin(ctx);
+
+    const rows = await ctx.db
+      .query("clinics")
+      .withIndex("by_clientId_and_name")
+      .take(MAX_CLINICS + 1);
+
+    const clinicsByClient = new Map<Id<"clients">, Infer<typeof directoryClinicView>[]>();
+    for (const clinic of rows.slice(0, MAX_CLINICS)) {
+      const clinicView = {
+        clinicId: clinic._id,
+        name: clinic.name,
+        isActive: clinic.isActive,
+      };
+      const clinics = clinicsByClient.get(clinic.clientId);
+      if (clinics === undefined) {
+        clinicsByClient.set(clinic.clientId, [clinicView]);
+      } else {
+        clinics.push(clinicView);
+      }
+    }
+
+    const clients: Infer<typeof clientDirectoryView>[] = [];
+    for (const [clientId, clinics] of clinicsByClient) {
+      const client = await ctx.db.get("clients", clientId);
+      if (client === null) continue;
+      clients.push({ clientId, name: client.name, isActive: client.isActive, clinics });
+    }
+    clients.sort((a, b) => a.name.localeCompare(b.name));
+
+    return { clients, limit: MAX_CLINICS, hasMore: rows.length > MAX_CLINICS };
+  },
+});
 export const listAvailable = query({
   args: {},
   returns: v.object({

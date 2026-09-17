@@ -4,6 +4,7 @@ import { useId, useState } from "react";
 
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
+import { AccountAssignmentsDialog } from "@/components/admin/AccountAssignmentsDialog";
 import { AdminTabs } from "@/components/app/AdminTabs";
 import { DataCard, DataCardList, DataCardRow, DataTableFrame } from "@/components/app/DataCard";
 import { PageHeader } from "@/components/app/PageHeader";
@@ -87,25 +88,21 @@ function RoleSelect({
   );
 }
 
-function PasswordLink({
-  account,
+/** A row action that opens a dialog for one account. */
+function AccountDialogButton({
+  label,
+  profileId,
   disabled,
   onOpen,
 }: {
-  account: ManagedAccountView;
+  label: string;
+  profileId: Id<"staffProfiles">;
   disabled: boolean;
   onOpen: (profileId: Id<"staffProfiles">) => void;
 }) {
-  const { t } = useI18n();
-
   return (
-    <Button
-      variant="outline"
-      size="sm"
-      disabled={disabled}
-      onClick={() => onOpen(account.profileId)}
-    >
-      {t.admin.accounts.passwordLink.action}
+    <Button variant="outline" size="sm" disabled={disabled} onClick={() => onOpen(profileId)}>
+      {label}
     </Button>
   );
 }
@@ -158,6 +155,7 @@ export function AdminAccountsPanel() {
   const [pendingProfileId, setPendingProfileId] = useState<Id<"staffProfiles"> | null>(null);
   const [error, setError] = useState<LocalizedMessage | null>(null);
   const [linkProfileId, setLinkProfileId] = useState<Id<"staffProfiles"> | null>(null);
+  const [assignProfileId, setAssignProfileId] = useState<Id<"staffProfiles"> | null>(null);
   const [generatedLink, setGeneratedLink] = useState<string | null>(null);
   const [linkError, setLinkError] = useState<LocalizedMessage | null>(null);
   const [isCreatingLink, setIsCreatingLink] = useState(false);
@@ -257,6 +255,10 @@ export function AdminAccountsPanel() {
     linkProfileId !== null
       ? (managed?.accounts.find((account) => account.profileId === linkProfileId) ?? null)
       : null;
+  const assignAccount =
+    assignProfileId !== null
+      ? (managed?.accounts.find((account) => account.profileId === assignProfileId) ?? null)
+      : null;
 
   return (
     <div className="flex flex-col gap-6">
@@ -289,6 +291,7 @@ export function AdminAccountsPanel() {
                     <TableHead>{t.admin.accounts.table.account}</TableHead>
                     <TableHead>{t.admin.accounts.table.role}</TableHead>
                     <TableHead>{t.admin.accounts.table.password}</TableHead>
+                    <TableHead>{t.admin.accounts.table.assignments}</TableHead>
                     <TableHead>{t.admin.accounts.table.enabled}</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -313,10 +316,19 @@ export function AdminAccountsPanel() {
                           <RoleSelect account={account} disabled={locked} onChange={updateRole} />
                         </TableCell>
                         <TableCell>
-                          <PasswordLink
-                            account={account}
+                          <AccountDialogButton
+                            label={t.admin.accounts.passwordLink.action}
+                            profileId={account.profileId}
                             disabled={isPending}
                             onOpen={openPasswordLink}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <AccountDialogButton
+                            label={t.admin.accounts.assignments.action}
+                            profileId={account.profileId}
+                            disabled={isPending}
+                            onOpen={setAssignProfileId}
                           />
                         </TableCell>
                         <TableCell>
@@ -352,10 +364,19 @@ export function AdminAccountsPanel() {
                       <RoleSelect account={account} disabled={locked} onChange={updateRole} />
                     </DataCardRow>
                     <DataCardRow label={t.admin.accounts.table.password}>
-                      <PasswordLink
-                        account={account}
+                      <AccountDialogButton
+                        label={t.admin.accounts.passwordLink.action}
+                        profileId={account.profileId}
                         disabled={isPending}
                         onOpen={openPasswordLink}
+                      />
+                    </DataCardRow>
+                    <DataCardRow label={t.admin.accounts.table.assignments}>
+                      <AccountDialogButton
+                        label={t.admin.accounts.assignments.action}
+                        profileId={account.profileId}
+                        disabled={isPending}
+                        onOpen={setAssignProfileId}
                       />
                     </DataCardRow>
                     <DataCardRow label={t.admin.accounts.table.enabled}>
@@ -431,6 +452,16 @@ export function AdminAccountsPanel() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {assignAccount === null ? null : (
+        // Keyed by account so every open starts from the assignment the row
+        // holds and no cancelled draft leaks into the next one.
+        <AccountAssignmentsDialog
+          key={assignAccount.profileId}
+          account={assignAccount}
+          onClose={() => setAssignProfileId(null)}
+        />
+      )}
     </div>
   );
 }
