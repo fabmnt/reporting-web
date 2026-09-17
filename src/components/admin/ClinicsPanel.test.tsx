@@ -34,7 +34,7 @@ const CLINICS = [
     clinicId: "clinic-1",
     name: "Downtown",
     googleSheetId: "sheet-1",
-    externalClinicId: null,
+    externalClinicId: "400",
     isActive: true,
     clientId: "client-1",
     clientName: "Smilist",

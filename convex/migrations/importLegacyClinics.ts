@@ -59,10 +59,18 @@ export const applyLegacyClinics = internalMutation({
       const clientKey = clientKeyFromName(clientName);
       const name = entry.name.trim();
       const googleSheetId = entry.googleSheetId.trim();
-      if (clientName === "" || clientKey === "" || name === "" || googleSheetId === "") {
+      // A clinic row needs the Control Central id the carrier API is read with,
+      // so entries whose legacy config carried no CLINIC_ID are skipped.
+      const externalClinicId = entry.externalClinicId?.trim() ?? "";
+      if (
+        clientName === "" ||
+        clientKey === "" ||
+        name === "" ||
+        googleSheetId === "" ||
+        externalClinicId === ""
+      ) {
         continue;
       }
-      const externalClinicId = entry.externalClinicId?.trim() || undefined;
       const nextQaGroupKeys = entry.qaGroupKeys ?? [];
 
       let clientId =
@@ -124,7 +132,7 @@ export const applyLegacyClinics = internalMutation({
         JSON.stringify(clinic.qaGroupKeys ?? []) === JSON.stringify(nextQaGroupKeys);
       const nameUnchanged = clinic.name === name;
       const activeUnchanged = clinic.isActive === entry.isActive;
-      const externalIdUnchanged = (clinic.externalClinicId ?? undefined) === externalClinicId;
+      const externalIdUnchanged = clinic.externalClinicId === externalClinicId;
 
       if (
         !willMove &&

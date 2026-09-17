@@ -49,7 +49,9 @@ export default defineSchema({
   }).index("by_key", ["key"]),
 
   clinics: defineTable({
-    externalClinicId: v.optional(v.string()),
+    // Every clinic comes from the Control Central directory, which is the only
+    // way to reach the carrier API for a clinic's bots.
+    externalClinicId: v.string(),
     clientId: v.id("clients"),
     name: v.string(),
     googleSheetId: v.string(),

@@ -34,6 +34,7 @@ export const errors = {
   CLIENT_NAME_REQUIRED: "El nombre del cliente es obligatorio.",
   CLINIC_NAME_REQUIRED: "El nombre de la clínica es obligatorio.",
   GOOGLE_SHEET_REQUIRED: "El ID de la hoja de Google es obligatorio.",
+  CARRIER_ID_REQUIRED: "El ID de la clínica en Control Central es obligatorio.",
   INVALID_DATE_RANGE: "La fecha de inicio debe ser anterior o igual a la fecha de fin.",
   INVALID_DATE_FORMAT: "Las fechas deben usar el formato AAAA-MM-DD.",
   REPORT_TYPE_NAME_TAKEN: (name: string) => `Ya existe un tipo de reporte llamado "${name}".`,
@@ -52,8 +53,6 @@ export const errors = {
   CARRIER_SIGN_IN_REJECTED:
     "La API de carriers rechazó las credenciales de la aplicación. Pide a un administrador que las revise.",
   CARRIER_API_UNAVAILABLE: "La API de carriers no respondió. Inténtalo de nuevo en un momento.",
-  SHEET_CARRIER_ID_MISSING:
-    "Esta clínica no tiene id de Control Central, así que no se pueden leer sus carriers.",
   SHEET_CARRIER_ACCESS_DENIED: "La API de carriers no da acceso a la aplicación a esta clínica.",
   SHEET_CARRIER_CLINIC_UNKNOWN: "La API de carriers no conoce esta clínica.",
   SHEET_CARRIER_UNAVAILABLE:

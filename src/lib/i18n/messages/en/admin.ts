@@ -122,6 +122,7 @@ export const admin = {
       nameRequired: "Clinic name is required.",
       invalidSheet: "Paste a Google Sheet URL or ID.",
       clientRequired: "Choose a client.",
+      externalIdRequired: "Control Central clinic ID is required.",
       saveFailed: "Saving the clinic failed.",
     },
     delete: {

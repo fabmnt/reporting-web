@@ -19,7 +19,7 @@ export type ReportingClinicDoc = {
   clientId: Id<"clients">;
   name: string;
   googleSheetId: string;
-  externalClinicId: string | null;
+  externalClinicId: string;
   isActive: boolean;
   sheetColumns: ResolvedClinicSheetColumns;
   qaGroupKeys: string[];
@@ -35,7 +35,7 @@ function toReportingClinic(clinic: {
   clientId: Id<"clients">;
   name: string;
   googleSheetId: string;
-  externalClinicId?: string;
+  externalClinicId: string;
   isActive: boolean;
   sheetColumns?: Parameters<typeof resolveClinicSheetColumns>[0];
   qaGroupKeys?: string[];
@@ -45,7 +45,7 @@ function toReportingClinic(clinic: {
     clientId: clinic.clientId,
     name: clinic.name,
     googleSheetId: clinic.googleSheetId,
-    externalClinicId: clinic.externalClinicId ?? null,
+    externalClinicId: clinic.externalClinicId,
     isActive: clinic.isActive,
     sheetColumns: resolveClinicSheetColumns(clinic.sheetColumns),
     qaGroupKeys: clinic.qaGroupKeys ?? [],

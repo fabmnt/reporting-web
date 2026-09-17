@@ -163,6 +163,10 @@ function ClinicForm({
       setValidationError(localizedMessage((t) => t.admin.clinics.form.clientRequired));
       return;
     }
+    if (values.externalClinicId.trim() === "") {
+      setValidationError(localizedMessage((t) => t.admin.clinics.form.externalIdRequired));
+      return;
+    }
 
     await onSubmit({ ...values, name, sheetInput: googleSheetId });
   }
@@ -333,12 +337,9 @@ export function AdminClinicsPanel() {
       if (clientFilter !== ALL_CLIENTS && clinic.clientId !== clientFilter) return false;
       if (!matchesStatusFilter(clinic.isActive, statusFilter)) return false;
       if (needle === "") return true;
-      return [
-        clinic.name,
-        clinic.clientName,
-        clinic.externalClinicId ?? "",
-        clinic.googleSheetId,
-      ].some((value) => value.toLowerCase().includes(needle));
+      return [clinic.name, clinic.clientName, clinic.externalClinicId, clinic.googleSheetId].some(
+        (value) => value.toLowerCase().includes(needle)
+      );
     });
   }, [clinics, search, clientFilter, statusFilter]);
   const clinicPage = tablePage(filteredClinics, page);
@@ -375,7 +376,7 @@ export function AdminClinicsPanel() {
           name: values.name,
           googleSheetId: values.sheetInput,
           clientId,
-          externalClinicId: values.externalClinicId === "" ? null : values.externalClinicId,
+          externalClinicId: values.externalClinicId.trim(),
           isActive: values.isActive,
           sheetColumns,
         });
@@ -384,7 +385,7 @@ export function AdminClinicsPanel() {
           name: values.name,
           googleSheetId: values.sheetInput,
           clientId,
-          externalClinicId: values.externalClinicId === "" ? undefined : values.externalClinicId,
+          externalClinicId: values.externalClinicId.trim(),
           isActive: values.isActive,
           sheetColumns,
         });
@@ -455,7 +456,7 @@ export function AdminClinicsPanel() {
           name: editingClinic.name,
           sheetInput: editingClinic.googleSheetId,
           clientId: editingClinic.clientId,
-          externalClinicId: editingClinic.externalClinicId ?? "",
+          externalClinicId: editingClinic.externalClinicId,
           isActive: editingClinic.isActive,
           sheetColumns: sheetColumnsToFormValues(editingClinic.sheetColumns),
         }
@@ -548,11 +549,9 @@ export function AdminClinicsPanel() {
                         <TableCell>
                           <div className="flex flex-col gap-1">
                             <span>{clinic.name}</span>
-                            {clinic.externalClinicId ? (
-                              <span className="text-xs text-muted-foreground">
-                                {t.clinics.externalId(clinic.externalClinicId)}
-                              </span>
-                            ) : null}
+                            <span className="text-xs text-muted-foreground">
+                              {t.clinics.externalId(clinic.externalClinicId)}
+                            </span>
                           </div>
                         </TableCell>
                         <TableCell>{clinic.clientName}</TableCell>
@@ -590,11 +589,7 @@ export function AdminClinicsPanel() {
                 <DataCard
                   key={clinic.clinicId}
                   title={clinic.name}
-                  subtitle={
-                    clinic.externalClinicId
-                      ? t.clinics.externalId(clinic.externalClinicId)
-                      : undefined
-                  }
+                  subtitle={t.clinics.externalId(clinic.externalClinicId)}
                   badge={
                     <Badge variant={clinic.isActive ? "secondary" : "outline"}>
                       {clinic.isActive ? t.common.active : t.common.inactive}

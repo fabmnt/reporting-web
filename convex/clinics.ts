@@ -9,8 +9,11 @@ import { clinicSheetColumns } from "./model/clinicSheetColumns";
 import { listProfileClinics } from "./model/reporting";
 import { requireAdmin, requireOperator } from "./model/staff";
 
-const MAX_CLINICS = 500;
-const MAX_CLIENTS = 200;
+// The Control Central directory is the whole set of clients and clinics the
+// reports can reach, and it is larger than the cap these lists started with:
+// the lists truncate in silence, so the cap has to sit above it.
+const MAX_CLINICS = 2000;
+const MAX_CLIENTS = 500;
 const MAX_STAFF_PROFILES = 500;
 // Mirrors the cap the assignment mutations and the report scope use, so a
 // self-service assignment cannot grow past what the reports can read.
@@ -31,7 +34,7 @@ const clinicView = v.object({
   clinicId: v.id("clinics"),
   name: v.string(),
   googleSheetId: v.string(),
-  externalClinicId: v.union(v.string(), v.null()),
+  externalClinicId: v.string(),
   isActive: v.boolean(),
   clientId: v.id("clients"),
   clientName: v.string(),
@@ -43,7 +46,7 @@ const assignedClinicView = v.object({
   clinicId: v.id("clinics"),
   name: v.string(),
   googleSheetId: v.string(),
-  externalClinicId: v.union(v.string(), v.null()),
+  externalClinicId: v.string(),
   clientName: v.string(),
   sheetColumns: clinicSheetColumns,
 });
@@ -52,7 +55,7 @@ const assignedClinicView = v.object({
 const clinicChoiceView = v.object({
   clinicId: v.id("clinics"),
   name: v.string(),
-  externalClinicId: v.union(v.string(), v.null()),
+  externalClinicId: v.string(),
   clientName: v.string(),
 });
 
@@ -346,7 +349,7 @@ export const list = query({
       clinicId: row._id,
       name: row.name,
       googleSheetId: row.googleSheetId,
-      externalClinicId: row.externalClinicId ?? null,
+      externalClinicId: row.externalClinicId,
       isActive: row.isActive,
       clientId: row.clientId,
       clientName: row.clientName,
@@ -387,7 +390,7 @@ export const listAvailable = query({
       .map((row) => ({
         clinicId: row._id,
         name: row.name,
-        externalClinicId: row.externalClinicId ?? null,
+        externalClinicId: row.externalClinicId,
         clientName: row.clientName,
       }))
       .sort((a, b) => a.clientName.localeCompare(b.clientName) || a.name.localeCompare(b.name));
@@ -418,7 +421,7 @@ export const listAssigned = query({
         clinicId: clinic._id,
         name: clinic.name,
         googleSheetId: clinic.googleSheetId,
-        externalClinicId: row?.externalClinicId ?? null,
+        externalClinicId: clinic.externalClinicId,
         clientName: clinic.clientName,
         sheetColumns: row?.sheetColumns ?? {},
       });
@@ -512,7 +515,7 @@ export const updateAssigned = mutation({
 export const create = mutation({
   args: {
     ...clinicInputFields,
-    externalClinicId: v.optional(v.string()),
+    externalClinicId: v.string(),
     isActive: v.optional(v.boolean()),
     sheetColumns: v.optional(clinicSheetColumns),
     qaGroupKeys: v.optional(v.array(v.string())),
@@ -523,6 +526,9 @@ export const create = mutation({
 
     const name = cleanRequiredText(args.name, { code: "CLINIC_NAME_REQUIRED" });
     const googleSheetId = cleanRequiredText(args.googleSheetId, { code: "GOOGLE_SHEET_REQUIRED" });
+    const externalClinicId = cleanRequiredText(args.externalClinicId, {
+      code: "CARRIER_ID_REQUIRED",
+    });
     await requireClient(ctx, args.clientId);
     await assertGoogleSheetIdAvailable(ctx, googleSheetId);
     await assertClinicNameAvailable(ctx, args.clientId, name);
@@ -531,7 +537,7 @@ export const create = mutation({
       name,
       googleSheetId,
       clientId: args.clientId,
-      externalClinicId: args.externalClinicId?.trim() || undefined,
+      externalClinicId,
       isActive: args.isActive ?? true,
       sheetColumns: args.sheetColumns ?? {},
       qaGroupKeys: cleanQaGroupKeys(args.qaGroupKeys ?? []),
@@ -545,7 +551,7 @@ export const update = mutation({
   args: {
     clinicId: v.id("clinics"),
     ...clinicInputFields,
-    externalClinicId: v.union(v.string(), v.null()),
+    externalClinicId: v.string(),
     isActive: v.boolean(),
     sheetColumns: v.optional(clinicSheetColumns),
     qaGroupKeys: v.optional(v.array(v.string())),
@@ -561,6 +567,9 @@ export const update = mutation({
 
     const name = cleanRequiredText(args.name, { code: "CLINIC_NAME_REQUIRED" });
     const googleSheetId = cleanRequiredText(args.googleSheetId, { code: "GOOGLE_SHEET_REQUIRED" });
+    const externalClinicId = cleanRequiredText(args.externalClinicId, {
+      code: "CARRIER_ID_REQUIRED",
+    });
     await requireClient(ctx, args.clientId);
     await assertGoogleSheetIdAvailable(ctx, googleSheetId, args.clinicId);
     await assertClinicNameAvailable(ctx, args.clientId, name, args.clinicId);
@@ -570,7 +579,7 @@ export const update = mutation({
       googleSheetId,
       clientId: args.clientId,
       isActive: args.isActive,
-      externalClinicId: args.externalClinicId?.trim() || undefined,
+      externalClinicId,
       sheetColumns: args.sheetColumns ?? clinic.sheetColumns ?? {},
       qaGroupKeys:
         args.qaGroupKeys !== undefined

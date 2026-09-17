@@ -30,7 +30,7 @@ type ExecuteClinic = {
   clientId: Id<"clients">;
   name: string;
   googleSheetId: string;
-  externalClinicId: string | null;
+  externalClinicId: string;
   sheetColumns: ResolvedClinicSheetColumns;
   conditions: ReportConditionSet;
 };
@@ -173,11 +173,6 @@ export async function runExecuteReport(
       failedClinics += 1;
       sheets.push({ ...clinicEntry, error });
     };
-
-    if (clinic.externalClinicId === null) {
-      failClinic({ code: "SHEET_CARRIER_ID_MISSING" });
-      continue;
-    }
 
     let botsResult = await fetchClinicBots(clinic.externalClinicId, token, deadlineMs);
     if (!botsResult.ok && botsResult.failure === "unauthorized") {

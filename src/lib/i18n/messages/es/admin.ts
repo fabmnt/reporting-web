@@ -125,6 +125,7 @@ export const admin = {
       nameRequired: "El nombre de la clínica es obligatorio.",
       invalidSheet: "Pega una URL o un ID de hoja de Google.",
       clientRequired: "Elige un cliente.",
+      externalIdRequired: "El ID de la clínica en Control Central es obligatorio.",
       saveFailed: "No se pudo guardar la clínica.",
     },
     delete: {

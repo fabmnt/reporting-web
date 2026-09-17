@@ -70,6 +70,8 @@ function renderAppError(payload: AppErrorPayload, t: Messages): string | null {
       return e.CLINIC_NAME_REQUIRED;
     case "GOOGLE_SHEET_REQUIRED":
       return e.GOOGLE_SHEET_REQUIRED;
+    case "CARRIER_ID_REQUIRED":
+      return e.CARRIER_ID_REQUIRED;
     case "INVALID_DATE_RANGE":
       return e.INVALID_DATE_RANGE;
     case "INVALID_DATE_FORMAT":
@@ -136,8 +138,6 @@ export function sheetErrorText(error: ReportSheetError, t: Messages): string {
       return t.errors.SHEET_INVALID_COLUMN(error.column);
     case "SHEET_RATE_LIMITED":
       return t.errors.SHEET_RATE_LIMITED;
-    case "SHEET_CARRIER_ID_MISSING":
-      return t.errors.SHEET_CARRIER_ID_MISSING;
     case "SHEET_CARRIER_ACCESS_DENIED":
       return t.errors.SHEET_CARRIER_ACCESS_DENIED;
     case "SHEET_CARRIER_CLINIC_UNKNOWN":

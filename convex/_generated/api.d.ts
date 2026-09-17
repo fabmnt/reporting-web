@@ -17,6 +17,7 @@ import type * as googleSheets from "../googleSheets.js";
 import type * as http from "../http.js";
 import type * as migrations_dataCleanup from "../migrations/dataCleanup.js";
 import type * as migrations_executeReportConditions from "../migrations/executeReportConditions.js";
+import type * as migrations_importCccDirectory from "../migrations/importCccDirectory.js";
 import type * as migrations_importLegacyClinics from "../migrations/importLegacyClinics.js";
 import type * as migrations_importLegacyStaff from "../migrations/importLegacyStaff.js";
 import type * as migrations_renameStaffAccount from "../migrations/renameStaffAccount.js";
@@ -58,6 +59,7 @@ declare const fullApi: ApiFromModules<{
   http: typeof http;
   "migrations/dataCleanup": typeof migrations_dataCleanup;
   "migrations/executeReportConditions": typeof migrations_executeReportConditions;
+  "migrations/importCccDirectory": typeof migrations_importCccDirectory;
   "migrations/importLegacyClinics": typeof migrations_importLegacyClinics;
   "migrations/importLegacyStaff": typeof migrations_importLegacyStaff;
   "migrations/renameStaffAccount": typeof migrations_renameStaffAccount;
