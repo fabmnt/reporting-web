@@ -27,6 +27,7 @@ import type * as migrations_reportTypesSeed from "../migrations/reportTypesSeed.
 import type * as model_appErrors from "../model/appErrors.js";
 import type * as model_assignments from "../model/assignments.js";
 import type * as model_carrierBots from "../model/carrierBots.js";
+import type * as model_clientKey from "../model/clientKey.js";
 import type * as model_clients from "../model/clients.js";
 import type * as model_clinicSheetColumns from "../model/clinicSheetColumns.js";
 import type * as model_executeRules from "../model/executeRules.js";
@@ -71,6 +72,7 @@ declare const fullApi: ApiFromModules<{
   "model/appErrors": typeof model_appErrors;
   "model/assignments": typeof model_assignments;
   "model/carrierBots": typeof model_carrierBots;
+  "model/clientKey": typeof model_clientKey;
   "model/clients": typeof model_clients;
   "model/clinicSheetColumns": typeof model_clinicSheetColumns;
   "model/executeRules": typeof model_executeRules;
