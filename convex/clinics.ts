@@ -17,7 +17,11 @@ import { requireAdmin, requireOperator } from "./model/staff";
 // take a cursor instead and never truncate.
 const MAX_CLINICS = 2000;
 const MAX_CLIENTS = 500;
-const MAX_STAFF_PROFILES = 500;
+// How much of the profile table one page of a walk reads. The walk itself
+// reaches every profile: an assignment lives on the profile and no index covers
+// the clinics inside them, so stopping at a page would leave the accounts past
+// it out.
+const PROFILE_PAGE_SIZE = 500;
 // The clinic picker shows what is still available, so its scan reads past the
 // first page of the table: filtering after a short cap would hide every clinic
 // that sits behind the pages of clinics the caller already has.
@@ -93,26 +97,34 @@ const clientClinicView = v.object({
 /**
  * The display name of every account that holds each clinic, so a clinic list
  * can say who runs it. Assignments are stored on the profiles and Convex has no
- * index over the clinics inside them, so a page costs one pass over the
- * profiles; an account that holds no clinic costs nothing.
+ * index over the clinics inside them, so a page costs one read per profile in
+ * the deployment: the walk goes through all of them, because a clinic whose
+ * only account sits past the first page would otherwise read as unassigned. An
+ * account that holds no clinic costs its read and nothing else.
  */
 async function assigneeNamesByClinic(ctx: QueryCtx): Promise<Map<Id<"clinics">, string[]>> {
-  const profiles = await ctx.db
-    .query("staffProfiles")
-    .withIndex("by_userId")
-    .take(MAX_STAFF_PROFILES);
   const namesByClinic = new Map<Id<"clinics">, string[]>();
+  let cursor: string | null = null;
 
-  for (const profile of profiles) {
-    for (const clinicId of profile.assignedClinicIds ?? []) {
-      const names = namesByClinic.get(clinicId);
-      if (names === undefined) {
-        namesByClinic.set(clinicId, [profile.displayName]);
-      } else {
-        names.push(profile.displayName);
+  do {
+    const page = await ctx.db
+      .query("staffProfiles")
+      .withIndex("by_userId")
+      .paginate({ cursor, numItems: PROFILE_PAGE_SIZE });
+
+    for (const profile of page.page) {
+      for (const clinicId of profile.assignedClinicIds ?? []) {
+        const names = namesByClinic.get(clinicId);
+        if (names === undefined) {
+          namesByClinic.set(clinicId, [profile.displayName]);
+        } else {
+          names.push(profile.displayName);
+        }
       }
     }
-  }
+
+    cursor = page.isDone ? null : page.continueCursor;
+  } while (cursor !== null);
 
   for (const names of namesByClinic.values()) {
     names.sort((first, second) => first.localeCompare(second));
@@ -321,18 +333,30 @@ async function assertClientNameAvailable(
   return key;
 }
 
+/**
+ * Clears a clinic from every account that holds it. The profile table is walked
+ * in pages, so an account past the first one does not keep an assignment to a
+ * clinic that is gone.
+ */
 async function removeClinicFromStaffProfiles(ctx: MutationCtx, clinicId: Id<"clinics">) {
-  const profiles = await ctx.db
-    .query("staffProfiles")
-    .withIndex("by_userId")
-    .take(MAX_STAFF_PROFILES);
-  for (const profile of profiles) {
-    const assignedClinicIds = profile.assignedClinicIds ?? [];
-    if (!assignedClinicIds.includes(clinicId)) continue;
-    await ctx.db.patch(profile._id, {
-      assignedClinicIds: assignedClinicIds.filter((id) => id !== clinicId),
-    });
-  }
+  let cursor: string | null = null;
+
+  do {
+    const page = await ctx.db
+      .query("staffProfiles")
+      .withIndex("by_userId")
+      .paginate({ cursor, numItems: PROFILE_PAGE_SIZE });
+
+    for (const profile of page.page) {
+      const assignedClinicIds = profile.assignedClinicIds ?? [];
+      if (!assignedClinicIds.includes(clinicId)) continue;
+      await ctx.db.patch(profile._id, {
+        assignedClinicIds: assignedClinicIds.filter((id) => id !== clinicId),
+      });
+    }
+
+    cursor = page.isDone ? null : page.continueCursor;
+  } while (cursor !== null);
 }
 
 async function requireAssignedClinic(

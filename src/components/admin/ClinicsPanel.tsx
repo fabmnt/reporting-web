@@ -355,8 +355,9 @@ export function AdminClinicsPanel() {
   const firstRow = shownIndex * TABLE_PAGE_SIZE + 1;
   const lastRow = firstRow + shownRows.length - 1;
   const hasFilters = isSearching || clientFilter !== ALL_CLIENTS || statusFilter !== "all";
-  const canGoNext =
-    clinicsData !== undefined ? !clinicsData.isDone : (pages.held?.canGoNext ?? false);
+  // A page ahead is one the server just read and said it has, with the cursor
+  // that asks for it: a page held from before cannot stand in for that.
+  const canGoNext = clinicsData !== undefined && !clinicsData.isDone;
   // Only a page the reader asked for shows a spinner on its own control; a
   // filter or a search leaves the table as it is until its rows arrive.
   const paging = !isSearching && clinicsData === undefined ? pages.pending : null;
@@ -689,9 +690,12 @@ export function AdminClinicsPanel() {
             canPrevious={pages.canGoPrevious}
             canNext={canGoNext}
             pending={paging}
-            onPrevious={() => pages.goPrevious({ rows: shownRows, canGoNext })}
+            onPrevious={() => pages.goPrevious({ rows: shownRows, index: shownIndex })}
             onNext={() =>
-              pages.goNext(clinicsData?.continueCursor ?? "", { rows: shownRows, canGoNext })
+              pages.goNext(clinicsData?.continueCursor ?? "", {
+                rows: shownRows,
+                index: shownIndex,
+              })
             }
           />
         )}

@@ -37,10 +37,6 @@ export function useSearchText(): SearchText {
 /** The page on screen, handed over when the reader moves to another one. */
 export type PageHold<T> = {
   rows: T[];
-  canGoNext: boolean;
-};
-
-export type HeldPage<T> = PageHold<T> & {
   // The page the rows belong to, which is the one the reader was reading.
   index: number;
 };
@@ -57,12 +53,22 @@ export type CursorPages<T> = {
   // The page to keep showing while the next one loads. A cursor change empties
   // the query result, and a table that unmounts for it collapses the page and
   // jumps the reader to the top.
-  held: HeldPage<T> | null;
+  held: PageHold<T> | null;
   goPrevious: (hold: PageHold<T>) => void;
   // Called with the cursor of the page that was just read.
   goNext: (continueCursor: string, hold: PageHold<T>) => void;
   // Back to the first page, which is where a list whose filters changed starts.
   reset: () => void;
+};
+
+// Where in the pages read so far the reader is. One value, because the cursor
+// in use is the one at the index: moved apart, the index can pass the end of
+// the list and the cursor falls back to the first page.
+type PageState<T> = {
+  cursors: (string | null)[];
+  index: number;
+  pending: "previous" | "next" | null;
+  held: PageHold<T> | null;
 };
 
 /**
@@ -73,36 +79,50 @@ export type CursorPages<T> = {
  * arrive.
  */
 export function useCursorPages<T>(): CursorPages<T> {
-  const [cursors, setCursors] = useState<(string | null)[]>([null]);
-  const [index, setIndex] = useState(0);
-  const [pending, setPending] = useState<"previous" | "next" | null>(null);
-  const [held, setHeld] = useState<HeldPage<T> | null>(null);
+  const [state, setState] = useState<PageState<T>>({
+    cursors: [null],
+    index: 0,
+    pending: null,
+    held: null,
+  });
 
   function goNext(continueCursor: string, hold: PageHold<T>) {
-    setHeld({ ...hold, index });
-    setPending("next");
-    setCursors((current) => [...current.slice(0, index + 1), continueCursor]);
-    setIndex((current) => current + 1);
+    setState((current) => {
+      // A second press before the page lands reads the result the first press
+      // ran with, so the cursor it holds is the one already in use: it asks for
+      // the page on its way, and counting it twice would leave the index past
+      // the last cursor.
+      if (current.cursors[current.index] === continueCursor) return current;
+
+      return {
+        cursors: [...current.cursors.slice(0, current.index + 1), continueCursor],
+        index: current.index + 1,
+        pending: "next",
+        held: hold,
+      };
+    });
   }
 
   function goPrevious(hold: PageHold<T>) {
-    setHeld({ ...hold, index });
-    setPending("previous");
-    setIndex((current) => Math.max(0, current - 1));
+    setState((current) =>
+      current.index === 0
+        ? current
+        : { ...current, index: current.index - 1, pending: "previous", held: hold }
+    );
   }
 
   function reset() {
-    setCursors([null]);
-    setIndex(0);
-    setPending(null);
+    // The held page stays: a list whose filters changed keeps the rows it had on
+    // screen until the filtered page arrives.
+    setState((current) => ({ cursors: [null], index: 0, pending: null, held: current.held }));
   }
 
   return {
-    cursor: cursors[index] ?? null,
-    index,
-    canGoPrevious: index > 0,
-    pending,
-    held,
+    cursor: state.cursors[state.index] ?? null,
+    index: state.index,
+    canGoPrevious: state.index > 0,
+    pending: state.pending,
+    held: state.held,
     goPrevious,
     goNext,
     reset,

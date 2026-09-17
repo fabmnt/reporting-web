@@ -249,8 +249,9 @@ export function AdminClientsPanel() {
   const firstRow = shownIndex * TABLE_PAGE_SIZE + 1;
   const lastRow = firstRow + shownRows.length - 1;
   const hasFilters = isSearching || statusFilter !== "all";
-  const canGoNext =
-    clientsData !== undefined ? !clientsData.isDone : (pages.held?.canGoNext ?? false);
+  // A page ahead is one the server just read and said it has, with the cursor
+  // that asks for it: a page held from before cannot stand in for that.
+  const canGoNext = clientsData !== undefined && !clientsData.isDone;
   // Only a page the reader asked for shows a spinner on its own control; a
   // filter or a search leaves the table as it is until its rows arrive.
   const paging = !isSearching && clientsData === undefined ? pages.pending : null;
@@ -469,9 +470,12 @@ export function AdminClientsPanel() {
             canPrevious={pages.canGoPrevious}
             canNext={canGoNext}
             pending={paging}
-            onPrevious={() => pages.goPrevious({ rows: shownRows, canGoNext })}
+            onPrevious={() => pages.goPrevious({ rows: shownRows, index: shownIndex })}
             onNext={() =>
-              pages.goNext(clientsData?.continueCursor ?? "", { rows: shownRows, canGoNext })
+              pages.goNext(clientsData?.continueCursor ?? "", {
+                rows: shownRows,
+                index: shownIndex,
+              })
             }
           />
         )}
