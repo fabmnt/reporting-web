@@ -28,8 +28,8 @@ function nameOf(reference: AnyFunctionReference): string {
 const ADMIN_ACCOUNT = { role: "admin", status: "active" };
 
 const CLIENTS = [
-  { clientId: "client-1", key: "smilist", name: "Smilist", isActive: true },
-  { clientId: "client-2", key: "old-co", name: "Old Co", isActive: false },
+  { clientId: "client-1", key: "smilist", name: "Smilist", isActive: true, clinicCount: 12 },
+  { clientId: "client-2", key: "old-co", name: "Old Co", isActive: false, clinicCount: 3 },
 ];
 
 const mutations = {

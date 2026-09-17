@@ -17,7 +17,6 @@ export const errors = {
   PASSWORD_TOO_SHORT: "The password must be at least 8 characters long.",
   PASSWORD_SETUP_LINK_INVALID:
     "This link is not valid any more. Ask an administrator for a new one.",
-  SELECTED_CLINIC_NOT_FOUND: "One of the selected clinics was not found.",
   CLIENT_NOT_FOUND: "Client was not found.",
   CLIENT_DISABLED: "This client is disabled.",
   CLINIC_NOT_FOUND: "Clinic was not found.",

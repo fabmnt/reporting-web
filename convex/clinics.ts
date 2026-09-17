@@ -30,6 +30,12 @@ const clientView = v.object({
   isActive: v.boolean(),
 });
 
+// The client list also reports how many clinics the client owns, because that
+// is the list the assignments dialog opens onto.
+const clientListView = clientView.extend({
+  clinicCount: v.number(),
+});
+
 const clinicView = v.object({
   clinicId: v.id("clinics"),
   name: v.string(),
@@ -40,6 +46,8 @@ const clinicView = v.object({
   clientName: v.string(),
   sheetColumns: clinicSheetColumns,
   qaGroupKeys: v.array(v.string()),
+  // The accounts that hold this clinic, so a clinic list can say who runs it.
+  assignedTo: v.array(v.string()),
 });
 
 const assignedClinicView = v.object({
@@ -58,6 +66,47 @@ const clinicChoiceView = v.object({
   externalClinicId: v.string(),
   clientName: v.string(),
 });
+
+// What the clinics of one client carry into the assignments dialog: the columns
+// the clinics list shows, without the client every row already belongs to.
+const clientClinicView = v.object({
+  clinicId: v.id("clinics"),
+  name: v.string(),
+  googleSheetId: v.string(),
+  externalClinicId: v.string(),
+  isActive: v.boolean(),
+  sheetColumns: clinicSheetColumns,
+});
+
+/**
+ * The display name of every account that holds each clinic, so a clinic list
+ * can say who runs it. The profiles are read once for the whole list, and an
+ * account that holds no clinic costs nothing.
+ */
+async function assigneeNamesByClinic(ctx: QueryCtx): Promise<Map<Id<"clinics">, string[]>> {
+  const profiles = await ctx.db
+    .query("staffProfiles")
+    .withIndex("by_userId")
+    .take(MAX_STAFF_PROFILES);
+  const namesByClinic = new Map<Id<"clinics">, string[]>();
+
+  for (const profile of profiles) {
+    for (const clinicId of profile.assignedClinicIds ?? []) {
+      const names = namesByClinic.get(clinicId);
+      if (names === undefined) {
+        namesByClinic.set(clinicId, [profile.displayName]);
+      } else {
+        names.push(profile.displayName);
+      }
+    }
+  }
+
+  for (const names of namesByClinic.values()) {
+    names.sort((first, second) => first.localeCompare(second));
+  }
+
+  return namesByClinic;
+}
 
 /**
  * Resolves the client of every clinic row once, so a list of clinics costs one
@@ -234,7 +283,7 @@ async function usableClinicIds(
 export const listClients = query({
   args: {},
   returns: v.object({
-    clients: v.array(clientView),
+    clients: v.array(clientListView),
     limit: v.number(),
     hasMore: v.boolean(),
   }),
@@ -245,12 +294,23 @@ export const listClients = query({
       .query("clients")
       .withIndex("by_key")
       .take(MAX_CLIENTS + 1);
-    const clients = rows.slice(0, MAX_CLIENTS).map((client) => ({
-      clientId: client._id,
-      key: client.key,
-      name: client.name,
-      isActive: client.isActive,
-    }));
+
+    const clients = [];
+    for (const client of rows.slice(0, MAX_CLIENTS)) {
+      // The index holds one range per client, so counting a client's clinics
+      // reads that client's rows and nothing else.
+      const clinics = await ctx.db
+        .query("clinics")
+        .withIndex("by_clientId_and_name", (query) => query.eq("clientId", client._id))
+        .take(MAX_CLINICS);
+      clients.push({
+        clientId: client._id,
+        key: client.key,
+        name: client.name,
+        isActive: client.isActive,
+        clinicCount: clinics.length,
+      });
+    }
     clients.sort((a, b) => a.name.localeCompare(b.name));
 
     return { clients, limit: MAX_CLIENTS, hasMore: rows.length > MAX_CLIENTS };
@@ -345,6 +405,7 @@ export const list = query({
       .take(MAX_CLINICS + 1);
 
     const named = await withClientNames(ctx, rows.slice(0, MAX_CLINICS));
+    const assignees = await assigneeNamesByClinic(ctx);
     const clinics = named.map((row) => ({
       clinicId: row._id,
       name: row.name,
@@ -355,10 +416,54 @@ export const list = query({
       clientName: row.clientName,
       sheetColumns: row.sheetColumns ?? {},
       qaGroupKeys: row.qaGroupKeys ?? [],
+      assignedTo: assignees.get(row._id) ?? [],
     }));
     clinics.sort(
       (a, b) => a.clientName.localeCompare(b.clientName) || a.name.localeCompare(b.name)
     );
+
+    return { clinics, limit: MAX_CLINICS, hasMore: rows.length > MAX_CLINICS };
+  },
+});
+
+/**
+ * The clinics of one client, for the assignments dialog: it reads them when the
+ * dialog opens, so an admin assigns from one client without the directory being
+ * read whole.
+ *
+ * An inactive clinic stays in the list, with its flag, because the dialog has
+ * to show that a clinic it lists cannot be assigned any more. A client that no
+ * longer exists has no clinics to list.
+ */
+export const listByClient = query({
+  args: { clientId: v.id("clients") },
+  returns: v.object({
+    clinics: v.array(clientClinicView),
+    limit: v.number(),
+    hasMore: v.boolean(),
+  }),
+  handler: async (ctx, args) => {
+    await requireAdmin(ctx);
+
+    const client = await ctx.db.get("clients", args.clientId);
+    if (client === null) {
+      throw appError({ code: "CLIENT_NOT_FOUND" });
+    }
+
+    const rows = await ctx.db
+      .query("clinics")
+      .withIndex("by_clientId_and_name", (query) => query.eq("clientId", args.clientId))
+      .take(MAX_CLINICS + 1);
+
+    const clinics = rows.slice(0, MAX_CLINICS).map((row) => ({
+      clinicId: row._id,
+      name: row.name,
+      googleSheetId: row.googleSheetId,
+      externalClinicId: row.externalClinicId,
+      isActive: row.isActive,
+      sheetColumns: row.sheetColumns ?? {},
+    }));
+    clinics.sort((a, b) => a.name.localeCompare(b.name));
 
     return { clinics, limit: MAX_CLINICS, hasMore: rows.length > MAX_CLINICS };
   },

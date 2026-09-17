@@ -30,19 +30,6 @@ const managedAccount = currentAccount.extend({
 const MAX_ASSIGNED_CLINICS = 200;
 const MAX_MANAGED_ACCOUNTS = 100;
 
-function cleanAssignedClinicIds(clinicIds: Id<"clinics">[]): Id<"clinics">[] {
-  const seen = new Set<string>();
-  const cleaned: Id<"clinics">[] = [];
-  for (const clinicId of clinicIds) {
-    const key = clinicId as string;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    cleaned.push(clinicId);
-    if (cleaned.length >= MAX_ASSIGNED_CLINICS) break;
-  }
-  return cleaned;
-}
-
 export const ensureCurrentProfile = mutation({
   args: {},
   returns: currentAccount,
@@ -220,28 +207,68 @@ export const setStatus = mutation({
   },
 });
 
-export const setAssignedClinics = mutation({
+/**
+ * Writes what one account runs reports on for a single client: the clinics of
+ * that client the caller sends are the ones the account keeps, and every other
+ * client keeps what it held. The assignment screens work client by client, so
+ * an edit can neither widen nor shrink another client by accident.
+ *
+ * Only an active clinic of that client can be assigned: the reports skip the
+ * rest, so keeping them would fill the cap with clinics nothing reads.
+ *
+ * The cap covers the whole assignment, not the client's share, because a report
+ * reads at most that many clinics. A caller that would pass it gets an error
+ * instead of a list that silently drops the clinics at the end.
+ */
+export const setClientAssignment = mutation({
   args: {
     profileId: v.id("staffProfiles"),
+    clientId: v.id("clients"),
     clinicIds: v.array(v.id("clinics")),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
     await requireAdmin(ctx);
+
     const target = await ctx.db.get("staffProfiles", args.profileId);
     if (target === null) {
       throw appError({ code: "PROFILE_NOT_FOUND" });
     }
-
-    const clinicIds = cleanAssignedClinicIds(args.clinicIds);
-    for (const clinicId of clinicIds) {
-      const clinic = await ctx.db.get("clinics", clinicId);
-      if (clinic === null) {
-        throw appError({ code: "SELECTED_CLINIC_NOT_FOUND" });
-      }
+    const client = await ctx.db.get("clients", args.clientId);
+    if (client === null) {
+      throw appError({ code: "CLIENT_NOT_FOUND" });
     }
 
-    await ctx.db.patch("staffProfiles", args.profileId, { assignedClinicIds: clinicIds });
+    const requested: Id<"clinics">[] = [];
+    const seen = new Set<string>();
+    for (const clinicId of args.clinicIds) {
+      if (seen.has(clinicId)) continue;
+      seen.add(clinicId);
+
+      const clinic = await ctx.db.get("clinics", clinicId);
+      if (clinic === null || clinic.clientId !== args.clientId || !clinic.isActive) {
+        throw appError({ code: "CLINIC_NOT_FOUND" });
+      }
+      requested.push(clinicId);
+    }
+
+    const kept: Id<"clinics">[] = [];
+    for (const clinicId of target.assignedClinicIds ?? []) {
+      const clinic = await ctx.db.get("clinics", clinicId);
+      // A clinic deleted since it was assigned can never be read again, so it
+      // leaves with this write instead of holding room in the cap. An inactive
+      // one stays: enabling it again restores the assignment.
+      if (clinic === null) continue;
+      if (clinic.clientId === args.clientId) continue;
+      kept.push(clinicId);
+    }
+
+    const assignedClinicIds = [...kept, ...requested];
+    if (assignedClinicIds.length > MAX_ASSIGNED_CLINICS) {
+      throw appError({ code: "CLINIC_ASSIGNMENT_LIMIT", limit: MAX_ASSIGNED_CLINICS });
+    }
+
+    await ctx.db.patch(args.profileId, { assignedClinicIds });
     return null;
   },
 });

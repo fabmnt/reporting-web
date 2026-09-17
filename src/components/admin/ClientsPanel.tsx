@@ -4,6 +4,7 @@ import { Plus } from "lucide-react";
 import { useMemo, useState, type SyntheticEvent } from "react";
 
 import { api } from "../../../convex/_generated/api";
+import { AssignClinicsDialog } from "@/components/admin/AssignClinicsDialog";
 import { ConfirmDeleteDialog } from "@/components/admin/ConfirmDeleteDialog";
 import { AdminTabs } from "@/components/app/AdminTabs";
 import { DataCard, DataCardList, DataCardRow, DataTableFrame } from "@/components/app/DataCard";
@@ -56,18 +57,23 @@ function ClientActions({
   disabled,
   onEdit,
   onDelete,
+  onAssign,
 }: {
   client: ClientView;
   disabled: boolean;
   onEdit: (client: ClientView) => void;
   onDelete: (client: ClientView) => void;
+  onAssign: (client: ClientView) => void;
 }) {
   const { t } = useI18n();
 
   return (
-    <div className="flex gap-2">
+    <div className="flex flex-wrap gap-2">
       <Button variant="outline" size="sm" disabled={disabled} onClick={() => onEdit(client)}>
         {t.common.edit}
+      </Button>
+      <Button variant="outline" size="sm" disabled={disabled} onClick={() => onAssign(client)}>
+        {t.admin.clients.assign}
       </Button>
       <Button
         variant="ghost"
@@ -207,6 +213,7 @@ export function AdminClientsPanel() {
   // draft must not leak into the next open.
   const [formSession, setFormSession] = useState(0);
   const [clientToDelete, setClientToDelete] = useState<ClientView | null>(null);
+  const [assigningClient, setAssigningClient] = useState<ClientView | null>(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [page, setPage] = useState(1);
@@ -358,6 +365,7 @@ export function AdminClientsPanel() {
                 <TableHeader className="bg-muted/40">
                   <TableRow>
                     <TableHead>{t.admin.clients.table.client}</TableHead>
+                    <TableHead>{t.admin.clients.table.clinics}</TableHead>
                     <TableHead>{t.admin.clients.table.key}</TableHead>
                     <TableHead>{t.admin.clients.table.status}</TableHead>
                     <TableHead>{t.common.actions}</TableHead>
@@ -369,6 +377,7 @@ export function AdminClientsPanel() {
                     return (
                       <TableRow key={client.clientId}>
                         <TableCell>{client.name}</TableCell>
+                        <TableCell className="tabular-nums">{client.clinicCount}</TableCell>
                         <TableCell className="font-mono text-xs text-muted-foreground">
                           {client.key}
                         </TableCell>
@@ -383,6 +392,7 @@ export function AdminClientsPanel() {
                             disabled={isPending}
                             onEdit={openEdit}
                             onDelete={requestDelete}
+                            onAssign={setAssigningClient}
                           />
                         </TableCell>
                       </TableRow>
@@ -404,12 +414,16 @@ export function AdminClientsPanel() {
                     </Badge>
                   }
                 >
+                  <DataCardRow label={t.admin.clients.table.clinics}>
+                    <span className="tabular-nums">{client.clinicCount}</span>
+                  </DataCardRow>
                   <DataCardRow>
                     <ClientActions
                       client={client}
                       disabled={pendingClientId === client.clientId}
                       onEdit={openEdit}
                       onDelete={requestDelete}
+                      onAssign={setAssigningClient}
                     />
                   </DataCardRow>
                 </DataCard>
@@ -469,6 +483,10 @@ export function AdminClientsPanel() {
         error={deleteError}
         onConfirm={() => void confirmDelete()}
       />
+
+      {assigningClient === null ? null : (
+        <AssignClinicsDialog client={assigningClient} onClose={() => setAssigningClient(null)} />
+      )}
     </div>
   );
 }

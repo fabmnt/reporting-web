@@ -40,6 +40,7 @@ const CLINICS = [
     clientName: "Smilist",
     sheetColumns: {},
     qaGroupKeys: [],
+    assignedTo: ["Fabian"],
   },
   {
     clinicId: "clinic-2",
@@ -51,6 +52,7 @@ const CLINICS = [
     clientName: "Smilist",
     sheetColumns: {},
     qaGroupKeys: [],
+    assignedTo: [],
   },
 ];
 

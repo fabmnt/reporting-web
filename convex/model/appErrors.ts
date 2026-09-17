@@ -19,7 +19,6 @@ export type AppErrorPayload =
   | { code: "CANNOT_DISABLE_SELF" }
   | { code: "PASSWORD_TOO_SHORT" }
   | { code: "PASSWORD_SETUP_LINK_INVALID" }
-  | { code: "SELECTED_CLINIC_NOT_FOUND" }
   | { code: "CLIENT_NOT_FOUND" }
   | { code: "CLIENT_DISABLED" }
   | { code: "CLINIC_NOT_FOUND" }

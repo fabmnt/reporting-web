@@ -10,6 +10,7 @@ export const common = {
   loading: "Cargando",
   active: "Activo",
   inactive: "Inactivo",
+  none: "—",
   status: "Estado",
   actions: "Acciones",
   you: "Tú",

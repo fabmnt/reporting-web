@@ -538,6 +538,7 @@ export function AdminClinicsPanel() {
                     <TableHead>{t.admin.clinics.table.googleSheet}</TableHead>
                     <TableHead>{t.admin.clinics.table.columns}</TableHead>
                     <TableHead>{t.admin.clinics.table.status}</TableHead>
+                    <TableHead>{t.admin.clinics.table.assignedTo}</TableHead>
                     <TableHead>{t.common.actions}</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -568,6 +569,15 @@ export function AdminClinicsPanel() {
                           <Badge variant={clinic.isActive ? "secondary" : "outline"}>
                             {clinic.isActive ? t.common.active : t.common.inactive}
                           </Badge>
+                        </TableCell>
+                        <TableCell className="max-w-48">
+                          {clinic.assignedTo.length === 0 ? (
+                            <span className="text-muted-foreground">{t.common.none}</span>
+                          ) : (
+                            <span className="block truncate" title={clinic.assignedTo.join(", ")}>
+                              {clinic.assignedTo.join(", ")}
+                            </span>
+                          )}
                         </TableCell>
                         <TableCell>
                           <ClinicActions
@@ -607,6 +617,17 @@ export function AdminClinicsPanel() {
                   <DataCardRow label={t.admin.clinics.table.columns}>
                     <TruncatedText className="font-mono text-xs">
                       {formatSheetColumnSummary(clinic.sheetColumns)}
+                    </TruncatedText>
+                  </DataCardRow>
+                  <DataCardRow label={t.admin.clinics.table.assignedTo}>
+                    <TruncatedText
+                      className={
+                        clinic.assignedTo.length === 0 ? "text-muted-foreground" : undefined
+                      }
+                    >
+                      {clinic.assignedTo.length === 0
+                        ? t.common.none
+                        : clinic.assignedTo.join(", ")}
                     </TruncatedText>
                   </DataCardRow>
                   <DataCardRow>

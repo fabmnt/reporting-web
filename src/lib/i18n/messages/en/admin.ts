@@ -9,19 +9,16 @@ export const admin = {
     table: {
       account: "Account",
       role: "Role",
-      clinics: "Clinics",
       password: "Password",
       enabled: "Enabled",
     },
     roleFor: (name: string) => `Role for ${name}`,
     statusFor: (name: string) => `Account status for ${name}`,
-    assign: "Assign",
     enabled: "Enabled",
     disabled: "Disabled",
     failures: {
       role: "Role update failed.",
       status: "Status update failed.",
-      assignment: "Clinic assignment failed.",
       passwordLink: "Creating the password link failed.",
     },
     passwordLink: {
@@ -36,14 +33,6 @@ export const admin = {
       copied: "Copied",
       failedTitle: "Could not create the link",
     },
-    assignment: {
-      title: "Assign clinics",
-      descriptionFor: (name: string) => `${name} runs reports only on the clinics you select.`,
-      descriptionGeneric: "Choose which clinics this account can run reports on.",
-      noneAvailable: "No clinics yet. Add clinics before assigning them.",
-      failedTitle: "Could not assign clinics",
-      save: "Save clinics",
-    },
   },
   clients: {
     pageTitle: "Clients",
@@ -57,8 +46,25 @@ export const admin = {
     },
     table: {
       client: "Client",
+      clinics: "Clinics",
       key: "Key",
       status: "Status",
+    },
+    assign: "Assign",
+    assignDialog: {
+      title: "Assign clinics",
+      descriptionFor: (name: string) =>
+        `Choose which of ${name}'s clinics this account runs reports on.`,
+      user: "Account",
+      chooseUser: "Choose an account",
+      search: "Search clinics",
+      selectAll: "Select all",
+      selected: (count: number, total: number) => `${count} of ${total} selected.`,
+      noneAvailable: "This client has no clinics to assign.",
+      noMatches: "No clinics match this search.",
+      failedTitle: "Could not assign the clinics",
+      saveFailed: "Saving the assignment failed.",
+      save: "Save",
     },
     limit: (limit: number) => `Showing the first ${limit} clients.`,
     form: {
@@ -102,6 +108,7 @@ export const admin = {
       googleSheet: "Google Sheet",
       columns: "Columns",
       status: "Status",
+      assignedTo: "Assigned to",
     },
     limit: (limit: number) => `Showing the first ${limit} clinics.`,
     form: {
