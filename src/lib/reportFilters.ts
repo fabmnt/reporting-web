@@ -7,6 +7,9 @@ export type ReportFilters = {
   endDate: string;
   reportTypeId: string | null;
   verification: VerificationFilter;
+  // The assigned clinics the run leaves out. Ids the account is not assigned to
+  // are ignored where the selection is matched against the assigned clinics.
+  excludedClinicIds: string[];
 };
 
 // The query string is the store of the run form, so a reload, a bookmark, or a
@@ -16,6 +19,7 @@ const START_DATE_PARAM = "startDate";
 const END_DATE_PARAM = "endDate";
 const REPORT_TYPE_PARAM = "reportType";
 const VERIFICATION_PARAM = "verification";
+const EXCLUDED_CLINICS_PARAM = "excludedClinics";
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -34,6 +38,16 @@ function readDate(params: URLSearchParams, name: string, fallback: string): stri
   return ISO_DATE.test(value) ? value : fallback;
 }
 
+// Clinic ids are compared with the ones the account holds, so a value that is
+// not one of them costs nothing and needs no check of its own.
+function readClinicIds(value: string | null): string[] {
+  if (value === null) return [];
+  return value
+    .split(",")
+    .map((clinicId) => clinicId.trim())
+    .filter((clinicId) => clinicId !== "");
+}
+
 export function readReportFilters(search: string): ReportFilters {
   const params = new URLSearchParams(search);
   const today = todayIso();
@@ -46,6 +60,7 @@ export function readReportFilters(search: string): ReportFilters {
     // fallback of the picker.
     reportTypeId: params.get(REPORT_TYPE_PARAM) || null,
     verification: isVerificationFilter(verification) ? verification : "all",
+    excludedClinicIds: readClinicIds(params.get(EXCLUDED_CLINICS_PARAM)),
   };
 }
 
@@ -62,6 +77,12 @@ export function replaceReportFilters(filters: ReportFilters): void {
   });
 
   if (filters.reportTypeId !== null) params.set(REPORT_TYPE_PARAM, filters.reportTypeId);
+
+  // Leaving nothing out is the default, so the common case keeps the query
+  // string short whatever the account is assigned to.
+  if (filters.excludedClinicIds.length > 0) {
+    params.set(EXCLUDED_CLINICS_PARAM, filters.excludedClinicIds.join(","));
+  }
 
   const { pathname } = window.location;
   window.history.replaceState(window.history.state, "", `${pathname}?${params.toString()}`);
