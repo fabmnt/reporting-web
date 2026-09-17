@@ -58,7 +58,9 @@ export type CursorPages<T> = {
   // Called with the cursor of the page that was just read.
   goNext: (continueCursor: string, hold: PageHold<T>) => void;
   // Back to the first page, which is where a list whose filters changed starts.
-  reset: () => void;
+  // The page on screen is handed over with it, because the page held from an
+  // earlier move is not the one the reader is looking at.
+  reset: (hold: PageHold<T>) => void;
 };
 
 // Where in the pages read so far the reader is. One value, because the cursor
@@ -111,10 +113,9 @@ export function useCursorPages<T>(): CursorPages<T> {
     );
   }
 
-  function reset() {
-    // The held page stays: a list whose filters changed keeps the rows it had on
-    // screen until the filtered page arrives.
-    setState((current) => ({ cursors: [null], index: 0, pending: null, held: current.held }));
+  function reset(hold: PageHold<T>) {
+    // The rows on screen stay, until the filtered page arrives.
+    setState({ cursors: [null], index: 0, pending: null, held: hold });
   }
 
   return {

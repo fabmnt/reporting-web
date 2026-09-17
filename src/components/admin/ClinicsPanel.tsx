@@ -506,7 +506,7 @@ export function AdminClinicsPanel() {
                 value={search.text}
                 onChange={(event) => {
                   search.change(event.target.value);
-                  pages.reset();
+                  pages.reset({ rows: shownRows, index: shownIndex });
                 }}
                 placeholder={t.admin.clinics.filters.search}
                 aria-label={t.admin.clinics.filters.search}
@@ -520,7 +520,7 @@ export function AdminClinicsPanel() {
                 value={clientFilter}
                 onValueChange={(value) => {
                   setClientFilter(value ?? ALL_CLIENTS);
-                  pages.reset();
+                  pages.reset({ rows: shownRows, index: shownIndex });
                 }}
               >
                 <SelectTrigger aria-label={t.admin.clinics.filters.client} className="w-48">
@@ -544,7 +544,7 @@ export function AdminClinicsPanel() {
                 label={t.admin.clinics.filters.status}
                 onChange={(next) => {
                   setStatusFilter(next);
-                  pages.reset();
+                  pages.reset({ rows: shownRows, index: shownIndex });
                 }}
               />
             </div>

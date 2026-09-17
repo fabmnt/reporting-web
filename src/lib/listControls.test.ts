@@ -30,4 +30,19 @@ describe("useCursorPages", () => {
     expect(result.current.held).toEqual({ rows: ["row-3"], index: 2 });
     expect(result.current.pending).toBe("previous");
   });
+
+  it("keeps the page on screen when the filters change", () => {
+    const { result } = renderHook(() => useCursorPages<string>());
+
+    act(() => result.current.goNext("cursor-1", { rows: ["row-1"], index: 0 }));
+    act(() => result.current.goNext("cursor-2", { rows: ["row-2"], index: 1 }));
+    // The reader is on the third page now, and it is that page the filter
+    // change has to leave on screen, not the one the last move held.
+    act(() => result.current.reset({ rows: ["row-3"], index: 2 }));
+
+    expect(result.current.cursor).toBeNull();
+    expect(result.current.index).toBe(0);
+    expect(result.current.pending).toBeNull();
+    expect(result.current.held).toEqual({ rows: ["row-3"], index: 2 });
+  });
 });

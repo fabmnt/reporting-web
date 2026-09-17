@@ -362,7 +362,7 @@ export function AdminClientsPanel() {
               value={search.text}
               onChange={(event) => {
                 search.change(event.target.value);
-                pages.reset();
+                pages.reset({ rows: shownRows, index: shownIndex });
               }}
               placeholder={t.admin.clients.filters.search}
               aria-label={t.admin.clients.filters.search}
@@ -373,7 +373,7 @@ export function AdminClientsPanel() {
               label={t.admin.clients.filters.status}
               onChange={(next) => {
                 setStatusFilter(next);
-                pages.reset();
+                pages.reset({ rows: shownRows, index: shownIndex });
               }}
             />
           </div>
