@@ -35,7 +35,9 @@ function toReportingClinic(clinic: {
   clientId: Id<"clients">;
   name: string;
   googleSheetId: string;
-  externalClinicId: string;
+  // Optional in the table until the directory import has backfilled every row,
+  // and empty for a clinic that has not been imported yet.
+  externalClinicId?: string;
   isActive: boolean;
   sheetColumns?: Parameters<typeof resolveClinicSheetColumns>[0];
   qaGroupKeys?: string[];
@@ -45,7 +47,7 @@ function toReportingClinic(clinic: {
     clientId: clinic.clientId,
     name: clinic.name,
     googleSheetId: clinic.googleSheetId,
-    externalClinicId: clinic.externalClinicId,
+    externalClinicId: clinic.externalClinicId ?? "",
     isActive: clinic.isActive,
     sheetColumns: resolveClinicSheetColumns(clinic.sheetColumns),
     qaGroupKeys: clinic.qaGroupKeys ?? [],

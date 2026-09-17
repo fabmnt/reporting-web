@@ -49,9 +49,13 @@ export default defineSchema({
   }).index("by_key", ["key"]),
 
   clinics: defineTable({
-    // Every clinic comes from the Control Central directory, which is the only
-    // way to reach the carrier API for a clinic's bots.
-    externalClinicId: v.string(),
+    // The Control Central id the carrier API reads a clinic's bots with. Every
+    // write sets it and the screens ask for it, but the field stays optional
+    // until the directory import has backfilled the rows that predate it: Convex
+    // refuses a push whose schema rejects documents the deployment already
+    // holds, and the import can only run once this schema is live. Tighten this
+    // to v.string() after the import has run everywhere.
+    externalClinicId: v.optional(v.string()),
     clientId: v.id("clients"),
     name: v.string(),
     googleSheetId: v.string(),

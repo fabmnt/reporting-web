@@ -410,7 +410,7 @@ export const list = query({
       clinicId: row._id,
       name: row.name,
       googleSheetId: row.googleSheetId,
-      externalClinicId: row.externalClinicId,
+      externalClinicId: row.externalClinicId ?? "",
       isActive: row.isActive,
       clientId: row.clientId,
       clientName: row.clientName,
@@ -459,7 +459,7 @@ export const listByClient = query({
       clinicId: row._id,
       name: row.name,
       googleSheetId: row.googleSheetId,
-      externalClinicId: row.externalClinicId,
+      externalClinicId: row.externalClinicId ?? "",
       isActive: row.isActive,
       sheetColumns: row.sheetColumns ?? {},
     }));
@@ -495,7 +495,7 @@ export const listAvailable = query({
       .map((row) => ({
         clinicId: row._id,
         name: row.name,
-        externalClinicId: row.externalClinicId,
+        externalClinicId: row.externalClinicId ?? "",
         clientName: row.clientName,
       }))
       .sort((a, b) => a.clientName.localeCompare(b.clientName) || a.name.localeCompare(b.name));
@@ -526,7 +526,7 @@ export const listAssigned = query({
         clinicId: clinic._id,
         name: clinic.name,
         googleSheetId: clinic.googleSheetId,
-        externalClinicId: clinic.externalClinicId,
+        externalClinicId: clinic.externalClinicId ?? "",
         clientName: clinic.clientName,
         sheetColumns: row?.sheetColumns ?? {},
       });

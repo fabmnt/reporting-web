@@ -5,12 +5,10 @@ import { internalMutation, internalQuery } from "../_generated/server";
 import { clientKeyFromName } from "../model/clients";
 import { clinicSheetColumns } from "../model/clinicSheetColumns";
 
-const MAX_CLINICS = 2000;
-const MAX_CLIENTS = 500;
-const MAX_STAFF_PROFILES = 500;
-// One wipe call deletes at most this many rows and asks to be called again, so
-// the whole table never has to fit in a single transaction.
-const WIPE_BATCH = 500;
+// One call reads, clears or deletes at most this many rows, so a table never
+// has to fit in a single transaction. The script calls again while a call
+// reports work left to do.
+const BATCH = 500;
 
 const directoryClinic = v.object({
   clientName: v.string(),
@@ -21,29 +19,44 @@ const directoryClinic = v.object({
   qaGroupKeys: v.array(v.string()),
 });
 
-// The part of a clinic the Control Central directory cannot supply: the column
-// mapping the reports write to, and the QA groups carried by the legacy
-// configs. The import reads this before wiping so it can keep them, and uses
-// the Control Central id to recognise a clinic whose spreadsheet it shares
-// with another one.
+const sheetConfig = v.object({
+  googleSheetId: v.string(),
+  externalClinicId: v.union(v.string(), v.null()),
+  sheetColumns: clinicSheetColumns,
+  qaGroupKeys: v.array(v.string()),
+});
+
+/**
+ * The part of a clinic the Control Central directory cannot supply: the column
+ * mapping the reports write to, and the QA groups carried by the legacy
+ * configs. The import reads this before wiping so it can keep them, and uses
+ * the Control Central id to recognise a clinic whose spreadsheet it shares
+ * with another one.
+ *
+ * One page of clinics per call, with the cursor of the next page, so every
+ * clinic of the deployment keeps its mapping however many there are.
+ */
 export const readSheetConfig = internalQuery({
-  args: {},
-  returns: v.array(
-    v.object({
-      googleSheetId: v.string(),
-      externalClinicId: v.union(v.string(), v.null()),
-      sheetColumns: clinicSheetColumns,
-      qaGroupKeys: v.array(v.string()),
-    })
-  ),
-  handler: async (ctx) => {
-    const rows = await ctx.db.query("clinics").withIndex("by_clientId_and_name").take(MAX_CLINICS);
-    return rows.map((row) => ({
-      googleSheetId: row.googleSheetId,
-      externalClinicId: row.externalClinicId ?? null,
-      sheetColumns: row.sheetColumns ?? {},
-      qaGroupKeys: row.qaGroupKeys ?? [],
-    }));
+  args: { cursor: v.union(v.string(), v.null()) },
+  returns: v.object({
+    rows: v.array(sheetConfig),
+    cursor: v.union(v.string(), v.null()),
+  }),
+  handler: async (ctx, args) => {
+    const page = await ctx.db
+      .query("clinics")
+      .withIndex("by_clientId_and_name")
+      .paginate({ cursor: args.cursor, numItems: BATCH });
+
+    return {
+      rows: page.page.map((row) => ({
+        googleSheetId: row.googleSheetId,
+        externalClinicId: row.externalClinicId ?? null,
+        sheetColumns: row.sheetColumns ?? {},
+        qaGroupKeys: row.qaGroupKeys ?? [],
+      })),
+      cursor: page.isDone ? null : page.continueCursor,
+    };
   },
 });
 
@@ -53,53 +66,75 @@ export const readSheetConfig = internalQuery({
  * still owns one must not be removed, then clients, then the assignments that
  * point at the clinics that no longer exist.
  *
- * Returns `done: false` when it hit the batch limit, which means the caller has
- * to run it again before importing.
+ * Every stage handles one batch per call. The assignments are a page of the
+ * table rather than a batch, and the cursor of the next page travels back in
+ * `profileCursor`, so a page that holds no assignment still moves the wipe on
+ * instead of reading the same rows again. `done` stays false while any stage
+ * has work left, which means the caller has to run the mutation again before
+ * importing.
  */
 export const wipeDirectory = internalMutation({
-  args: {},
+  args: { profileCursor: v.union(v.string(), v.null()) },
   returns: v.object({
     deletedClinics: v.number(),
     deletedClients: v.number(),
     clearedProfiles: v.number(),
+    profileCursor: v.union(v.string(), v.null()),
     done: v.boolean(),
   }),
-  handler: async (ctx) => {
+  handler: async (ctx, args) => {
     let deletedClinics = 0;
-    const clinics = await ctx.db
-      .query("clinics")
-      .withIndex("by_clientId_and_name")
-      .take(WIPE_BATCH);
+    const clinics = await ctx.db.query("clinics").withIndex("by_clientId_and_name").take(BATCH);
     for (const clinic of clinics) {
       await ctx.db.delete("clinics", clinic._id);
       deletedClinics += 1;
     }
-    if (clinics.length === WIPE_BATCH) {
-      return { deletedClinics, deletedClients: 0, clearedProfiles: 0, done: false };
+    if (clinics.length === BATCH) {
+      return {
+        deletedClinics,
+        deletedClients: 0,
+        clearedProfiles: 0,
+        profileCursor: args.profileCursor,
+        done: false,
+      };
     }
 
     let deletedClients = 0;
-    const clients = await ctx.db.query("clients").withIndex("by_key").take(MAX_CLIENTS);
+    const clients = await ctx.db.query("clients").withIndex("by_key").take(BATCH);
     for (const client of clients) {
       await ctx.db.delete("clients", client._id);
       deletedClients += 1;
     }
-    if (clients.length === MAX_CLIENTS) {
-      return { deletedClinics, deletedClients, clearedProfiles: 0, done: false };
+    if (clients.length === BATCH) {
+      return {
+        deletedClinics,
+        deletedClients,
+        clearedProfiles: 0,
+        profileCursor: args.profileCursor,
+        done: false,
+      };
     }
 
-    let clearedProfiles = 0;
-    const profiles = await ctx.db
+    const page = await ctx.db
       .query("staffProfiles")
       .withIndex("by_userId")
-      .take(MAX_STAFF_PROFILES);
-    for (const profile of profiles) {
+      .paginate({ cursor: args.profileCursor, numItems: BATCH });
+
+    let clearedProfiles = 0;
+    for (const profile of page.page) {
       if ((profile.assignedClinicIds ?? []).length === 0) continue;
       await ctx.db.patch(profile._id, { assignedClinicIds: [] });
       clearedProfiles += 1;
     }
 
-    return { deletedClinics, deletedClients, clearedProfiles, done: true };
+    const profileCursor = page.isDone ? null : page.continueCursor;
+    return {
+      deletedClinics,
+      deletedClients,
+      clearedProfiles,
+      profileCursor,
+      done: profileCursor === null,
+    };
   },
 });
 
@@ -128,7 +163,14 @@ export const insertClinics = internalMutation({
         continue;
       }
 
+      // A name without a letter or a number, like "&", has no key to store the
+      // client under, and every such name would share one row.
       const key = clientKeyFromName(clientName);
+      if (key === "") {
+        skipped += 1;
+        continue;
+      }
+
       let clientId = clientIdByKey.get(key);
       if (clientId === undefined) {
         const existing = await ctx.db

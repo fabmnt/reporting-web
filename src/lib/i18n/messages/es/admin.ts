@@ -123,7 +123,7 @@ export const admin = {
       client: "Cliente",
       chooseClient: "Elige un cliente",
       sheetLabel: "URL o ID de la hoja de Google",
-      externalId: "ID externo de la clínica (opcional)",
+      externalId: "ID de la clínica en Control Central",
       active: "Activa",
       inactiveSuffix: "(inactivo)",
       saveFailedTitle: "No se pudo guardar la clínica",

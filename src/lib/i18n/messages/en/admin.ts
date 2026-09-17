@@ -121,7 +121,7 @@ export const admin = {
       client: "Client",
       chooseClient: "Choose a client",
       sheetLabel: "Google Sheet URL or ID",
-      externalId: "External clinic ID (optional)",
+      externalId: "Control Central clinic ID",
       active: "Active",
       inactiveSuffix: "(inactive)",
       saveFailedTitle: "Could not save clinic",

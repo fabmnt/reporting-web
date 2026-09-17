@@ -51,7 +51,6 @@ const PREVIEW_LIMIT = 10;
 // Small enough that one batch stays well inside a single transaction and
 // inside one command line argument.
 const INSERT_BATCH = 100;
-const MAX_WIPE_CALLS = 50;
 
 // What the import needs out of Control Central, after the API shapes are
 // narrowed at the fetch boundary.
@@ -89,6 +88,16 @@ type SharedSheet = {
   dropped: string[];
 };
 
+// Two clinics of one client cannot share a name: the app looks a clinic up by
+// its client and its name, so the second row would be the one every screen
+// found. The plan keeps the first and reports the rest.
+type SharedName = {
+  clientName: string;
+  name: string;
+  kept: string;
+  dropped: string[];
+};
+
 type DirectoryPlan = {
   generatedAt: string;
   source: string;
@@ -96,6 +105,7 @@ type DirectoryPlan = {
   clinics: DirectoryClinic[];
   skipped: SkippedClinic[];
   sharedSheets: SharedSheet[];
+  sharedNames: SharedName[];
   carriedOverConfig: number;
 };
 
@@ -103,7 +113,14 @@ type WipeResult = {
   deletedClinics: number;
   deletedClients: number;
   clearedProfiles: number;
+  profileCursor: string | null;
   done: boolean;
+};
+
+type WipeTotals = {
+  deletedClinics: number;
+  deletedClients: number;
+  clearedProfiles: number;
 };
 
 type InsertResult = {
@@ -287,6 +304,16 @@ function buildPlan(directory: Directory, configBySheet: Map<string, SheetConfig>
 
   for (const clinic of directory.clinics) {
     const clientName = directory.clientNameByClinicId.get(clinic.externalClinicId) ?? "";
+    // A clinic row needs a name, and the wipe that follows the plan would take
+    // the stored row of a clinic that never comes back.
+    if (clinic.name === "") {
+      skipped.push({
+        name: clinic.name,
+        externalClinicId: clinic.externalClinicId,
+        reason: "no name",
+      });
+      continue;
+    }
     if (clinic.googleSheetId === "") {
       skipped.push({
         name: clinic.name,
@@ -325,24 +352,52 @@ function buildPlan(directory: Directory, configBySheet: Map<string, SheetConfig>
   });
 
   const sharedSheets: SharedSheet[] = [];
+  const sharedNames: SharedName[] = [];
   const bySheet = new Map<string, DirectoryClinic>();
+  const byClientAndName = new Map<string, DirectoryClinic>();
+
   for (const clinic of candidates) {
-    const kept = bySheet.get(clinic.googleSheetId);
-    if (kept === undefined) {
-      bySheet.set(clinic.googleSheetId, clinic);
+    const keptBySheet = bySheet.get(clinic.googleSheetId);
+    if (keptBySheet !== undefined) {
+      const label = `${clinic.clientName} / ${clinic.name}`;
+      const group = sharedSheets.find((entry) => entry.googleSheetId === clinic.googleSheetId);
+      if (group === undefined) {
+        sharedSheets.push({
+          googleSheetId: clinic.googleSheetId,
+          kept: `${keptBySheet.clientName} / ${keptBySheet.name}`,
+          dropped: [label],
+        });
+      } else {
+        group.dropped.push(label);
+      }
       continue;
     }
-    const label = `${clinic.clientName} / ${clinic.name}`;
-    const group = sharedSheets.find((entry) => entry.googleSheetId === clinic.googleSheetId);
-    if (group === undefined) {
-      sharedSheets.push({
-        googleSheetId: clinic.googleSheetId,
-        kept: `${kept.clientName} / ${kept.name}`,
-        dropped: [label],
-      });
+
+    // Clients are stored under the key their name normalizes to, and the app
+    // looks a clinic up by that key and the clinic name. Two spellings the key
+    // rule would join are not joined here, so the collision is caught for the
+    // names the directory repeats as they are written.
+    const nameKey = `${clinic.clientName.toLowerCase()}\n${clinic.name}`;
+    const keptByName = byClientAndName.get(nameKey);
+    if (keptByName !== undefined) {
+      const group = sharedNames.find(
+        (entry) => entry.clientName === clinic.clientName && entry.name === clinic.name
+      );
+      if (group === undefined) {
+        sharedNames.push({
+          clientName: clinic.clientName,
+          name: clinic.name,
+          kept: keptByName.googleSheetId,
+          dropped: [clinic.googleSheetId],
+        });
+      } else {
+        group.dropped.push(clinic.googleSheetId);
+      }
       continue;
     }
-    group.dropped.push(label);
+
+    bySheet.set(clinic.googleSheetId, clinic);
+    byClientAndName.set(nameKey, clinic);
   }
 
   let carriedOverConfig = 0;
@@ -364,6 +419,7 @@ function buildPlan(directory: Directory, configBySheet: Map<string, SheetConfig>
     clinics,
     skipped,
     sharedSheets,
+    sharedNames,
     carriedOverConfig,
   };
 }
@@ -406,39 +462,57 @@ function runConvex(functionName: string, payload: unknown, targetProd: boolean):
   return parseConvexOutput(result.stdout.trim(), functionName);
 }
 
+// The deployment holds more clinics than one call can read, so the pages are
+// collected until the mutation reports the last one.
 function readSheetConfig(targetProd: boolean): Map<string, SheetConfig> {
-  const rows = runConvex(
-    "migrations/importCccDirectory:readSheetConfig",
-    {},
-    targetProd
-  ) as SheetConfig[];
-  return new Map(rows.map((row) => [row.googleSheetId, row]));
+  const configBySheet = new Map<string, SheetConfig>();
+  let cursor: string | null = null;
+
+  for (;;) {
+    const page = runConvex(
+      "migrations/importCccDirectory:readSheetConfig",
+      { cursor },
+      targetProd
+    ) as {
+      rows: SheetConfig[];
+      cursor: string | null;
+    };
+    for (const row of page.rows) {
+      configBySheet.set(row.googleSheetId, row);
+    }
+    if (page.cursor === null) return configBySheet;
+    cursor = page.cursor;
+  }
 }
 
-function wipeDirectory(targetProd: boolean): WipeResult {
-  const totals: WipeResult = {
-    deletedClinics: 0,
-    deletedClients: 0,
-    clearedProfiles: 0,
-    done: false,
-  };
+// Each call handles one batch of every stage and reports what is left, so the
+// wipe runs until the deployment says it is done. A call that removes nothing
+// and does not move the profile cursor can never finish, so the loop stops
+// there instead of calling again forever.
+function wipeDirectory(targetProd: boolean): WipeTotals {
+  const totals: WipeTotals = { deletedClinics: 0, deletedClients: 0, clearedProfiles: 0 };
+  let profileCursor: string | null = null;
+  let lastWorkDone = -1;
 
-  for (let call = 0; call < MAX_WIPE_CALLS; call += 1) {
+  for (;;) {
     const result = runConvex(
       "migrations/importCccDirectory:wipeDirectory",
-      {},
+      { profileCursor },
       targetProd
     ) as WipeResult;
+
     totals.deletedClinics += result.deletedClinics;
     totals.deletedClients += result.deletedClients;
     totals.clearedProfiles += result.clearedProfiles;
-    if (result.done) {
-      totals.done = true;
-      return totals;
-    }
-  }
+    if (result.done) return totals;
 
-  return fail(`The wipe did not finish after ${MAX_WIPE_CALLS} calls.`);
+    const workDone = totals.deletedClinics + totals.deletedClients + totals.clearedProfiles;
+    if (workDone === lastWorkDone && result.profileCursor === profileCursor) {
+      return fail("The wipe stopped with rows left. Run the import again to finish it.");
+    }
+    lastWorkDone = workDone;
+    profileCursor = result.profileCursor;
+  }
 }
 
 function insertClinics(plan: DirectoryPlan, targetProd: boolean): InsertResult {
@@ -479,21 +553,33 @@ function printPlan(plan: DirectoryPlan, outputPath: string) {
   );
   console.log(`Clinics that keep the column mapping they already had: ${plan.carriedOverConfig}`);
 
-  printList(
-    "Clinics with a spreadsheet that Control Central places under no client (not imported)",
-    plan.skipped
-      .filter((entry) => entry.reason === "no client")
-      .map((entry) => `${entry.name} (${entry.externalClinicId})`)
-  );
-  printList(
-    "Clinics with no spreadsheet (not imported)",
-    plan.skipped
-      .filter((entry) => entry.reason === "no spreadsheet")
-      .map((entry) => `${entry.name} (${entry.externalClinicId})`)
-  );
+  const skipLabels: Record<string, string> = {
+    "no name": "Clinics Control Central lists without a name (not imported)",
+    "no client":
+      "Clinics with a spreadsheet that Control Central places under no client (not imported)",
+    "no spreadsheet": "Clinics with no spreadsheet (not imported)",
+  };
+  for (const reason of Object.keys(skipLabels)) {
+    printList(
+      skipLabels[reason],
+      plan.skipped
+        .filter((entry) => entry.reason === reason)
+        .map((entry) =>
+          entry.name === "" ? entry.externalClinicId : `${entry.name} (${entry.externalClinicId})`
+        )
+    );
+  }
+
   printList(
     "Clinics sharing another clinic's spreadsheet (not imported)",
     plan.sharedSheets.map((group) => `${group.kept} keeps it; dropped ${group.dropped.join(", ")}`)
+  );
+  printList(
+    "Clinics sharing another clinic's name under one client (not imported)",
+    plan.sharedNames.map(
+      (group) =>
+        `${group.clientName} / ${group.name}: kept ${group.kept}; dropped ${group.dropped.join(", ")}`
+    )
   );
 }
 
