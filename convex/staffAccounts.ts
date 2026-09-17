@@ -3,6 +3,7 @@ import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
 import { mutation, query } from "./_generated/server";
 import { appError } from "./model/appErrors";
+import { MAX_ASSIGNED_CLINICS, usableClinicIds } from "./model/assignments";
 import { getStaffProfile, requireAdmin, requireCurrentUserId } from "./model/staff";
 import { staffLanguage, staffRole, staffStatus } from "./schema";
 
@@ -27,7 +28,6 @@ const managedAccount = currentAccount.extend({
   assignedClinicIds: v.array(v.id("clinics")),
 });
 
-const MAX_ASSIGNED_CLINICS = 200;
 // Matches the cap the rest of the app reads profiles under, so an account that
 // exists is an account the admin screens can list and assign.
 const MAX_MANAGED_ACCOUNTS = 500;
@@ -267,7 +267,7 @@ export const setClientAssignment = mutation({
       removed.add(clinicId);
     }
 
-    const assignedClinicIds = (target.assignedClinicIds ?? []).filter(
+    let assignedClinicIds = (target.assignedClinicIds ?? []).filter(
       (clinicId) => !removed.has(clinicId)
     );
     for (const clinicId of added) {
@@ -277,7 +277,14 @@ export const setClientAssignment = mutation({
     }
 
     if (assignedClinicIds.length > MAX_ASSIGNED_CLINICS) {
-      throw appError({ code: "CLINIC_ASSIGNMENT_LIMIT", limit: MAX_ASSIGNED_CLINICS });
+      // A list that only looks full, because it holds clinics that were
+      // disabled or deleted since they were assigned, still takes another
+      // clinic: a report skips those, so the ids that hold no room leave with
+      // the same write instead of blocking the edit.
+      assignedClinicIds = await usableClinicIds(ctx, assignedClinicIds);
+      if (assignedClinicIds.length > MAX_ASSIGNED_CLINICS) {
+        throw appError({ code: "CLINIC_ASSIGNMENT_LIMIT", limit: MAX_ASSIGNED_CLINICS });
+      }
     }
 
     await ctx.db.patch(args.profileId, { assignedClinicIds });

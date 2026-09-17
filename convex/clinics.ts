@@ -4,6 +4,7 @@ import type { Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { mutation, query } from "./_generated/server";
 import { appError, type AppErrorPayload } from "./model/appErrors";
+import { MAX_ASSIGNED_CLINICS, usableClinicIds } from "./model/assignments";
 import { clientKeyFromName } from "./model/clients";
 import { clinicSheetColumns } from "./model/clinicSheetColumns";
 import { listProfileClinics } from "./model/reporting";
@@ -15,9 +16,6 @@ import { requireAdmin, requireOperator } from "./model/staff";
 const MAX_CLINICS = 2000;
 const MAX_CLIENTS = 500;
 const MAX_STAFF_PROFILES = 500;
-// Mirrors the cap the assignment mutations and the report scope use, so a
-// self-service assignment cannot grow past what the reports can read.
-const MAX_ASSIGNED_CLINICS = 200;
 // The clinic picker shows what is still available, so its scan reads past the
 // first page of the table: filtering after a short cap would hide every clinic
 // that sits behind the pages of clinics the caller already has.
@@ -259,25 +257,6 @@ async function requireAssignedClinic(
     throw appError({ code: "CLINIC_NOT_FOUND" });
   }
   return clinic;
-}
-
-/**
- * The assigned ids whose clinic still exists and is active. The list keeps the
- * ids of clinics that were disabled or deleted since they were assigned, and
- * the screens cannot show those, so only the usable ones hold room in the cap.
- */
-async function usableClinicIds(
-  ctx: MutationCtx,
-  clinicIds: Id<"clinics">[]
-): Promise<Id<"clinics">[]> {
-  const usable: Id<"clinics">[] = [];
-  for (const clinicId of clinicIds) {
-    const clinic = await ctx.db.get("clinics", clinicId);
-    if (clinic !== null && clinic.isActive) {
-      usable.push(clinicId);
-    }
-  }
-  return usable;
 }
 
 export const listClients = query({

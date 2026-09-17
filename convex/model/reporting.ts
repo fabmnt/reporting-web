@@ -1,6 +1,7 @@
 import type { Id } from "../_generated/dataModel";
 import type { QueryCtx } from "../_generated/server";
 import { appError } from "./appErrors";
+import { MAX_ASSIGNED_CLINICS } from "./assignments";
 import { resolveClinicSheetColumns, type ResolvedClinicSheetColumns } from "./clinicSheetColumns";
 
 export type StaffProfileForReporting = {
@@ -28,7 +29,6 @@ export type ReportingClinicDoc = {
 type ReportingCtx = QueryCtx;
 
 const MAX_CLIENT_CLINICS = 200;
-const MAX_ASSIGNED_CLINICS = 200;
 
 function toReportingClinic(clinic: {
   _id: Id<"clinics">;

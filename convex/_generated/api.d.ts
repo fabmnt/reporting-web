@@ -24,6 +24,7 @@ import type * as migrations_renameStaffAccount from "../migrations/renameStaffAc
 import type * as migrations_reportTypesCleanup from "../migrations/reportTypesCleanup.js";
 import type * as migrations_reportTypesSeed from "../migrations/reportTypesSeed.js";
 import type * as model_appErrors from "../model/appErrors.js";
+import type * as model_assignments from "../model/assignments.js";
 import type * as model_carrierBots from "../model/carrierBots.js";
 import type * as model_clients from "../model/clients.js";
 import type * as model_clinicSheetColumns from "../model/clinicSheetColumns.js";
@@ -66,6 +67,7 @@ declare const fullApi: ApiFromModules<{
   "migrations/reportTypesCleanup": typeof migrations_reportTypesCleanup;
   "migrations/reportTypesSeed": typeof migrations_reportTypesSeed;
   "model/appErrors": typeof model_appErrors;
+  "model/assignments": typeof model_assignments;
   "model/carrierBots": typeof model_carrierBots;
   "model/clients": typeof model_clients;
   "model/clinicSheetColumns": typeof model_clinicSheetColumns;
