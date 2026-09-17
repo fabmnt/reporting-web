@@ -43,6 +43,7 @@ export const errors = {
   REPORT_TYPE_GROUP_REQUIRED: "A report type needs at least one row group.",
   REPORT_TYPE_GROUP_LIMIT: (limit: number) => `A report type supports up to ${limit} row groups.`,
   REPORT_TYPE_GROUP_KEYS: "Row group keys must be unique and non-empty.",
+  REPORT_RUN_NOT_FOUND: "This report run is not available any more.",
   SHEET_NO_TABS: (startDate: string, endDate: string) =>
     `No tabs found between ${startDate} and ${endDate}.`,
   SHEET_INVALID_COLUMN: (column: string) =>

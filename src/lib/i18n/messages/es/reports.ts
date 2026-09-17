@@ -21,13 +21,21 @@ export const reports = {
     "Aún no hay tipos de reporte. Crea uno en Configuración o pide a un administrador que comparta uno integrado.",
   run: "Ejecutar reporte",
   running: "Ejecutando reporte",
+  cancel: "Cancelar ejecución",
+  cancelling: "Cancelando la ejecución",
   failedTitle: "El reporte falló",
+  cancelled: {
+    title: "Reporte cancelado",
+    body: "Detuviste esta ejecución. Las filas que se leyeron antes de detenerla aparecen abajo.",
+    nothing: "Detuviste esta ejecución antes de que leyera alguna hoja.",
+  },
   outcomes: {
     noAssignedClinics: "No hay clínicas asignadas para ejecutar.",
     noReportType: "No hay ningún tipo de reporte para ejecutar.",
     pickDates: "Elige una fecha de inicio y una de fin.",
     invalidRange: "La fecha de inicio debe ser anterior o igual a la fecha de fin.",
     failed: "El reporte falló.",
+    cancelFailed: "No se pudo cancelar la ejecución.",
   },
   reading: {
     title: "Leyendo hojas",

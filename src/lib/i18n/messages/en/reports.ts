@@ -20,13 +20,21 @@ export const reports = {
     "No report types yet. Create one in Configuration, or ask an administrator to share a built-in.",
   run: "Run report",
   running: "Running report",
+  cancel: "Cancel run",
+  cancelling: "Cancelling report",
   failedTitle: "Report failed",
+  cancelled: {
+    title: "Report cancelled",
+    body: "You stopped this run. The rows it read before stopping are shown below.",
+    nothing: "You stopped this run before it read any sheet.",
+  },
   outcomes: {
     noAssignedClinics: "No assigned clinics to run.",
     noReportType: "No report type to run.",
     pickDates: "Pick a start and end date.",
     invalidRange: "The start date must be on or before the end date.",
     failed: "The report failed.",
+    cancelFailed: "The run could not be cancelled.",
   },
   reading: {
     title: "Reading sheets",

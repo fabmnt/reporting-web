@@ -51,6 +51,10 @@ export const inactiveCarriersEntry = v.object({
 export const reportRunResult = v.object({
   reportRunId: v.union(v.id("reportRuns"), v.null()),
   assignedClinicCount: v.number(),
+  // A run the operator stopped answers with the sheets it read before the
+  // request landed, so the results view can tell a short list from a complete
+  // one.
+  cancelled: v.boolean(),
   sheets: v.array(reportSheetResult),
   // Only the carrier engine has bots to report, so a row report leaves it out.
   inactiveCarriers: v.optional(v.array(inactiveCarriersEntry)),

@@ -4,6 +4,7 @@ import { internalAction } from "./_generated/server";
 import { actionDeadline, fetchSheetsJson, refreshAccessToken } from "./googleApi";
 import { reportSheetError, sheetErrorFrom, type ReportSheetError } from "./model/appErrors";
 import { assertReportDateRange, tabsInDateRange } from "./model/reporting";
+import { reportRunCancelled } from "./model/reportRuns";
 
 type SheetsTabListResponse = {
   sheets?: Array<{ properties?: { title?: string } }>;
@@ -35,6 +36,7 @@ const SHEET_TITLE_FIELDS = "sheets.properties.title";
 // these, so Sheets access never bypasses requireOperator.
 export const planSheetTabs = internalAction({
   args: {
+    runId: v.id("reportRuns"),
     clinics: v.array(v.object({ clinicId: v.id("clinics"), googleSheetId: v.string() })),
     startDate: v.string(),
     endDate: v.string(),
@@ -70,6 +72,10 @@ export const planSheetTabs = internalAction({
     }
 
     for (const clinic of args.clinics) {
+      // A run the operator stopped stops planning here: a clinic without a plan
+      // is one the run will not read either, and planning the rest would only
+      // spend requests on it.
+      if (await reportRunCancelled(ctx, args.runId)) break;
       try {
         const data = (await fetchSheetsJson(
           ctx,
@@ -106,7 +112,11 @@ function toSheetTabValues(tabTitle: string, grid: string[][] | undefined): Sheet
 // A failed chunk comes back as per-tab errors, so the other tabs of the same
 // spreadsheet still return their data.
 export const readSheetTabsValues = internalAction({
-  args: { googleSheetId: v.string(), tabTitles: v.array(v.string()) },
+  args: {
+    runId: v.id("reportRuns"),
+    googleSheetId: v.string(),
+    tabTitles: v.array(v.string()),
+  },
   returns: v.array(
     v.object({
       tabTitle: v.string(),
@@ -120,6 +130,9 @@ export const readSheetTabsValues = internalAction({
     const deadlineMs = actionDeadline();
     const results: SheetTabValues[] = [];
     for (let start = 0; start < args.tabTitles.length; start += MAX_RANGES_PER_BATCH_REQUEST) {
+      // The chunk already in flight finishes on its own, and no further chunk is
+      // asked for once the operator has stopped the run.
+      if (await reportRunCancelled(ctx, args.runId)) break;
       const chunk = args.tabTitles.slice(start, start + MAX_RANGES_PER_BATCH_REQUEST);
       try {
         const query = chunk

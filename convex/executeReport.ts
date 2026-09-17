@@ -24,6 +24,7 @@ import type {
   ReportRunResult,
   ReportSheetResult,
 } from "./model/reportResults";
+import { reportRunCancelled } from "./model/reportRuns";
 
 type ExecuteClinic = {
   clinicId: Id<"clinics">;
@@ -36,6 +37,8 @@ type ExecuteClinic = {
 };
 
 export type ExecuteRunConfig = {
+  // The record the run belongs to, which is what the operator cancels.
+  runId: Id<"reportRuns">;
   clinics: ExecuteClinic[];
   buckets: Array<{ key: string; label: string }>;
   startDate: string;
@@ -146,6 +149,7 @@ export async function runExecuteReport(
     tabsForClinic: Record<string, string[]>;
     errorsForClinic: Record<string, ReportSheetError>;
   } = await ctx.runAction(internal.sheets.planSheetTabs, {
+    runId: config.runId,
     clinics: config.clinics.map((clinic) => ({
       clinicId: clinic.clinicId,
       googleSheetId: clinic.googleSheetId,
@@ -158,8 +162,13 @@ export async function runExecuteReport(
   const inactiveCarriers: InactiveCarriersEntry[] = [];
   let succeededClinics = 0;
   let failedClinics = 0;
+  let processedClinics = 0;
 
   for (const clinic of config.clinics) {
+    // The operator may have stopped the run while the clinics before this one
+    // were read, and a clinic that is not read is not counted as processed.
+    if (await reportRunCancelled(ctx, config.runId)) break;
+    processedClinics += 1;
     const clinicEntry: ClinicEntry = {
       clinicId: clinic.clinicId,
       clinicName: clinic.name,
@@ -265,6 +274,7 @@ export async function runExecuteReport(
     }> = [];
     try {
       tabResults = await ctx.runAction(internal.sheets.readSheetTabsValues, {
+        runId: config.runId,
         googleSheetId: clinic.googleSheetId,
         tabTitles: tabs,
       });
@@ -366,25 +376,20 @@ export async function runExecuteReport(
   const clientIds = new Set(config.clinics.map((clinic) => clinic.clientId));
   const clientId = clientIds.size === 1 ? config.clinics[0]?.clientId : undefined;
 
-  const { reportRunId }: { reportRunId: Id<"reportRuns"> } = await ctx.runMutation(
-    internal.reports.recordReportRun,
-    {
-      reportTypeId: config.reportTypeId,
-      reportTypeName: config.reportTypeName,
-      clientId,
-      status: succeededClinics === 0 ? "failed" : "completed",
-      initiatedByUserId: config.userId,
-      startedAt: config.startedAt,
-      completedAt: Date.now(),
-      processedClinicCount: config.clinics.length,
-      succeededClinicCount: succeededClinics,
-      failedClinicCount: failedClinics,
-    }
-  );
+  const { cancelled } = await ctx.runMutation(internal.reportRuns.finishReportRun, {
+    runId: config.runId,
+    clientId,
+    status: succeededClinics === 0 ? "failed" : "completed",
+    completedAt: Date.now(),
+    processedClinicCount: processedClinics,
+    succeededClinicCount: succeededClinics,
+    failedClinicCount: failedClinics,
+  });
 
   return {
-    reportRunId,
+    reportRunId: config.runId,
     assignedClinicCount: config.clinics.length,
+    cancelled,
     sheets,
     inactiveCarriers,
   };
