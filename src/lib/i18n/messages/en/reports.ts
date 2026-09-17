@@ -23,6 +23,7 @@ export const reports = {
   failedTitle: "Report failed",
   outcomes: {
     noAssignedClinics: "No assigned clinics to run.",
+    noSelectedClinics: "Select at least one clinic to run.",
     noReportType: "No report type to run.",
     pickDates: "Pick a start and end date.",
     invalidRange: "The start date must be on or before the end date.",
