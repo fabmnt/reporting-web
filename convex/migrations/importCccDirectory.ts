@@ -2,7 +2,8 @@ import type { Id } from "../_generated/dataModel";
 import { v } from "convex/values";
 
 import { internalMutation, internalQuery } from "../_generated/server";
-import { adjustClientClinicCount, clientKeyFromName } from "../model/clients";
+import { clientKeyFromName } from "../model/clientKey";
+import { adjustClientClinicCount } from "../model/clients";
 import { clinicSheetColumns } from "../model/clinicSheetColumns";
 
 // One call reads, clears or deletes at most this many rows, so a table never

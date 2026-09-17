@@ -37,7 +37,7 @@ import { fileURLToPath } from "node:url";
 
 // A client row is stored under the key its name normalizes to, so the plan has
 // to read client names the way the import writes them.
-import { clientKeyFromName } from "../convex/model/clients.ts";
+import { clientKeyFromName } from "../convex/model/clientKey.ts";
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptDir, "..");

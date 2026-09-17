@@ -2,14 +2,6 @@ import type { Id } from "../_generated/dataModel";
 import type { MutationCtx } from "../_generated/server";
 import { appError } from "./appErrors";
 
-// Client names are free text, so the stored key is the normalized name.
-export function clientKeyFromName(name: string): string {
-  return name
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-}
-
 /**
  * Moves the stored clinic count of a client by `delta`. The client list shows
  * the count, so every mutation that adds, moves or deletes a clinic calls this
