@@ -49,6 +49,14 @@ export type InactiveCarriersSection = {
   clinicName: string;
   bots: Array<{ name: string; status: string; unsupported?: boolean }>;
 };
+// Rows of one clinic tab that no carrier bot could take. They stay out of the
+// results, so the operator works them by hand from this list.
+export type UnmatchedCarrierRowsSection = {
+  clinicId: Id<"clinics">;
+  clinicName: string;
+  tabTitle: string;
+  rowNumbers: number[];
+};
 export type ReportResult = {
   reportRunId: Id<"reportRuns"> | null;
   assignedClinicCount: number;
@@ -57,6 +65,7 @@ export type ReportResult = {
   cancelled: boolean;
   sheets: SheetResult[];
   inactiveCarriers?: InactiveCarriersSection[];
+  unmatchedCarrierRows?: UnmatchedCarrierRowsSection[];
 };
 
 // Leading data columns shown beside the row number; the rest of the sheet is
@@ -154,12 +163,17 @@ function groupByClinic(sheets: SheetResult[]): ClinicGroup[] {
   return groups;
 }
 
-/** The row numbers of one sheet in the shape they are copied in: '2', '3', '33'. */
+/** Row numbers in the shape they are copied in: '2', '3', '33'. */
+function formatRowNumbers(rowNumbers: number[]): string {
+  return rowNumbers.map((rowNumber) => `'${rowNumber}'`).join(", ");
+}
+
+/** The row numbers of one sheet in the shape they are copied in. */
 function rowNumberList(sheet: SheetResult): string {
   const rowNumbers = sheet.bucketRows
     .flatMap((bucket) => bucket.rows.map((row) => row.rowNumber))
     .sort((left, right) => left - right);
-  return rowNumbers.map((rowNumber) => `'${rowNumber}'`).join(", ");
+  return formatRowNumbers(rowNumbers);
 }
 
 /** A record of the phone layout: the cells that picked it are always in view. */
@@ -460,6 +474,60 @@ export function InactiveCarriersCard({ carriers }: { carriers: InactiveCarriersS
                 </ul>
               </div>
             ))}
+          </div>
+        </CollapsiblePanel>
+      </Collapsible>
+    </Card>
+  );
+}
+
+/**
+ * The rows of a clinic that no carrier bot could take, listed per clinic tab so
+ * an operator can work them by hand. They stay out of the results, so this card
+ * is the only place they appear, and it opens so the work is not hidden.
+ */
+export function UnmatchedCarrierRowsCard({ rows }: { rows: UnmatchedCarrierRowsSection[] }) {
+  const { t } = useI18n();
+
+  if (rows.length === 0) return null;
+
+  return (
+    <Card>
+      <Collapsible defaultOpen>
+        <CollapsibleTrigger className="group/unmatched flex w-full flex-col gap-1 px-(--card-spacing)">
+          <span className="flex items-center justify-between gap-2">
+            <span className="font-heading text-base leading-snug font-medium">
+              {t.reports.unmatchedCarrierRows.title}
+            </span>
+            <ChevronDown
+              className="size-4 shrink-0 text-muted-foreground transition-transform group-data-[panel-open]/unmatched:rotate-180"
+              aria-hidden="true"
+            />
+          </span>
+          <span className="text-sm text-muted-foreground">
+            {t.reports.unmatchedCarrierRows.note}
+          </span>
+        </CollapsibleTrigger>
+        <CollapsiblePanel className="mt-(--card-spacing) border-t px-(--card-spacing) pt-(--card-spacing)">
+          <div className="flex flex-col gap-4">
+            {rows.map((entry) => {
+              const label = entry.tabTitle
+                ? `${entry.clinicName} · ${entry.tabTitle}`
+                : entry.clinicName;
+              const rowNumbers = formatRowNumbers(entry.rowNumbers);
+              return (
+                <div key={`${entry.clinicId}-${entry.tabTitle}`} className="flex flex-col gap-1.5">
+                  <h3 className="text-sm font-medium">{entry.clinicName}</h3>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {entry.tabTitle === "" ? null : (
+                      <h4 className="text-xs text-muted-foreground">{entry.tabTitle}</h4>
+                    )}
+                    <p className="font-mono text-xs">{rowNumbers}</p>
+                    <CopyRowNumbers label={label} rowNumbers={rowNumbers} />
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </CollapsiblePanel>
       </Collapsible>

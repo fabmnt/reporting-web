@@ -48,6 +48,16 @@ export const inactiveCarriersEntry = v.object({
   ),
 });
 
+// The rows of one clinic tab that no carrier bot could take. A report type that
+// lists them fills this in, so an operator can work them by hand instead of
+// reading a short report as a complete one.
+export const unmatchedCarrierRowsEntry = v.object({
+  clinicId: v.id("clinics"),
+  clinicName: v.string(),
+  tabTitle: v.string(),
+  rowNumbers: v.array(v.number()),
+});
+
 export const reportRunResult = v.object({
   reportRunId: v.union(v.id("reportRuns"), v.null()),
   assignedClinicCount: v.number(),
@@ -58,10 +68,14 @@ export const reportRunResult = v.object({
   sheets: v.array(reportSheetResult),
   // Only the carrier engine has bots to report, so a row report leaves it out.
   inactiveCarriers: v.optional(v.array(inactiveCarriersEntry)),
+  // Only a report type that lists the rows no bot could take fills this in, so
+  // every other run leaves it out.
+  unmatchedCarrierRows: v.optional(v.array(unmatchedCarrierRowsEntry)),
 });
 
 export type ReportRow = Infer<typeof reportRow>;
 export type ReportBucketResult = Infer<typeof reportBucketResult>;
 export type ReportSheetResult = Infer<typeof reportSheetResult>;
 export type InactiveCarriersEntry = Infer<typeof inactiveCarriersEntry>;
+export type UnmatchedCarrierRowsEntry = Infer<typeof unmatchedCarrierRowsEntry>;
 export type ReportRunResult = Infer<typeof reportRunResult>;

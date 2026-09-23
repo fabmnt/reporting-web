@@ -41,6 +41,7 @@ import {
   InactiveCarriersCard,
   OverviewCard,
   ResultsCard,
+  UnmatchedCarrierRowsCard,
   type ReportResult,
 } from "./ReportResults";
 
@@ -473,8 +474,9 @@ export function ReportRunner() {
               {showsResults ? (
                 <>
                   <OverviewCard result={result} />
-                  <InactiveCarriersCard carriers={result.inactiveCarriers ?? []} />
                   <ResultsCard result={result} />
+                  <UnmatchedCarrierRowsCard rows={result.unmatchedCarrierRows ?? []} />
+                  <InactiveCarriersCard carriers={result.inactiveCarriers ?? []} />
                 </>
               ) : null}
             </>

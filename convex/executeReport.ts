@@ -23,8 +23,10 @@ import type {
   ReportBucketResult,
   ReportRunResult,
   ReportSheetResult,
+  UnmatchedCarrierRowsEntry,
 } from "./model/reportResults";
 import { reportRunCancelled } from "./model/reportRuns";
+import { PENDING_EXECUTE_REPORT_TYPE } from "./model/reportTypeSeed";
 
 type ExecuteClinic = {
   clinicId: Id<"clinics">;
@@ -141,6 +143,9 @@ export async function runExecuteReport(
   // being run, because a copy of the built-in type keeps the engine and a
   // deployment can hold several carrier reports.
   const logTag = `[${config.reportTypeName}]`;
+  // The pending-to-execute report lists the rows no bot can take, so an operator
+  // can work them by hand. Every other report drops those rows.
+  const listsUnmatchedRows = config.reportTypeName === PENDING_EXECUTE_REPORT_TYPE.name;
 
   const {
     tabsForClinic,
@@ -160,6 +165,7 @@ export async function runExecuteReport(
 
   const sheets: ReportSheetResult[] = [];
   const inactiveCarriers: InactiveCarriersEntry[] = [];
+  const unmatchedCarrierRows: UnmatchedCarrierRowsEntry[] = [];
   let succeededClinics = 0;
   let failedClinics = 0;
 
@@ -218,7 +224,7 @@ export async function runExecuteReport(
       });
     }
 
-    if (matchers.length === 0) {
+    if (matchers.length === 0 && !listsUnmatchedRows) {
       failClinic({ code: "SHEET_NO_CARRIER_BOTS" });
       continue;
     }
@@ -309,13 +315,16 @@ export async function runExecuteReport(
         ].sort((left, right) => left - right),
       }));
       const rowsByBucket = new Map(bucketRows.map((bucket) => [bucket.bucketKey, bucket.rows]));
+      // Rows that pass the filters but no bot can take. Only the report type
+      // that lists them keeps this non-empty; every other type drops them above.
+      const unmatchedRowNumbers: number[] = [];
       let droppedByCarrier = 0;
       let droppedByVerification = 0;
       let droppedByRules = 0;
       tabResult.values.forEach((row, index) => {
         const rowNumber = index + 2;
         const carriers = matchedCarriers(row, matchers);
-        if (carriers.length === 0) {
+        if (carriers.length === 0 && !listsUnmatchedRows) {
           droppedByCarrier += 1;
           console.log(
             `${logTag} dropped by the carrier filter: ${clinic.name} ${tabResult.tabTitle} ` +
@@ -345,6 +354,12 @@ export async function runExecuteReport(
           );
           return;
         }
+        // A row the conditions picked but no bot can take goes on the unmatched
+        // card instead of a bucket, which is what keeps it out of the results.
+        if (carriers.length === 0) {
+          unmatchedRowNumbers.push(rowNumber);
+          return;
+        }
         rowsByBucket.get(matchedBucket)?.push({ rowNumber, values: row, carriers });
       });
       const keptRows = bucketRows.reduce((total, bucket) => total + bucket.rows.length, 0);
@@ -352,9 +367,21 @@ export async function runExecuteReport(
       // went, so the counts do not have to be read off the drop lines.
       console.log(
         `${logTag} ${clinic.name} ${tabResult.tabTitle}: ${tabResult.values.length} rows read, ` +
-          `${keptRows} kept, ${droppedByCarrier} dropped by the carrier filter, ` +
+          `${keptRows} kept, ${unmatchedRowNumbers.length} without a matching bot, ` +
+          `${droppedByCarrier} dropped by the carrier filter, ` +
           `${droppedByVerification} by the verification filter, ${droppedByRules} by the conditions`
       );
+
+      // The rows no bot can take travel on their own card, so they stay out of
+      // the buckets and the results tables.
+      if (unmatchedRowNumbers.length > 0) {
+        unmatchedCarrierRows.push({
+          clinicId: clinic.clinicId,
+          clinicName: clinic.name,
+          tabTitle: tabResult.tabTitle,
+          rowNumbers: unmatchedRowNumbers,
+        });
+      }
 
       sheets.push({
         ...clinicEntry,
@@ -397,5 +424,6 @@ export async function runExecuteReport(
     cancelled,
     sheets,
     inactiveCarriers,
+    unmatchedCarrierRows,
   };
 }

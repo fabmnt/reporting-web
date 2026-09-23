@@ -53,8 +53,12 @@ export const reports = {
   },
   inactiveCarriers: {
     title: "Carriers not active",
-    note: "Bots the carrier API reports as not active. A bot that cannot run leaves its rows out of the report; the others still appear so an operator can work them.",
+    note: "Bots the carrier API does not report as active, and bots whose pattern this app cannot run. Check this list to tell a short result from a complete one.",
     patternUnsupported: "Pattern this app cannot run",
+  },
+  unmatchedCarrierRows: {
+    title: "Rows without a matching bot",
+    note: "Rows that are pending to execute but no clinic bot can run, so they stay out of the results above.",
   },
   results: {
     title: "Results",
