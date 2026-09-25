@@ -20,6 +20,7 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useI18n } from "@/lib/i18n/context";
 import { localizedError, type LocalizedMessage } from "@/lib/i18n/errors";
+import { useSearchText } from "@/lib/listControls";
 
 type ClientChoice = FunctionReturnType<typeof api.clinics.listClientChoices>["clients"][number];
 
@@ -53,10 +54,11 @@ function ClientRow({
 
 /**
  * The clients one service account reads the sheets of, and the clients it could
- * take over. Linking writes the client's service account, which is the same
- * link the client form sets, so the counts of the accounts involved move with
- * it. A client already linked to another account is offered here too, because
- * moving it is what linking it to this one means.
+ * take over. Linking writes the client's service account alone, through the
+ * mutation that keeps it and the counts of both accounts in step, so a client
+ * renamed or disabled while this was open keeps what it was given. A client
+ * already linked to another account is offered here too, because moving it is
+ * what linking it to this one means.
  */
 export function ServiceAccountClientsDialog({
   account,
@@ -66,35 +68,53 @@ export function ServiceAccountClientsDialog({
   onClose: () => void;
 }) {
   const { t } = useI18n();
-  const data = useQuery(api.clinics.listClientChoices, {});
-  const updateClient = useMutation(api.clinics.updateClient);
+  // The clients of this account, read through the account's own index: the
+  // picker below holds one page of the table, and a linked client past that page
+  // would be missing from the account that reads its sheets.
+  const accountClients = useQuery(api.clinics.listServiceAccountClients, {
+    serviceAccountId: account.serviceAccountId,
+  });
+  // A substring is not something an index can answer, so the directory is the
+  // picker's page of the table while the box is empty and the bounded server
+  // search once it holds something, the same as the clients screen.
+  const search = useSearchText();
+  const isSearching = search.query !== "";
+  const choiceData = useQuery(api.clinics.listClientChoices, isSearching ? "skip" : {});
+  const searchData = useQuery(
+    api.clinics.searchClients,
+    isSearching ? { search: search.query } : "skip"
+  );
+  const linkClient = useMutation(api.clinics.linkClientServiceAccount);
 
-  const [search, setSearch] = useState("");
   const [pendingClientId, setPendingClientId] = useState<Id<"clients"> | null>(null);
   const [error, setError] = useState<LocalizedMessage | null>(null);
 
-  const clients = data?.clients ?? [];
-  const linked = clients.filter((client) => client.serviceAccountId === account.serviceAccountId);
-  const others = clients.filter((client) => client.serviceAccountId !== account.serviceAccountId);
-  const needle = search.trim().toLowerCase();
-  const matches =
-    needle === ""
-      ? others
-      : others.filter(
-          (client) =>
-            client.name.toLowerCase().includes(needle) || client.key.toLowerCase().includes(needle)
-        );
+  const linked = accountClients?.clients ?? [];
+  const directory: ClientChoice[] = isSearching
+    ? (searchData?.clients ?? [])
+    : (choiceData?.clients ?? []);
+  const others = directory.filter((client) => client.serviceAccountId !== account.serviceAccountId);
+  const isReady =
+    accountClients !== undefined &&
+    (isSearching ? searchData !== undefined : choiceData !== undefined);
+
+  // What a list says when it is not the whole directory: a search that read only
+  // part of the table, or a page of the picker that stopped before its end.
+  let directoryNote: string | null = null;
+  if (isSearching) {
+    if (searchData?.hasMore === true) {
+      directoryNote = t.admin.serviceAccounts.clientsDialog.searchIncomplete;
+    }
+  } else if (choiceData?.hasMore === true) {
+    directoryNote = t.admin.serviceAccounts.clientsDialog.incomplete(choiceData.limit);
+  }
 
   async function link(client: ClientChoice) {
     setPendingClientId(client.clientId);
     setError(null);
     try {
-      // The name and the state travel back unchanged: this dialog only decides
-      // which account reads the client's sheets.
-      await updateClient({
+      await linkClient({
         clientId: client.clientId,
-        name: client.name,
-        isActive: client.isActive,
         serviceAccountId: account.serviceAccountId,
       });
     } catch (cause) {
@@ -124,7 +144,7 @@ export function ServiceAccountClientsDialog({
           </DialogDescription>
         </DialogHeader>
 
-        {data === undefined ? (
+        {!isReady ? (
           <Skeleton className="h-40 w-full" />
         ) : (
           <div className="flex flex-col gap-4">
@@ -148,6 +168,11 @@ export function ServiceAccountClientsDialog({
                   ))}
                 </div>
               )}
+              {accountClients?.hasMore === true ? (
+                <p className="text-xs text-muted-foreground">
+                  {t.admin.serviceAccounts.clientsDialog.incomplete(accountClients.limit)}
+                </p>
+              ) : null}
             </div>
 
             <div className="flex flex-col gap-3">
@@ -160,22 +185,20 @@ export function ServiceAccountClientsDialog({
                 </FieldLabel>
                 <Input
                   id="service-account-client-search"
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value)}
+                  value={search.text}
+                  onChange={(event) => search.change(event.target.value)}
                   disabled={pendingClientId !== null}
                 />
               </Field>
               <div className="flex max-h-64 flex-col gap-3 overflow-y-auto">
                 {others.length === 0 ? (
                   <p className="text-sm text-muted-foreground">
-                    {t.admin.serviceAccounts.clientsDialog.allLinked}
-                  </p>
-                ) : matches.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">
-                    {t.admin.serviceAccounts.clientsDialog.noMatches}
+                    {isSearching
+                      ? t.admin.serviceAccounts.clientsDialog.noMatches
+                      : t.admin.serviceAccounts.clientsDialog.allLinked}
                   </p>
                 ) : (
-                  matches.map((client) => (
+                  others.map((client) => (
                     <ClientRow
                       key={client.clientId}
                       client={client}
@@ -185,11 +208,9 @@ export function ServiceAccountClientsDialog({
                   ))
                 )}
               </div>
-              {data.hasMore ? (
-                <p className="text-xs text-muted-foreground">
-                  {t.admin.serviceAccounts.clientsDialog.incomplete(data.limit)}
-                </p>
-              ) : null}
+              {directoryNote === null ? null : (
+                <p className="text-xs text-muted-foreground">{directoryNote}</p>
+              )}
             </div>
           </div>
         )}

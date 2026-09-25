@@ -540,6 +540,49 @@ export const listClientChoices = query({
   },
 });
 
+// How many clients of one account this list reads. The clients of a single
+// account sit far below this, so the cap reports a list that was cut rather than
+// cutting one, and an installation that outgrows it still sees how many it holds.
+const MAX_SERVICE_ACCOUNT_CLIENTS = 2000;
+
+/**
+ * The clients that read their sheets with one service account, read through the
+ * account's own index so the list is whole: the client picker behind the accounts
+ * screen holds one page of the table, and a linked client past that page would be
+ * missing from the account that owns it.
+ */
+export const listServiceAccountClients = query({
+  args: { serviceAccountId: v.id("googleServiceAccounts") },
+  returns: v.object({
+    clients: v.array(clientView),
+    limit: v.number(),
+    hasMore: v.boolean(),
+  }),
+  handler: async (ctx, args) => {
+    await requireAdmin(ctx);
+
+    const account = await ctx.db.get("googleServiceAccounts", args.serviceAccountId);
+    if (account === null) throw appError({ code: "SERVICE_ACCOUNT_NOT_FOUND" });
+
+    const rows = await ctx.db
+      .query("clients")
+      .withIndex("by_serviceAccountId", (query) =>
+        query.eq("serviceAccountId", args.serviceAccountId)
+      )
+      .take(MAX_SERVICE_ACCOUNT_CLIENTS + 1);
+    const clients = rows
+      .slice(0, MAX_SERVICE_ACCOUNT_CLIENTS)
+      .map((client) => toClientView(client, account.email));
+    clients.sort((a, b) => a.name.localeCompare(b.name));
+
+    return {
+      clients,
+      limit: MAX_SERVICE_ACCOUNT_CLIENTS,
+      hasMore: rows.length > MAX_SERVICE_ACCOUNT_CLIENTS,
+    };
+  },
+});
+
 /**
  * Creates a client. The service account is optional: without one the client's
  * sheets are read with the app's own Google account.
@@ -615,6 +658,43 @@ export const updateClient = mutation({
     });
 
     return await readClientView(ctx, args.clientId);
+  },
+});
+
+/**
+ * Links one client to a service account and writes nothing else. The accounts
+ * screen links from a list it read earlier, so sending the client's name and
+ * state back would undo a rename or a disable that landed in between; this
+ * writes the link and moves the counts of both accounts, the same as the client
+ * form's update does.
+ *
+ * Throws CLIENT_NOT_FOUND or SERVICE_ACCOUNT_NOT_FOUND.
+ */
+export const linkClientServiceAccount = mutation({
+  args: {
+    clientId: v.id("clients"),
+    serviceAccountId: v.id("googleServiceAccounts"),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await requireAdmin(ctx);
+
+    const client = await ctx.db.get("clients", args.clientId);
+    if (client === null) {
+      throw appError({ code: "CLIENT_NOT_FOUND" });
+    }
+    await assertServiceAccountExists(ctx, args.serviceAccountId);
+
+    const previousServiceAccountId = client.serviceAccountId ?? null;
+    if (previousServiceAccountId === args.serviceAccountId) return null;
+
+    if (previousServiceAccountId !== null) {
+      await adjustServiceAccountClientCount(ctx, previousServiceAccountId, -1);
+    }
+    await adjustServiceAccountClientCount(ctx, args.serviceAccountId, 1);
+
+    await ctx.db.patch(args.clientId, { serviceAccountId: args.serviceAccountId });
+    return null;
   },
 });
 

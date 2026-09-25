@@ -226,6 +226,7 @@ export const admin = {
       search: "Search clients",
       allLinked: "Every client already reads its sheets with this account.",
       noMatches: "No clients match this search.",
+      searchIncomplete: "This search may leave matches out. Narrow it down to see the rest.",
       incomplete: (limit: number) =>
         `Showing up to ${limit} clients. Some clients may be left out.`,
       link: "Link",
