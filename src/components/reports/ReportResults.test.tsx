@@ -140,6 +140,25 @@ describe("ResultsCard", () => {
     expect(screen.getByText("No matching rows.")).toBeVisible();
     expect(screen.queryByRole("tab")).not.toBeInTheDocument();
   });
+
+  it("keeps the tab of a clinic that fell back even when it read no row", () => {
+    renderResults(
+      run([
+        {
+          ...sheet("clinic-1", "Abilene", "2026-09-29", []),
+          credential: { kind: "oauth" },
+          fallback: { account: "reader@example.com", reason: "denied" },
+        },
+      ])
+    );
+
+    // The clinic has no row to show, but which account read it is what tells the
+    // operator that a link Google turned down is behind the empty result. The
+    // alert says which account read the sheets instead, so no line repeats it.
+    expect(screen.getByRole("tab", { name: /Abilene/ })).toBeVisible();
+    expect(screen.getByText(/could not read this sheet/)).toBeVisible();
+    expect(screen.queryByText("Read with the app's Google account")).not.toBeInTheDocument();
+  });
 });
 
 describe("UnmatchedCarrierRowsCard", () => {

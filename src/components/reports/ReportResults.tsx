@@ -191,14 +191,19 @@ function sheetHasContent(sheet: SheetResult): boolean {
 }
 
 // A clinic none of whose sheet tabs has anything to show is left out of the
-// results whole.
+// results whole, unless one of them fell back to the app's own account: which
+// account read a clinic is what tells a reader that its rows were held back by
+// the filters and not by a link Google turned down.
 function clinicHasContent(group: ClinicGroup): boolean {
-  return group.sheets.some(sheetHasContent);
+  return (
+    group.sheets.some(sheetHasContent) || group.sheets.some((sheet) => sheet.fallback !== undefined)
+  );
 }
 
 // The account a clinic's sheets were read with. Every sheet of a clinic belongs
-// to the same client, so the first sheet that carries one answers for the whole
-// clinic, and a clinic whose account could not be resolved has none.
+// to the same client, so the sheets name one account between them and the first
+// sheet that carries one answers for the clinic. A clinic whose account could not
+// be resolved has none.
 function clinicCredential(group: ClinicGroup): GoogleCredential | null {
   return group.sheets.find((sheet) => sheet.credential !== undefined)?.credential ?? null;
 }
@@ -682,9 +687,10 @@ export function OverviewCard({ result }: { result: ReportResult }) {
  * Renders one finished run. Each clinic the run found rows for is a tab named
  * after the clinic and its row count, and inside it the sheet tabs of that
  * clinic carry the rows they found. A clinic or a sheet tab with nothing to
- * show is left out, unless it failed, in which case its error stays in view.
- * Every value comes from the run itself, so editing the report controls
- * afterward never rewrites what the run returned.
+ * show is left out, unless it failed or fell back to the app's own account, in
+ * which case its error or its account stays in view. Every value comes from the
+ * run itself, so editing the report controls afterward never rewrites what the
+ * run returned.
  */
 export function ResultsCard({ result }: { result: ReportResult }) {
   const { t } = useI18n();
@@ -744,8 +750,8 @@ export function ResultsCard({ result }: { result: ReportResult }) {
               ))}
             </TabsList>
             {groups.map((group) => {
-              // One account reads every sheet of a clinic, so the tab names it
-              // once at the end instead of on every sheet.
+              // The account a clinic's sheets were read with, which a clinic read
+              // by one account names once at the end instead of on every sheet.
               const credential = clinicCredential(group);
               const fallback = clinicFallback(group);
               return (
@@ -802,7 +808,10 @@ export function ResultsCard({ result }: { result: ReportResult }) {
                       </div>
                     );
                   })}
-                  {credential === null ? null : (
+                  {/* The alert already says which account read the sheets
+                      instead, so the line names one only while the whole clinic
+                      was read with it. */}
+                  {credential === null || fallback !== null ? null : (
                     <p className="text-xs text-muted-foreground">{readWithText(credential, t)}</p>
                   )}
                 </TabsContent>

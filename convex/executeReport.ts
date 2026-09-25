@@ -290,6 +290,7 @@ export async function runExecuteReport(
       headers: string[];
       values: string[][];
       error: ReportSheetError | null;
+      credential: GoogleCredential;
       fallback: CredentialFallback | null;
     }> = [];
     try {
@@ -307,15 +308,21 @@ export async function runExecuteReport(
         sheets.push({ ...clinicEntry, tabTitle, error: sheetError });
       }
     }
-    // The read reports the account it fell back from, which is the same for
-    // every tab of the call, and the clinic says so for the sheets it pushes
-    // from here on.
-    clinicEntry.fallback = tabResults[0]?.fallback ?? clinicEntry.fallback;
 
     for (const tabResult of tabResults) {
+      // The account this tab was read with and the account it left, which the
+      // read reports per sheet: a session that fell back mid-clinic answers with
+      // the app's own account from that point on.
+      const readEntry: ClinicEntry = {
+        ...clinicEntry,
+        credential: tabResult.credential,
+        // Absent rather than null: a sheet the run read as linked carries no
+        // fallback at all.
+        fallback: tabResult.fallback ?? undefined,
+      };
       if (tabResult.error !== null) {
         clinicFailed = true;
-        sheets.push({ ...clinicEntry, tabTitle: tabResult.tabTitle, error: tabResult.error });
+        sheets.push({ ...readEntry, tabTitle: tabResult.tabTitle, error: tabResult.error });
         continue;
       }
 
@@ -411,7 +418,7 @@ export async function runExecuteReport(
       }
 
       sheets.push({
-        ...clinicEntry,
+        ...readEntry,
         tabTitle: tabResult.tabTitle,
         headers: tabResult.headers,
         bucketRows,

@@ -290,10 +290,11 @@ async function runReportSheets(
     if (await reportRunCancelled(ctx, runId)) break;
     // The account that read this clinic's sheets, which the results name, and
     // the account it left for the app's own when the linked one could not be
-    // used. The read reports that again, for a sheet that is refused only once
-    // its values are asked for.
+    // used. This is what planning answered, which is what a clinic the read never
+    // reached is reported with; a sheet that was read names both again, for one
+    // refused only once its values were asked for.
     const credential = credentialsForClinic[clinic.clinicId];
-    let fallback = fallbacksForClinic[clinic.clinicId];
+    const fallback = fallbacksForClinic[clinic.clinicId];
     const planningError = errorsForClinic[clinic.clinicId];
     if (planningError !== undefined) {
       failedClinics += 1;
@@ -357,6 +358,7 @@ async function runReportSheets(
       headers: string[];
       values: string[][];
       error: ReportSheetError | null;
+      credential: GoogleCredential;
       fallback: CredentialFallback | null;
     }> = [];
     try {
@@ -385,9 +387,6 @@ async function runReportSheets(
         });
       }
     }
-    // The read reports the account it fell back from, which is the same for
-    // every tab of the call. Null means the sheets were read as linked.
-    fallback = tabResults[0]?.fallback ?? fallback;
     for (const tabResult of tabResults) {
       if (tabResult.error !== null) {
         clinicFailed = true;
@@ -399,8 +398,10 @@ async function runReportSheets(
           headers: [],
           bucketRows: [],
           error: tabResult.error,
-          credential,
-          fallback,
+          credential: tabResult.credential,
+          // Absent rather than null: a sheet the run read as linked carries no
+          // fallback at all.
+          fallback: tabResult.fallback ?? undefined,
         });
         continue;
       }
@@ -430,8 +431,10 @@ async function runReportSheets(
         headers,
         bucketRows,
         error: null,
-        credential,
-        fallback,
+        credential: tabResult.credential,
+        // Absent rather than null: a sheet the run read as linked carries no
+        // fallback at all.
+        fallback: tabResult.fallback ?? undefined,
       });
     }
     // A clinic the operator stopped in the middle of read no sheet, so it is

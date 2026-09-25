@@ -18,8 +18,17 @@ type SheetTabValues = {
   headers: string[];
   values: string[][];
   error: ReportSheetError | null;
-  // The account the sheet was read with, when the client's own could not be
-  // used, so the result marks the sheets that were read that way.
+  // The account this tab was read with and the account that one left for the
+  // app's own, when the client's linked account could not be used, so a result
+  // names the account behind the sheet and marks the ones read that way.
+  credential: GoogleCredential;
+  fallback: CredentialFallback | null;
+};
+
+// The account one call of a session was made as: what a tab it answered for is
+// reported with.
+type SheetsReadAccount = {
+  credential: GoogleCredential;
   fallback: CredentialFallback | null;
 };
 
@@ -119,11 +128,11 @@ export const planSheetTabs = internalAction({
 function toSheetTabValues(
   tabTitle: string,
   grid: SheetGrid,
-  fallback: CredentialFallback | null
+  account: SheetsReadAccount
 ): SheetTabValues {
   // First row is the header, same as the old tool's get_rows() which pops row 0.
-  if (grid.length === 0) return { tabTitle, headers: [], values: [], error: null, fallback };
-  return { tabTitle, headers: grid[0] ?? [], values: grid.slice(1), error: null, fallback };
+  if (grid.length === 0) return { tabTitle, headers: [], values: [], error: null, ...account };
+  return { tabTitle, headers: grid[0] ?? [], values: grid.slice(1), error: null, ...account };
 }
 
 // Reads every requested tab of one spreadsheet. Batches the tabs so a clinic
@@ -143,8 +152,9 @@ export const readSheetTabsValues = internalAction({
       headers: v.array(v.string()),
       values: v.array(v.array(v.string())),
       error: v.union(reportSheetError, v.null()),
-      // The account the tab was read with, when the client's own could not be
-      // used.
+      // The account the tab was read with, and the account it left for the app's
+      // own when the client's linked account could not be used.
+      credential: googleCredential,
       fallback: v.union(credentialFallback, v.null()),
     })
   ),
@@ -165,17 +175,26 @@ export const readSheetTabsValues = internalAction({
           args.googleSheetId,
           chunk.map((tabTitle) => `${tabTitle}!${READ_RANGE}`)
         );
+        // The account of the session as of this chunk: one that already fell back
+        // answered with the app's own account.
+        const account: SheetsReadAccount = {
+          credential: session.credential,
+          fallback: session.fallback,
+        };
         chunk.forEach((tabTitle, index) => {
-          results.push(toSheetTabValues(tabTitle, grids[index] ?? [], session.fallback));
+          results.push(toSheetTabValues(tabTitle, grids[index] ?? [], account));
         });
       } catch (error) {
         const sheetError = sheetErrorFrom(error);
         // The state of the session and not of this chunk: a session that already
         // fell back stays on the app's own account, so the tabs that fail after
         // that say which account was reading them.
-        const fallback = session.fallback;
+        const account: SheetsReadAccount = {
+          credential: session.credential,
+          fallback: session.fallback,
+        };
         for (const tabTitle of chunk) {
-          results.push({ tabTitle, headers: [], values: [], error: sheetError, fallback });
+          results.push({ tabTitle, headers: [], values: [], error: sheetError, ...account });
         }
       }
     }
