@@ -48,6 +48,13 @@ export const inactiveCarriersEntry = v.object({
   ),
 });
 
+// One row no carrier bot could take, kept with the carrier cell it was read
+// from so an operator can tell a name no bot matches from an empty cell.
+export const unmatchedCarrierRow = v.object({
+  rowNumber: v.number(),
+  carrier: v.string(),
+});
+
 // The rows of one clinic tab that no carrier bot could take. A report type that
 // lists them fills this in, so an operator can work them by hand instead of
 // reading a short report as a complete one.
@@ -55,7 +62,7 @@ export const unmatchedCarrierRowsEntry = v.object({
   clinicId: v.id("clinics"),
   clinicName: v.string(),
   tabTitle: v.string(),
-  rowNumbers: v.array(v.number()),
+  rows: v.array(unmatchedCarrierRow),
 });
 
 export const reportRunResult = v.object({
@@ -77,5 +84,6 @@ export type ReportRow = Infer<typeof reportRow>;
 export type ReportBucketResult = Infer<typeof reportBucketResult>;
 export type ReportSheetResult = Infer<typeof reportSheetResult>;
 export type InactiveCarriersEntry = Infer<typeof inactiveCarriersEntry>;
+export type UnmatchedCarrierRow = Infer<typeof unmatchedCarrierRow>;
 export type UnmatchedCarrierRowsEntry = Infer<typeof unmatchedCarrierRowsEntry>;
 export type ReportRunResult = Infer<typeof reportRunResult>;

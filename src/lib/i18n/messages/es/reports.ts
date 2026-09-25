@@ -60,6 +60,7 @@ export const reports = {
   unmatchedCarrierRows: {
     title: "Filas sin un bot que coincida",
     note: "Filas pendientes de ejecutar que ningún bot de la clínica puede ejecutar, por eso quedan fuera de los resultados de arriba.",
+    carrier: "Carrier",
   },
   results: {
     title: "Resultados",

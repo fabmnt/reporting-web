@@ -49,13 +49,19 @@ export type InactiveCarriersSection = {
   clinicName: string;
   bots: Array<{ name: string; status: string; unsupported?: boolean }>;
 };
+// One row no carrier bot could take, with the carrier cell it was read from:
+// that cell is the name the bots did not match.
+export type UnmatchedCarrierRow = {
+  rowNumber: number;
+  carrier: string;
+};
 // Rows of one clinic tab that no carrier bot could take. They stay out of the
 // results, so the operator works them by hand from this list.
 export type UnmatchedCarrierRowsSection = {
   clinicId: Id<"clinics">;
   clinicName: string;
   tabTitle: string;
-  rowNumbers: number[];
+  rows: UnmatchedCarrierRow[];
 };
 export type ReportResult = {
   reportRunId: Id<"reportRuns"> | null;
@@ -514,16 +520,37 @@ export function UnmatchedCarrierRowsCard({ rows }: { rows: UnmatchedCarrierRowsS
               const label = entry.tabTitle
                 ? `${entry.clinicName} · ${entry.tabTitle}`
                 : entry.clinicName;
-              const rowNumbers = formatRowNumbers(entry.rowNumbers);
+              const rowNumbers = formatRowNumbers(entry.rows.map((row) => row.rowNumber));
               return (
                 <div key={`${entry.clinicId}-${entry.tabTitle}`} className="flex flex-col gap-1.5">
-                  <h3 className="text-sm font-medium">{entry.clinicName}</h3>
                   <div className="flex flex-wrap items-center gap-2">
+                    <h3 className="text-sm font-medium">{entry.clinicName}</h3>
                     {entry.tabTitle === "" ? null : (
                       <h4 className="text-xs text-muted-foreground">{entry.tabTitle}</h4>
                     )}
-                    <p className="font-mono text-xs">{rowNumbers}</p>
                     <CopyRowNumbers label={label} rowNumbers={rowNumbers} />
+                  </div>
+                  <div className="overflow-hidden rounded-lg border">
+                    <Table>
+                      <TableHeader className="bg-muted/40">
+                        <TableRow>
+                          <TableHead>{t.common.row}</TableHead>
+                          <TableHead>{t.reports.unmatchedCarrierRows.carrier}</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {entry.rows.map((row) => (
+                          <TableRow key={row.rowNumber}>
+                            <TableCell className="font-mono tabular-nums">
+                              {row.rowNumber}
+                            </TableCell>
+                            <TableCell className="max-w-40">
+                              <TruncatedText>{row.carrier || t.common.none}</TruncatedText>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
                   </div>
                 </div>
               );

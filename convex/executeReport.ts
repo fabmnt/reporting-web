@@ -23,6 +23,7 @@ import type {
   ReportBucketResult,
   ReportRunResult,
   ReportSheetResult,
+  UnmatchedCarrierRow,
   UnmatchedCarrierRowsEntry,
 } from "./model/reportResults";
 import { reportRunCancelled } from "./model/reportRuns";
@@ -317,9 +318,10 @@ export async function runExecuteReport(
         ].sort((left, right) => left - right),
       }));
       const rowsByBucket = new Map(bucketRows.map((bucket) => [bucket.bucketKey, bucket.rows]));
-      // Rows that pass the filters but no bot can take. Only the report type
-      // that lists them keeps this non-empty; every other type drops them above.
-      const unmatchedRowNumbers: number[] = [];
+      // Rows that pass the filters but no bot can take, with the carrier cell
+      // they read from. Only the report type that lists them keeps this
+      // non-empty; every other type drops them above.
+      const unmatchedRows: UnmatchedCarrierRow[] = [];
       let droppedByCarrier = 0;
       let droppedByVerification = 0;
       let droppedByRules = 0;
@@ -358,8 +360,13 @@ export async function runExecuteReport(
         }
         // A row the conditions picked but no bot can take goes on the unmatched
         // card instead of a bucket, which is what keeps it out of the results.
+        // The carrier cell travels with it, because that is the name the bots
+        // did not match.
         if (carriers.length === 0) {
-          unmatchedRowNumbers.push(rowNumber);
+          unmatchedRows.push({
+            rowNumber,
+            carrier: (row[CARRIER_COLUMN_INDEX] ?? "").trim(),
+          });
           return;
         }
         rowsByBucket.get(matchedBucket)?.push({ rowNumber, values: row, carriers });
@@ -369,19 +376,19 @@ export async function runExecuteReport(
       // went, so the counts do not have to be read off the drop lines.
       console.log(
         `${logTag} ${clinic.name} ${tabResult.tabTitle}: ${tabResult.values.length} rows read, ` +
-          `${keptRows} kept, ${unmatchedRowNumbers.length} without a matching bot, ` +
+          `${keptRows} kept, ${unmatchedRows.length} without a matching bot, ` +
           `${droppedByCarrier} dropped by the carrier filter, ` +
           `${droppedByVerification} by the verification filter, ${droppedByRules} by the conditions`
       );
 
       // The rows no bot can take travel on their own card, so they stay out of
       // the buckets and the results tables.
-      if (unmatchedRowNumbers.length > 0) {
+      if (unmatchedRows.length > 0) {
         unmatchedCarrierRows.push({
           clinicId: clinic.clinicId,
           clinicName: clinic.name,
           tabTitle: tabResult.tabTitle,
-          rowNumbers: unmatchedRowNumbers,
+          rows: unmatchedRows,
         });
       }
 
