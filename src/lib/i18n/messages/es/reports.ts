@@ -100,6 +100,15 @@ export const reports = {
     noneProcessed:
       "No se procesó ninguna hoja. Revisa tus clínicas asignadas y las fechas elegidas.",
     sheetError: "Error en la hoja",
+    readWithAppAccount: "Lectura con la cuenta de Google de la aplicación",
+    readWithServiceAccount: (email: string) => `Lectura con la cuenta de servicio ${email}`,
+    fallbackTitle: "Lectura con la cuenta de la aplicación",
+    fallbackDenied: (email: string) =>
+      `La cuenta de servicio ${email} no pudo leer esta hoja, así que se leyó con la cuenta de Google de la aplicación. Comparte la hoja con ese correo.`,
+    fallbackKeyRefused: (email: string) =>
+      `Google rechazó la clave de la cuenta de servicio ${email}, así que la hoja se leyó con la cuenta de Google de la aplicación. Pide a un administrador que reemplace su clave.`,
+    fallbackMissing:
+      "La cuenta de servicio vinculada a este cliente ya no existe, así que la hoja se leyó con la cuenta de Google de la aplicación. Pide a un administrador que vincule otra.",
     noMatchingRows: "No hay filas coincidentes.",
     noTabsFound: (startDate: string, endDate: string) =>
       `No se encontraron pestañas entre ${startDate} y ${endDate}.`,

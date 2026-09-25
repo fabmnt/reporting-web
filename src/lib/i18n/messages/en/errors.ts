@@ -68,6 +68,10 @@ export const errors = {
   SHEET_RATE_LIMITED: "Google rate limited our requests. Wait a minute and try again.",
   SHEET_SERVICE_ACCOUNT_MISSING:
     "The service account that reads this client's sheets is gone. Ask an administrator to link one again.",
+  SHEET_SERVICE_ACCOUNT_DENIED: (email: string) =>
+    `The service account ${email} has no access to the spreadsheet. Share the sheet with that address.`,
+  SHEET_SERVICE_ACCOUNT_KEY_REFUSED: (email: string) =>
+    `Google will not sign a token with the key of the service account ${email}. Ask an administrator to replace its key.`,
   CARRIER_SIGN_IN_REJECTED:
     "The carrier API rejected the app credentials. Ask an administrator to check them.",
   CARRIER_API_UNAVAILABLE: "The carrier API did not answer. Try again in a moment.",

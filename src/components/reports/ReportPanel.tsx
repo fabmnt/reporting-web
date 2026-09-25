@@ -199,6 +199,22 @@ export function ReportRunner() {
     updateFilters({ ...filters, excludedClinicIds: [...excluded] });
   }
 
+  // A client stands for the clinics the form lists under it, so one tick is the
+  // whole client instead of one per clinic. A client that is held only partly
+  // becomes whole, the same as the group picker does.
+  function toggleClientClinics(clinicIds: readonly Id<"clinics">[]) {
+    const excluded = new Set(filters.excludedClinicIds);
+    const includeAll = clinicIds.some((clinicId) => excluded.has(clinicId));
+    for (const clinicId of clinicIds) {
+      if (includeAll) {
+        excluded.delete(clinicId);
+      } else {
+        excluded.add(clinicId);
+      }
+    }
+    updateFilters({ ...filters, excludedClinicIds: [...excluded] });
+  }
+
   // A ticked group holds the run to the clinics it covers, so the run form
   // reads no clinic but those while one is ticked. The ids are matched against
   // the groups that exist, so a group that was deleted while it was ticked
@@ -421,6 +437,7 @@ export function ReportRunner() {
               runClinicCount={runClinics.length}
               running={running}
               onToggleClinic={toggleClinic}
+              onToggleClientClinics={toggleClientClinics}
               onToggleGroup={toggleGroup}
               onManageGroups={() => setGroupManagerOpen(true)}
             />

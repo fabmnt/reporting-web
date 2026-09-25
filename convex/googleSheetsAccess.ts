@@ -2,7 +2,13 @@ import { internal } from "./_generated/api.js";
 import type { Id } from "./_generated/dataModel";
 import type { ActionCtx } from "./_generated/server";
 import { fetchSheetsJson, refreshAccessToken } from "./googleApi";
-import { OAUTH_CREDENTIAL, credentialKey, type GoogleCredential } from "./model/googleCredentials";
+import {
+  OAUTH_CREDENTIAL,
+  accountUnusable,
+  credentialKey,
+  type CredentialFallback,
+  type GoogleCredential,
+} from "./model/googleCredentials";
 import { toSheetGrid, type SheetGrid } from "./model/googleGrid";
 import { actionDeadline } from "./model/googlePolicy";
 
@@ -26,6 +32,12 @@ type SheetsBatchValuesResponse = {
  * and a client without one through the fetch client the app has always used.
  */
 export type SheetsSession = {
+  // The account every call of this session is made as. A report result names it
+  // so a reader can tell which Google account read a sheet.
+  credential: GoogleCredential;
+  // Set once the account the client is linked to could not be used and the app's
+  // own account read the sheet instead. Null while the session reads as linked.
+  fallback: CredentialFallback | null;
   // The title of every tab of one spreadsheet, in the order Google lists them.
   listTabTitles(spreadsheetId: string): Promise<string[]>;
   // The cells of each requested range, in the same order. A range Google has
@@ -59,6 +71,8 @@ async function oauthSession(ctx: ActionCtx, credential: GoogleCredential): Promi
   const token = await refreshAccessToken();
 
   return {
+    credential,
+    fallback: null,
     async listTabTitles(spreadsheetId) {
       const data = (await fetchSheetsJson(
         ctx,
@@ -93,6 +107,8 @@ function serviceAccountSession(
   const serviceAccountId = credential.serviceAccountId;
 
   return {
+    credential,
+    fallback: null,
     async listTabTitles(spreadsheetId) {
       return await ctx.runAction(internal.googleServiceAccount.readTabTitles, {
         serviceAccountId,
@@ -110,9 +126,10 @@ function serviceAccountSession(
 }
 
 // The credential a client's sheets are read with. A caller that does not know
-// the client reads them with the app's own account, and a client that links an
-// account Google has since forgotten fails instead of quietly reading with the
-// app's account.
+// the client reads them with the app's own account. A link that leads nowhere
+// throws here rather than answering with the app's account: the calls that read
+// sheets fall back to it themselves, so the sheets they read that way are marked
+// instead of quietly changing account.
 export async function credentialForClient(
   ctx: ActionCtx,
   clientId: Id<"clients"> | null
@@ -128,6 +145,66 @@ async function openSession(ctx: ActionCtx, credential: GoogleCredential): Promis
 }
 
 /**
+ * A session that reads with the account a client is linked to and, when Google
+ * turns that account away, with the app's own account instead. A link that is
+ * only missing a share would otherwise cost an operator the rows of a whole
+ * client, and a key that Google stopped accepting would keep failing until an
+ * administrator noticed.
+ *
+ * The account that was left is kept for the life of the session, so every call
+ * after the first one goes straight to the app's account, and it travels with
+ * the session so the result can name it.
+ */
+function fallingBackSession(input: {
+  linked: Extract<GoogleCredential, { kind: "serviceAccount" }>;
+  linkedSession: Promise<SheetsSession>;
+  appSession: () => Promise<SheetsSession>;
+}): SheetsSession {
+  let reading: SheetsSession | null = null;
+  let fallback: CredentialFallback | null = null;
+
+  async function read<T>(call: (session: SheetsSession) => Promise<T>): Promise<T> {
+    const active = reading;
+    if (active !== null) return await call(active);
+
+    const linked = await input.linkedSession;
+    try {
+      return await call(linked);
+    } catch (error) {
+      const reason = accountUnusable(error);
+      if (reason === null) throw error;
+
+      try {
+        // Opening the app's own session is part of the attempt: a deployment
+        // whose own account cannot be used leaves both accounts unusable.
+        const app = await input.appSession();
+        const value = await call(app);
+        reading = app;
+        fallback = { account: input.linked.email, reason };
+        return value;
+      } catch {
+        // Both accounts failed, so the error of the account the client picked is
+        // the one the sheet reports: that is the link an administrator has to
+        // mend, and it names the account the sheet's fix belongs to.
+        throw error;
+      }
+    }
+  }
+
+  return {
+    get credential() {
+      return reading === null ? input.linked : OAUTH_CREDENTIAL;
+    },
+    get fallback() {
+      return fallback;
+    },
+    listTabTitles: (spreadsheetId) => read((session) => session.listTabTitles(spreadsheetId)),
+    readRanges: (spreadsheetId, ranges) =>
+      read((session) => session.readRanges(spreadsheetId, ranges)),
+  };
+}
+
+/**
  * The sessions of one action, opened on demand and kept for its life. A run that
  * spans several clients of the same credential opens that credential once, so
  * its token is refreshed once instead of once per client, and every clinic of
@@ -135,7 +212,12 @@ async function openSession(ctx: ActionCtx, credential: GoogleCredential): Promis
  * failing for the clinics that ask for it later, which is why the attempt itself
  * is what is kept.
  *
- * A session that cannot be opened throws, which is the error of every sheet that
+ * A client whose own account cannot be used is read with the app's own account,
+ * and the session says so, so the result marks the sheets that were read that
+ * way. Whose account cannot be used belongs to the session of one caller and not
+ * to the account: Google refuses a spreadsheet the account was not given, so the
+ * clinic that follows one refused sheet still asks its own with the account it is
+ * linked to. Anything else that goes wrong is the error of every sheet that
  * client owns.
  */
 export function sheetsSessions(ctx: ActionCtx): {
@@ -143,17 +225,38 @@ export function sheetsSessions(ctx: ActionCtx): {
 } {
   const opened = new Map<string, Promise<SheetsSession>>();
 
+  function sessionFor(credential: GoogleCredential): Promise<SheetsSession> {
+    const key = credentialKey(credential);
+
+    let session = opened.get(key);
+    if (session === undefined) {
+      session = openSession(ctx, credential);
+      opened.set(key, session);
+    }
+    return session;
+  }
+
   return {
     async forClient(clientId) {
-      const credential = await credentialForClient(ctx, clientId);
-      const key = credentialKey(credential);
-
-      let session = opened.get(key);
-      if (session === undefined) {
-        session = openSession(ctx, credential);
-        opened.set(key, session);
+      let credential: GoogleCredential;
+      try {
+        credential = await credentialForClient(ctx, clientId);
+      } catch (error) {
+        // A link that points at an account which is not there any more leaves no
+        // account to read with at all. The client is read with the app's own
+        // account and keeps the mark that tells an operator why.
+        const reason = accountUnusable(error);
+        if (reason === null) throw error;
+        return { ...(await sessionFor(OAUTH_CREDENTIAL)), fallback: { account: null, reason } };
       }
-      return await session;
+
+      if (credential.kind === "oauth") return await sessionFor(credential);
+
+      return fallingBackSession({
+        linked: credential,
+        linkedSession: sessionFor(credential),
+        appSession: () => sessionFor(OAUTH_CREDENTIAL),
+      });
     },
   };
 }

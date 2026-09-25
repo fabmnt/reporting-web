@@ -168,6 +168,10 @@ export function sheetErrorText(error: ReportSheetError, t: Messages): string {
       return t.errors.SHEET_RATE_LIMITED;
     case "SHEET_SERVICE_ACCOUNT_MISSING":
       return t.errors.SHEET_SERVICE_ACCOUNT_MISSING;
+    case "SHEET_SERVICE_ACCOUNT_DENIED":
+      return t.errors.SHEET_SERVICE_ACCOUNT_DENIED(error.email);
+    case "SHEET_SERVICE_ACCOUNT_KEY_REFUSED":
+      return t.errors.SHEET_SERVICE_ACCOUNT_KEY_REFUSED(error.email);
     case "SHEET_CARRIER_ID_MISSING":
       return t.errors.SHEET_CARRIER_ID_MISSING;
     case "SHEET_CARRIER_ACCESS_DENIED":

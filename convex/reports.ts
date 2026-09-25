@@ -6,9 +6,10 @@ import type { ActionCtx, QueryCtx } from "./_generated/server";
 import { action, internalQuery } from "./_generated/server";
 import { internal } from "./_generated/api.js";
 import { runExecuteReport } from "./executeReport";
-import { appError, sheetErrorFrom, type ReportSheetError } from "./model/appErrors";
+import { appError, messageOf, sheetErrorFrom, type ReportSheetError } from "./model/appErrors";
 import type { ResolvedClinicSheetColumns } from "./model/clinicSheetColumns";
 import type { ExecuteVerificationFilter } from "./model/executeRules";
+import type { CredentialFallback, GoogleCredential } from "./model/googleCredentials";
 import {
   reportRunResult,
   type ReportRow,
@@ -156,7 +157,7 @@ export const runSheetReport = action({
         processedClinicCount: 0,
         succeededClinicCount: 0,
         failedClinicCount: 0,
-        errorMessage: error instanceof Error ? error.message : String(error),
+        errorMessage: messageOf(error),
       });
       if (closed.cancelled) return stoppedRun(args.runId);
       throw error;
@@ -261,9 +262,13 @@ async function runReportSheets(
   const {
     tabsForClinic,
     errorsForClinic,
+    credentialsForClinic,
+    fallbacksForClinic,
   }: {
     tabsForClinic: Record<string, string[]>;
     errorsForClinic: Record<string, ReportSheetError>;
+    credentialsForClinic: Record<string, GoogleCredential>;
+    fallbacksForClinic: Record<string, CredentialFallback>;
   } = await ctx.runAction(internal.sheets.planSheetTabs, {
     runId,
     clinics: config.clinics.map((c) => ({
@@ -283,6 +288,13 @@ async function runReportSheets(
     // The operator may have stopped the run while the clinics before this one
     // were read, and a clinic that is not read is not counted.
     if (await reportRunCancelled(ctx, runId)) break;
+    // The account that read this clinic's sheets, which the results name, and
+    // the account it left for the app's own when the linked one could not be
+    // used. This is what planning answered, which is what a clinic the read never
+    // reached is reported with; a sheet that was read names both again, for one
+    // refused only once its values were asked for.
+    const credential = credentialsForClinic[clinic.clinicId];
+    const fallback = fallbacksForClinic[clinic.clinicId];
     const planningError = errorsForClinic[clinic.clinicId];
     if (planningError !== undefined) {
       failedClinics += 1;
@@ -294,6 +306,8 @@ async function runReportSheets(
         headers: [],
         bucketRows: [],
         error: planningError,
+        credential,
+        fallback,
       });
       continue;
     }
@@ -308,6 +322,8 @@ async function runReportSheets(
         headers: [],
         bucketRows: [],
         error: { code: "SHEET_NO_TABS", startDate: params.startDate, endDate: params.endDate },
+        credential,
+        fallback,
       });
       continue;
     }
@@ -330,6 +346,8 @@ async function runReportSheets(
         headers: [],
         bucketRows: [],
         error: sheetErrorFrom(error),
+        credential,
+        fallback,
       });
       continue;
     }
@@ -340,6 +358,8 @@ async function runReportSheets(
       headers: string[];
       values: string[][];
       error: ReportSheetError | null;
+      credential: GoogleCredential;
+      fallback: CredentialFallback | null;
     }> = [];
     try {
       tabResults = await ctx.runAction(internal.sheets.readSheetTabsValues, {
@@ -362,6 +382,8 @@ async function runReportSheets(
           headers: [],
           bucketRows: [],
           error: sheetError,
+          credential,
+          fallback,
         });
       }
     }
@@ -376,6 +398,10 @@ async function runReportSheets(
           headers: [],
           bucketRows: [],
           error: tabResult.error,
+          credential: tabResult.credential,
+          // Absent rather than null: a sheet the run read as linked carries no
+          // fallback at all.
+          fallback: tabResult.fallback ?? undefined,
         });
         continue;
       }
@@ -405,6 +431,10 @@ async function runReportSheets(
         headers,
         bucketRows,
         error: null,
+        credential: tabResult.credential,
+        // Absent rather than null: a sheet the run read as linked carries no
+        // fallback at all.
+        fallback: tabResult.fallback ?? undefined,
       });
     }
     // A clinic the operator stopped in the middle of read no sheet, so it is

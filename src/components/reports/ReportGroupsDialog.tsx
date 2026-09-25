@@ -20,30 +20,16 @@ import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { useI18n } from "@/lib/i18n/context";
 import { localizedError, type LocalizedMessage } from "@/lib/i18n/errors";
-import { groupClinicCount, type ReportClinic, type ReportGroup } from "@/lib/reportGroups";
+import {
+  byClient,
+  groupClinicCount,
+  type ClientEntry,
+  type ReportClinic,
+  type ReportGroup,
+} from "@/lib/reportGroups";
 
 // Creating, editing and deleting the report groups of the account, from the
 // run form the groups are picked on.
-
-/** The clinics of one client, as the picker lists them under the client. */
-type ClientEntry = {
-  clientId: Id<"clients">;
-  clientName: string;
-  clinics: ReportClinic[];
-};
-
-function byClient(clinics: ReportClinic[]): ClientEntry[] {
-  const entries = new Map<string, ClientEntry>();
-  for (const clinic of clinics) {
-    let entry = entries.get(clinic.clientId);
-    if (entry === undefined) {
-      entry = { clientId: clinic.clientId, clientName: clinic.clientName, clinics: [] };
-      entries.set(clinic.clientId, entry);
-    }
-    entry.clinics.push(clinic);
-  }
-  return [...entries.values()].sort((a, b) => a.clientName.localeCompare(b.clientName));
-}
 
 /** One client and its clinics, with the client standing for all of them. */
 function ClientPicker({

@@ -215,5 +215,23 @@ export const admin = {
       deleteAccount: "Delete service account",
       accountFailed: "Deleting the service account failed.",
     },
+    clientsDialog: {
+      action: "Clients",
+      title: "Clients of this service account",
+      descriptionFor: (email: string) =>
+        `Every sheet of a client listed here is read with ${email}, so those sheets have to be shared with that address.`,
+      linkedTitle: "Linked clients",
+      linkedNone: "No client reads its sheets with this account yet.",
+      addTitle: "Link a client",
+      search: "Search clients",
+      allLinked: "Every client already reads its sheets with this account.",
+      noMatches: "No clients match this search.",
+      searchIncomplete: "This search may leave matches out. Narrow it down to see the rest.",
+      incomplete: (limit: number) =>
+        `Showing up to ${limit} clients. Some clients may be left out.`,
+      link: "Link",
+      linkFailedTitle: "Could not link the client",
+      linkFailed: "Linking the client failed.",
+    },
   },
 };

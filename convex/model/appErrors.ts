@@ -23,6 +23,13 @@ export type AppErrorPayload =
   | { code: "CLIENT_DISABLED" }
   | { code: "CLIENT_NOT_ASSIGNED" }
   | { code: "SERVICE_ACCOUNT_NOT_FOUND" }
+  // The account is there and its key signs, but Google will not let it read the
+  // sheet. The address travels with the code because sharing the sheet with it
+  // is the fix.
+  | { code: "SERVICE_ACCOUNT_DENIED"; email: string }
+  // Google refused to sign a token with the stored key, so nothing can be read
+  // with the account until an administrator replaces the key.
+  | { code: "SERVICE_ACCOUNT_KEY_REFUSED"; email: string }
   | { code: "SERVICE_ACCOUNT_LIMIT"; limit: number }
   | { code: "SERVICE_ACCOUNT_EMAIL_INVALID" }
   | { code: "SERVICE_ACCOUNT_EMAIL_TAKEN" }
@@ -89,6 +96,12 @@ export const reportSheetError = v.union(
   // The account that reads the client's sheets is not there any more, which
   // fails every sheet of that client until an administrator links one again.
   v.object({ code: v.literal("SHEET_SERVICE_ACCOUNT_MISSING") }),
+  // The account is linked but Google turns it away, which fails every sheet of
+  // that client until someone shares the sheet with its address.
+  v.object({ code: v.literal("SHEET_SERVICE_ACCOUNT_DENIED"), email: v.string() }),
+  // Google will not sign a token with the account's key, which fails every sheet
+  // of that client until an administrator replaces the key.
+  v.object({ code: v.literal("SHEET_SERVICE_ACCOUNT_KEY_REFUSED"), email: v.string() }),
   v.object({ code: v.literal("SHEET_FAILED"), message: v.string() }),
   // A clinic the carrier engine could not work: it has no Control Central id
   // yet, the API turned the app away, or the clinic has no bot left to run a
@@ -103,6 +116,18 @@ export const reportSheetError = v.union(
 
 export type ReportSheetError = Infer<typeof reportSheetError>;
 
+// Convex reports a failed node action the way node reports an uncaught
+// exception, which puts a prefix in front of the message this code threw. The
+// prefix tells the reader nothing about what went wrong, so the message a
+// result carries leaves it out.
+const UNCAUGHT_PREFIX = "Uncaught Error: ";
+
+/** The message of a caught error, without the prefix a failed node action gets. */
+export function messageOf(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+  return message.startsWith(UNCAUGHT_PREFIX) ? message.slice(UNCAUGHT_PREFIX.length) : message;
+}
+
 // Turns a caught error into the error a sheet reports, for the calls that keep
 // going after a failure instead of letting it reach the client.
 export function sheetErrorFrom(error: unknown): ReportSheetError {
@@ -116,8 +141,14 @@ export function sheetErrorFrom(error: unknown): ReportSheetError {
   if (payload !== null && payload.code === "SERVICE_ACCOUNT_NOT_FOUND") {
     return { code: "SHEET_SERVICE_ACCOUNT_MISSING" };
   }
+  if (payload !== null && payload.code === "SERVICE_ACCOUNT_DENIED") {
+    return { code: "SHEET_SERVICE_ACCOUNT_DENIED", email: payload.email };
+  }
+  if (payload !== null && payload.code === "SERVICE_ACCOUNT_KEY_REFUSED") {
+    return { code: "SHEET_SERVICE_ACCOUNT_KEY_REFUSED", email: payload.email };
+  }
   return {
     code: "SHEET_FAILED",
-    message: error instanceof Error ? error.message : String(error),
+    message: messageOf(error),
   };
 }

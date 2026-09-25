@@ -140,6 +140,71 @@ describe("ResultsCard", () => {
     expect(screen.getByText("No matching rows.")).toBeVisible();
     expect(screen.queryByRole("tab")).not.toBeInTheDocument();
   });
+
+  it("names the refused key of a sheet that fell back, not a missing share", () => {
+    renderResults(
+      run([
+        {
+          ...sheet("clinic-1", "Abilene", "2026-09-29", [sheetRow(3, "Ana", "Austin")]),
+          credential: { kind: "oauth" },
+          fallback: { account: "reader@example.com", reason: "keyRefused" },
+        },
+      ])
+    );
+
+    // Sharing the sheet does not fix a key Google will not sign with, so the
+    // sheet asks for the key instead, and the alert alone says which account read
+    // the sheets.
+    expect(
+      screen.getByText(/Google turned the key of the service account reader@example.com down/)
+    ).toBeVisible();
+    expect(screen.queryByText(/Share the sheet with that address/)).not.toBeInTheDocument();
+    expect(screen.queryByText("Read with the app's Google account")).not.toBeInTheDocument();
+  });
+
+  it("keeps the tab of a clinic that fell back even when it read no row", () => {
+    renderResults(
+      run([
+        {
+          ...sheet("clinic-1", "Abilene", "2026-09-29", []),
+          credential: { kind: "oauth" },
+          fallback: { account: "reader@example.com", reason: "denied" },
+        },
+      ])
+    );
+
+    // The clinic has no row to show, but which account read it is what tells the
+    // operator that a link Google turned down is behind the empty result. The
+    // alert says which account read the sheets instead, so no line repeats it.
+    expect(screen.getByRole("tab", { name: /Abilene/ })).toBeVisible();
+    expect(screen.getByText(/could not read this sheet/)).toBeVisible();
+    expect(screen.queryByText("Read with the app's Google account")).not.toBeInTheDocument();
+  });
+
+  it("names the reader of each sheet of a clinic that two accounts read", () => {
+    renderResults(
+      run([
+        {
+          ...sheet("clinic-1", "Abilene", "2026-09-29", [sheetRow(3, "Ana", "Austin")]),
+          credential: {
+            kind: "serviceAccount",
+            serviceAccountId: "account-1" as Id<"googleServiceAccounts">,
+            email: "reader@example.com",
+          },
+        },
+        {
+          ...sheet("clinic-1", "Abilene", "2026-09-28", [sheetRow(5, "Luis", "Dallas")]),
+          credential: { kind: "oauth" },
+          fallback: { account: "reader@example.com", reason: "denied" },
+        },
+      ])
+    );
+
+    // The alert says what was refused and not which rows it cost, so both readers
+    // stay named: the rows read as linked and the ones the refusal cost.
+    expect(screen.getByText("Read with the service account reader@example.com")).toBeVisible();
+    expect(screen.getByText("Read with the app's Google account")).toBeVisible();
+  });
 });
 
 describe("UnmatchedCarrierRowsCard", () => {

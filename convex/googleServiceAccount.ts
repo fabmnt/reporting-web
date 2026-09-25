@@ -118,19 +118,27 @@ function googleFailureOf(error: unknown): GoogleFailure {
   });
 }
 
-// The wording a sheet reports when a service account cannot read it. Sharing the
-// spreadsheet with the account is the fix for both a missing permission and an
-// id the account cannot see, so the address is named in the message.
+// The wording a sheet reports when a service account cannot read it and no code
+// covers the reason. Naming the address is what tells an operator which account
+// the sheet has to be shared with.
 function sheetsFailureMessage(failure: GoogleFailure, email: string): string {
   const suffix = failure.detail === "" ? "" : ` ${failure.detail}`;
-  if (failure.status === 403) {
-    return `The service account ${email} was denied the spreadsheet. Share the sheet with that address.${suffix}`;
-  }
   if (failure.status === 404) {
     return `The service account ${email} cannot find that spreadsheet. Check the sheet id and share the sheet with that address.${suffix}`;
   }
   if (failure.status === 0) return `Google Sheets request failed as ${email}. ${failure.detail}`;
   return `Google Sheets request failed with status ${failure.status} as ${email}.${suffix}`;
+}
+
+// Google's token endpoint answers a key it will not sign with using
+// error/error_description, while the Sheets API answers a refused request with
+// error.message. Only the first means the account itself is unusable, which is
+// what lets a run read the sheet with another account instead.
+function keyRefused(failure: GoogleFailure): boolean {
+  const body = (typeof failure.body === "object" && failure.body !== null ? failure.body : {}) as {
+    error_description?: unknown;
+  };
+  return typeof body.error_description === "string";
 }
 
 // The stored key of a service account. Only this module asks for it: the query
@@ -164,10 +172,19 @@ async function callSheets<T>(
     beforeAttempt: () =>
       awaitSheetsSlot(ctx, deadlineMs, serviceAccountBucket(account.serviceAccountId)),
     deadlineMs,
-    failure: (failure) =>
-      failure.quotaRejection
-        ? appError({ code: "SHEET_RATE_LIMITED" })
-        : new Error(sheetsFailureMessage(failure, account.key.email)),
+    failure: (failure) => {
+      if (failure.quotaRejection) return appError({ code: "SHEET_RATE_LIMITED" });
+      // A sheet Google refuses is the same fix for every sheet the client owns,
+      // so it travels as a code the operator reads in their own language
+      // instead of as the text Google answered with.
+      if (failure.status === 403) {
+        return appError({ code: "SERVICE_ACCOUNT_DENIED", email: account.key.email });
+      }
+      if (keyRefused(failure)) {
+        return appError({ code: "SERVICE_ACCOUNT_KEY_REFUSED", email: account.key.email });
+      }
+      return new Error(sheetsFailureMessage(failure, account.key.email));
+    },
   });
 }
 

@@ -3,7 +3,7 @@ import { type Infer, v } from "convex/values";
 
 import type { Id } from "../_generated/dataModel";
 import type { MutationCtx } from "../_generated/server";
-import { appError } from "./appErrors";
+import { appError, appErrorPayloadOf } from "./appErrors";
 
 // Which Google account reads a client's sheets. A client without a service
 // account keeps using the deployment wide OAuth refresh token, which is how
@@ -23,6 +23,37 @@ export type GoogleCredential = Infer<typeof googleCredential>;
 
 // The credential of every client that has no service account.
 export const OAUTH_CREDENTIAL: GoogleCredential = { kind: "oauth" };
+
+// Where a read landed when the account a client is linked to could not be used:
+// the app's own account. `account` is the address Google turned away, which is
+// the one that names the account an operator has to work on, and it is absent for
+// a link that points at an account which is not there any more. `reason` says
+// what has to be done about that account: link one again, share the sheet with
+// it, or replace the key Google will not sign with. A result keeps this beside
+// the credential that read the sheet, so an operator can tell a client that was
+// read as linked from one that fell back.
+export const credentialFallback = v.object({
+  account: v.union(v.string(), v.null()),
+  reason: v.union(v.literal("missing"), v.literal("denied"), v.literal("keyRefused")),
+});
+
+export type CredentialFallback = Infer<typeof credentialFallback>;
+
+/**
+ * Why a client's own account cannot be used, for the calls that read with the
+ * app's own account instead. Null means the failure is the request's own, which
+ * another account would not fix: a quota Google asks callers to wait out, a
+ * spreadsheet that is not there, or an answer that never arrived.
+ */
+export function accountUnusable(error: unknown): CredentialFallback["reason"] | null {
+  const code = appErrorPayloadOf(error)?.code;
+  if (code === "SERVICE_ACCOUNT_NOT_FOUND") return "missing";
+  if (code === "SERVICE_ACCOUNT_DENIED") return "denied";
+  // A key Google refuses is not fixed by sharing the sheet, so it keeps a
+  // reason of its own for the sentence the operator reads.
+  if (code === "SERVICE_ACCOUNT_KEY_REFUSED") return "keyRefused";
+  return null;
+}
 
 /**
  * Moves the stored client count of a service account by `delta`. The accounts

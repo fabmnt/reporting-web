@@ -214,5 +214,23 @@ export const admin = {
       deleteAccount: "Eliminar cuenta de servicio",
       accountFailed: "No se pudo eliminar la cuenta de servicio.",
     },
+    clientsDialog: {
+      action: "Clientes",
+      title: "Clientes de esta cuenta de servicio",
+      descriptionFor: (email: string) =>
+        `Cada hoja de los clientes de esta lista se lee con ${email}, así que esas hojas deben compartirse con ese correo.`,
+      linkedTitle: "Clientes vinculados",
+      linkedNone: "Ningún cliente lee sus hojas con esta cuenta todavía.",
+      addTitle: "Vincular un cliente",
+      search: "Buscar clientes",
+      allLinked: "Todos los clientes ya leen sus hojas con esta cuenta.",
+      noMatches: "Ningún cliente coincide con esta búsqueda.",
+      searchIncomplete: "Esta búsqueda puede dejar coincidencias fuera. Afínala para ver el resto.",
+      incomplete: (limit: number) =>
+        `Mostrando hasta ${limit} clientes. Puede que algunos queden fuera.`,
+      link: "Vincular",
+      linkFailedTitle: "No se pudo vincular el cliente",
+      linkFailed: "Falló la vinculación del cliente.",
+    },
   },
 };

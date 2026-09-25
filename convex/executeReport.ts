@@ -11,6 +11,7 @@ import {
   type ExecuteVerificationFilter,
 } from "./model/executeRules";
 import { actionDeadline } from "./model/googlePolicy";
+import type { CredentialFallback, GoogleCredential } from "./model/googleCredentials";
 import {
   conditionColumnResolver,
   evaluateConditionSet,
@@ -61,6 +62,12 @@ type ClinicEntry = {
   headers: string[];
   bucketRows: ReportBucketResult[];
   error: ReportSheetError | null;
+  // The account that reads this clinic's sheets, which the results name. Left
+  // out for a clinic whose account could not be resolved.
+  credential?: GoogleCredential;
+  // The account this clinic's own could not be used in favor of, when the run
+  // fell back to the app's own account to read its sheets at all.
+  fallback?: CredentialFallback;
 };
 
 // The error each failure of the carrier API turns into. A clinic keeps its
@@ -151,9 +158,13 @@ export async function runExecuteReport(
   const {
     tabsForClinic,
     errorsForClinic,
+    credentialsForClinic,
+    fallbacksForClinic,
   }: {
     tabsForClinic: Record<string, string[]>;
     errorsForClinic: Record<string, ReportSheetError>;
+    credentialsForClinic: Record<string, GoogleCredential>;
+    fallbacksForClinic: Record<string, CredentialFallback>;
   } = await ctx.runAction(internal.sheets.planSheetTabs, {
     runId: config.runId,
     clinics: config.clinics.map((clinic) => ({
@@ -183,6 +194,8 @@ export async function runExecuteReport(
       headers: [],
       bucketRows: [],
       error: null,
+      credential: credentialsForClinic[clinic.clinicId],
+      fallback: fallbacksForClinic[clinic.clinicId],
     };
     const failClinic = (error: ReportSheetError) => {
       failedClinics += 1;
@@ -277,6 +290,8 @@ export async function runExecuteReport(
       headers: string[];
       values: string[][];
       error: ReportSheetError | null;
+      credential: GoogleCredential;
+      fallback: CredentialFallback | null;
     }> = [];
     try {
       tabResults = await ctx.runAction(internal.sheets.readSheetTabsValues, {
@@ -295,9 +310,19 @@ export async function runExecuteReport(
     }
 
     for (const tabResult of tabResults) {
+      // The account this tab was read with and the account it left, which the
+      // read reports per sheet: a session that fell back mid-clinic answers with
+      // the app's own account from that point on.
+      const readEntry: ClinicEntry = {
+        ...clinicEntry,
+        credential: tabResult.credential,
+        // Absent rather than null: a sheet the run read as linked carries no
+        // fallback at all.
+        fallback: tabResult.fallback ?? undefined,
+      };
       if (tabResult.error !== null) {
         clinicFailed = true;
-        sheets.push({ ...clinicEntry, tabTitle: tabResult.tabTitle, error: tabResult.error });
+        sheets.push({ ...readEntry, tabTitle: tabResult.tabTitle, error: tabResult.error });
         continue;
       }
 
@@ -393,7 +418,7 @@ export async function runExecuteReport(
       }
 
       sheets.push({
-        ...clinicEntry,
+        ...readEntry,
         tabTitle: tabResult.tabTitle,
         headers: tabResult.headers,
         bucketRows,
