@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import type { Infer } from "convex/values";
 
 import { reportSheetError } from "./appErrors";
+import { credentialFallback, googleCredential } from "./googleCredentials";
 
 // One row of a finished run. `carriers` lists the bots whose pattern the row's
 // carrier cell matched, which only the carrier engine fills in.
@@ -30,6 +31,15 @@ export const reportSheetResult = v.object({
   // One entry per bucket of the report type, in bucket order.
   bucketRows: v.array(reportBucketResult),
   error: v.union(reportSheetError, v.null()),
+  // The Google account the sheet was read with, so a reader can tell the app's
+  // own account from a client's service account. Left out for a clinic whose
+  // account could not be resolved, which is what its error reports.
+  credential: v.optional(googleCredential),
+  // Set when the sheet could not be read with the account its client is linked
+  // to and the run read it with the app's own account instead. It names the
+  // account that was left, which is the one the sheet has to be shared with, and
+  // it stands beside a credential that names the account that did read the sheet.
+  fallback: v.optional(credentialFallback),
 });
 
 // A clinic with bots the carrier API reports as not active, or whose pattern

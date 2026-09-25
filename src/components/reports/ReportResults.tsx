@@ -5,6 +5,7 @@ import { useState } from "react";
 
 import type { Id } from "../../../convex/_generated/dataModel";
 import type { ReportSheetError } from "../../../convex/model/appErrors";
+import type { CredentialFallback, GoogleCredential } from "../../../convex/model/googleCredentials";
 import { DataTableFrame } from "@/components/app/DataCard";
 import { TruncatedText } from "@/components/app/TruncatedText";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -23,6 +24,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useI18n } from "@/lib/i18n/context";
 import { sheetErrorText } from "@/lib/i18n/errors";
+import type { Messages } from "@/lib/i18n/messages";
 import { cn } from "@/lib/utils";
 
 export type ReportRow = { rowNumber: number; values: string[]; carriers?: string[] };
@@ -41,6 +43,13 @@ export type SheetResult = {
   headers: string[];
   bucketRows: BucketResult[];
   error: ReportSheetError | null;
+  // The Google account the sheet was read with, so a reader can tell the app's
+  // own account from a client's service account. Left out for a clinic whose
+  // account could not be resolved.
+  credential?: GoogleCredential;
+  // Set when the sheet could not be read with the account its client is linked
+  // to and was read with the app's own account instead.
+  fallback?: CredentialFallback;
 };
 // Bots of one clinic that the carrier API reports as not active, or whose
 // pattern this app will not run, so the operator can tell a short list from a
@@ -185,6 +194,34 @@ function sheetHasContent(sheet: SheetResult): boolean {
 // results whole.
 function clinicHasContent(group: ClinicGroup): boolean {
   return group.sheets.some(sheetHasContent);
+}
+
+// The account a clinic's sheets were read with. Every sheet of a clinic belongs
+// to the same client, so the first sheet that carries one answers for the whole
+// clinic, and a clinic whose account could not be resolved has none.
+function clinicCredential(group: ClinicGroup): GoogleCredential | null {
+  return group.sheets.find((sheet) => sheet.credential !== undefined)?.credential ?? null;
+}
+
+/** That account as the results name it: the app's own, or a service account address. */
+function readWithText(credential: GoogleCredential, t: Messages): string {
+  return credential.kind === "serviceAccount"
+    ? t.reports.results.readWithServiceAccount(credential.email)
+    : t.reports.results.readWithAppAccount;
+}
+
+// The account a clinic's sheets were read instead of, when the run could not use
+// the account the client is linked to. One client stands behind every sheet of
+// the clinic, so the first sheet that carries one answers for all of them.
+function clinicFallback(group: ClinicGroup): CredentialFallback | null {
+  return group.sheets.find((sheet) => sheet.fallback !== undefined)?.fallback ?? null;
+}
+
+/** Why a clinic's sheets were read with the app's own account instead. */
+function fallbackText(fallback: CredentialFallback, t: Messages): string {
+  return fallback.account === null
+    ? t.reports.results.fallbackMissing
+    : t.reports.results.fallbackDenied(fallback.account);
 }
 
 /** Row numbers in the shape they are copied in: '2', '3', '33'. */
@@ -706,54 +743,71 @@ export function ResultsCard({ result }: { result: ReportResult }) {
                 </TabsTrigger>
               ))}
             </TabsList>
-            {groups.map((group) => (
-              <TabsContent
-                key={group.clinicId}
-                value={group.clinicId}
-                className="flex flex-col gap-4"
-              >
-                {group.sheets.filter(sheetHasContent).map((sheet) => {
-                  const buckets = sheet.bucketRows.filter((bucket) => bucket.rows.length > 0);
-                  // A sheet with neither a tab name nor a row count is a failed
-                  // read of a whole sheet: only its error says anything.
-                  const hasTabHeading = sheet.tabTitle !== "" || sheet.error === null;
-                  return (
-                    <div
-                      key={`${sheet.clinicId}-${sheet.tabTitle}`}
-                      className="flex flex-col gap-3"
-                    >
-                      {hasTabHeading ? (
-                        <div className="flex flex-wrap items-center gap-2">
-                          {sheet.tabTitle === "" ? null : (
-                            <h4 className="text-xs font-medium">{sheet.tabTitle}</h4>
-                          )}
-                          {sheet.error === null ? (
-                            <Badge variant="secondary" className="tabular-nums">
-                              {sheetRowCount(sheet)}
-                            </Badge>
-                          ) : null}
-                        </div>
-                      ) : null}
-                      {sheet.error ? (
-                        <Alert variant="destructive">
-                          <AlertTitle>{t.reports.results.sheetError}</AlertTitle>
-                          <AlertDescription>{sheetErrorText(sheet.error, t)}</AlertDescription>
-                        </Alert>
-                      ) : (
-                        buckets.map((bucket) => (
-                          <ResultBucket
-                            key={bucket.bucketKey}
-                            bucket={bucket}
-                            headers={sheet.headers}
-                            showLabel={buckets.length > 1}
-                          />
-                        ))
-                      )}
-                    </div>
-                  );
-                })}
-              </TabsContent>
-            ))}
+            {groups.map((group) => {
+              // One account reads every sheet of a clinic, so the tab names it
+              // once at the end instead of on every sheet.
+              const credential = clinicCredential(group);
+              const fallback = clinicFallback(group);
+              return (
+                <TabsContent
+                  key={group.clinicId}
+                  value={group.clinicId}
+                  className="flex flex-col gap-4"
+                >
+                  {/* A link that Google turned down costs a client's rows
+                      silently, so what was read without it stays in view. */}
+                  {fallback === null ? null : (
+                    <Alert>
+                      <AlertTitle>{t.reports.results.fallbackTitle}</AlertTitle>
+                      <AlertDescription>{fallbackText(fallback, t)}</AlertDescription>
+                    </Alert>
+                  )}
+                  {group.sheets.filter(sheetHasContent).map((sheet) => {
+                    const buckets = sheet.bucketRows.filter((bucket) => bucket.rows.length > 0);
+                    // A sheet with neither a tab name nor a row count is a failed
+                    // read of a whole sheet: only its error says anything.
+                    const hasTabHeading = sheet.tabTitle !== "" || sheet.error === null;
+                    return (
+                      <div
+                        key={`${sheet.clinicId}-${sheet.tabTitle}`}
+                        className="flex flex-col gap-3"
+                      >
+                        {hasTabHeading ? (
+                          <div className="flex flex-wrap items-center gap-2">
+                            {sheet.tabTitle === "" ? null : (
+                              <h4 className="text-xs font-medium">{sheet.tabTitle}</h4>
+                            )}
+                            {sheet.error === null ? (
+                              <Badge variant="secondary" className="tabular-nums">
+                                {sheetRowCount(sheet)}
+                              </Badge>
+                            ) : null}
+                          </div>
+                        ) : null}
+                        {sheet.error ? (
+                          <Alert variant="destructive">
+                            <AlertTitle>{t.reports.results.sheetError}</AlertTitle>
+                            <AlertDescription>{sheetErrorText(sheet.error, t)}</AlertDescription>
+                          </Alert>
+                        ) : (
+                          buckets.map((bucket) => (
+                            <ResultBucket
+                              key={bucket.bucketKey}
+                              bucket={bucket}
+                              headers={sheet.headers}
+                              showLabel={buckets.length > 1}
+                            />
+                          ))
+                        )}
+                      </div>
+                    );
+                  })}
+                  {credential === null ? null : (
+                    <p className="text-xs text-muted-foreground">{readWithText(credential, t)}</p>
+                  )}
+                </TabsContent>
+              );
+            })}
           </Tabs>
         )}
       </CardContent>

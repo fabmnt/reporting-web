@@ -11,6 +11,7 @@ import {
   type ExecuteVerificationFilter,
 } from "./model/executeRules";
 import { actionDeadline } from "./model/googlePolicy";
+import type { CredentialFallback, GoogleCredential } from "./model/googleCredentials";
 import {
   conditionColumnResolver,
   evaluateConditionSet,
@@ -61,6 +62,12 @@ type ClinicEntry = {
   headers: string[];
   bucketRows: ReportBucketResult[];
   error: ReportSheetError | null;
+  // The account that reads this clinic's sheets, which the results name. Left
+  // out for a clinic whose account could not be resolved.
+  credential?: GoogleCredential;
+  // The account this clinic's own could not be used in favor of, when the run
+  // fell back to the app's own account to read its sheets at all.
+  fallback?: CredentialFallback;
 };
 
 // The error each failure of the carrier API turns into. A clinic keeps its
@@ -151,9 +158,13 @@ export async function runExecuteReport(
   const {
     tabsForClinic,
     errorsForClinic,
+    credentialsForClinic,
+    fallbacksForClinic,
   }: {
     tabsForClinic: Record<string, string[]>;
     errorsForClinic: Record<string, ReportSheetError>;
+    credentialsForClinic: Record<string, GoogleCredential>;
+    fallbacksForClinic: Record<string, CredentialFallback>;
   } = await ctx.runAction(internal.sheets.planSheetTabs, {
     runId: config.runId,
     clinics: config.clinics.map((clinic) => ({
@@ -183,6 +194,8 @@ export async function runExecuteReport(
       headers: [],
       bucketRows: [],
       error: null,
+      credential: credentialsForClinic[clinic.clinicId],
+      fallback: fallbacksForClinic[clinic.clinicId],
     };
     const failClinic = (error: ReportSheetError) => {
       failedClinics += 1;
@@ -277,6 +290,7 @@ export async function runExecuteReport(
       headers: string[];
       values: string[][];
       error: ReportSheetError | null;
+      fallback: CredentialFallback | null;
     }> = [];
     try {
       tabResults = await ctx.runAction(internal.sheets.readSheetTabsValues, {
@@ -293,6 +307,10 @@ export async function runExecuteReport(
         sheets.push({ ...clinicEntry, tabTitle, error: sheetError });
       }
     }
+    // The read reports the account it fell back from, which is the same for
+    // every tab of the call, and the clinic says so for the sheets it pushes
+    // from here on.
+    clinicEntry.fallback = tabResults[0]?.fallback ?? clinicEntry.fallback;
 
     for (const tabResult of tabResults) {
       if (tabResult.error !== null) {

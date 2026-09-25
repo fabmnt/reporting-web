@@ -97,6 +97,13 @@ export const reports = {
     carriers: "Carriers",
     noneProcessed: "No sheets were processed. Check your assigned clinics and the selected dates.",
     sheetError: "Sheet error",
+    readWithAppAccount: "Read with the app's Google account",
+    readWithServiceAccount: (email: string) => `Read with the service account ${email}`,
+    fallbackTitle: "Read with the app's account",
+    fallbackDenied: (email: string) =>
+      `The service account ${email} could not read this sheet, so it was read with the app's own Google account. Share the sheet with that address.`,
+    fallbackMissing:
+      "The service account this client is linked to is gone, so the sheet was read with the app's own Google account. Ask an administrator to link one again.",
     noMatchingRows: "No matching rows.",
     noTabsFound: (startDate: string, endDate: string) =>
       `No tabs found between ${startDate} and ${endDate}.`,

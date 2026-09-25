@@ -70,6 +70,8 @@ export const errors = {
     "Google limitó la velocidad de nuestras solicitudes. Espera un minuto e inténtalo de nuevo.",
   SHEET_SERVICE_ACCOUNT_MISSING:
     "La cuenta de servicio que lee las hojas de este cliente ya no existe. Pide a un administrador que vincule otra.",
+  SHEET_SERVICE_ACCOUNT_DENIED: (email: string) =>
+    `La cuenta de servicio ${email} no tiene acceso a la hoja. Comparte la hoja con ese correo.`,
   CARRIER_SIGN_IN_REJECTED:
     "La API de carriers rechazó las credenciales de la aplicación. Pide a un administrador que las revise.",
   CARRIER_API_UNAVAILABLE: "La API de carriers no respondió. Inténtalo de nuevo en un momento.",

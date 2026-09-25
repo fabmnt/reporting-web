@@ -241,9 +241,9 @@ export const credentialForClient = internalQuery({
     if (serviceAccountId === undefined) return OAUTH_CREDENTIAL;
 
     const account = await ctx.db.get("googleServiceAccounts", serviceAccountId);
-    // A client whose account is gone fails instead of quietly reading with the
-    // app's own account: a run that reports rows nobody expected is worse than
-    // one that says what is missing.
+    // A client whose account is gone is reported as such rather than answered
+    // with the app's own account: the callers that read sheets fall back to it
+    // themselves, and the sheets they read that way stay marked.
     if (account === null) throw appError({ code: "SERVICE_ACCOUNT_NOT_FOUND" });
 
     return { kind: "serviceAccount", serviceAccountId, email: account.email };

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { appErrorPayloadOf } from "./appErrors";
-import { parseServiceAccountKey } from "./googleCredentials";
+import { appError, appErrorPayloadOf } from "./appErrors";
+import { accountUnusable, parseServiceAccountKey } from "./googleCredentials";
 
 const KEY_FILE_EMAIL = "reader@example.iam.gserviceaccount.com";
 
@@ -86,5 +86,27 @@ describe("parseServiceAccountKey", () => {
     expect(await refusalCode(keyFile(privateKey, "not an address"))).toBe(
       "SERVICE_ACCOUNT_EMAIL_INVALID"
     );
+  });
+});
+
+describe("accountUnusable", () => {
+  it("names the failures another account can read past", () => {
+    expect(accountUnusable(appError({ code: "SERVICE_ACCOUNT_NOT_FOUND" }))).toBe("missing");
+    expect(
+      accountUnusable(appError({ code: "SERVICE_ACCOUNT_DENIED", email: KEY_FILE_EMAIL }))
+    ).toBe("denied");
+    expect(
+      accountUnusable(appError({ code: "SERVICE_ACCOUNT_KEY_REFUSED", email: KEY_FILE_EMAIL }))
+    ).toBe("denied");
+  });
+
+  it("leaves the failures another account would not fix alone", () => {
+    // A quota, a spreadsheet that is not there and an answer that never arrived
+    // are the request's own: the app's account would run into them as well, so
+    // the sheet keeps reporting them as linked.
+    expect(accountUnusable(appError({ code: "SHEET_RATE_LIMITED" }))).toBeNull();
+    expect(
+      accountUnusable(new Error("The service account cannot find that spreadsheet."))
+    ).toBeNull();
   });
 });
