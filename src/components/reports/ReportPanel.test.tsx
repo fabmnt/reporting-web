@@ -1,10 +1,11 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { getFunctionName } from "convex/server";
+import { getFunctionName, type FunctionReturnType } from "convex/server";
 import { useAction, useMutation, useQuery } from "convex/react";
 import { beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 
 import { api } from "../../../convex/_generated/api";
+import type { Id } from "../../../convex/_generated/dataModel";
 import { I18nProvider } from "@/lib/i18n/context";
 
 import { ReportRunner } from "./ReportPanel";
@@ -33,13 +34,21 @@ const RUN_ACTION = nameOf(api.reports.runSheetReport);
 const START_RUN_MUTATION = nameOf(api.reportRuns.startReportRun);
 const ABANDON_RUN_MUTATION = nameOf(api.reportRuns.abandonReportRun);
 
+// Two clients, so a group can cover one of them and leave the other out.
 const ASSIGNMENT = {
   clinics: [
     { clinicId: "clinic-1", clientId: "client-1", name: "Downtown", clientName: "Smilist" },
+    { clinicId: "clinic-2", clientId: "client-2", name: "Uptown", clientName: "Mortenson" },
   ],
 };
 
-const GROUPS = { groups: [] };
+type GroupsPayload = FunctionReturnType<typeof api.reportGroups.list>;
+
+const NO_GROUPS: GroupsPayload = { groups: [] };
+
+// The groups the run form holds. A test that ticks one replaces this before
+// the form is rendered.
+let groups: GroupsPayload = NO_GROUPS;
 
 const REPORT_TYPES = {
   types: [
@@ -134,10 +143,11 @@ function renderRunner() {
 
 beforeEach(() => {
   vi.resetAllMocks();
+  groups = NO_GROUPS;
   useQueryMock.mockImplementation((reference: AnyFunctionReference) => {
     const name = nameOf(reference);
     if (name === ASSIGNMENT_QUERY) return ASSIGNMENT;
-    if (name === GROUPS_QUERY) return GROUPS;
+    if (name === GROUPS_QUERY) return groups;
     if (name === TYPES_QUERY) return REPORT_TYPES;
     return undefined;
   });
@@ -214,5 +224,36 @@ describe("ReportRunner", () => {
 
     expect(screen.getByText("No results yet")).toBeInTheDocument();
     expect(runReport).not.toHaveBeenCalled();
+  });
+
+  it("reads the clinics of the ticked group and no other", async () => {
+    const user = userEvent.setup();
+    groups = {
+      groups: [
+        {
+          groupId: "group-1" as Id<"reportGroups">,
+          name: "Mortenson batch",
+          clientIds: ["client-2" as Id<"clients">],
+          clinicIds: [],
+        },
+      ],
+    };
+    runReport.mockResolvedValue(PENDING_AUDIT_RUN);
+    renderRunner();
+
+    // Every assigned clinic is covered while no group is ticked.
+    expect(screen.getByRole("checkbox", { name: /^Downtown/ })).toBeVisible();
+    expect(screen.getByRole("checkbox", { name: /^Uptown/ })).toBeVisible();
+
+    await user.click(screen.getByRole("checkbox", { name: /Mortenson batch/ }));
+
+    // The group stands for the one client, so the clinic of the other client
+    // leaves the list and the run is asked for the group's clinic alone.
+    expect(screen.queryByRole("checkbox", { name: /^Downtown/ })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Run report" }));
+
+    await waitFor(() =>
+      expect(runReport).toHaveBeenCalledWith(expect.objectContaining({ clinicIds: ["clinic-2"] }))
+    );
   });
 });

@@ -113,12 +113,18 @@ function GroupForm({
   group,
   entries,
   clinics,
+  isSaving,
+  onSavingChange,
   onSaved,
   onCancel,
 }: {
   group: ReportGroup | null;
   entries: ClientEntry[];
   clinics: ReportClinic[];
+  // The save in flight belongs to the dialog, not to the form: a request that
+  // outlives the draft it was sent from would land on the next one.
+  isSaving: boolean;
+  onSavingChange: (saving: boolean) => void;
   onSaved: () => void;
   onCancel: () => void;
 }) {
@@ -129,7 +135,6 @@ function GroupForm({
   const [name, setName] = useState(group?.name ?? "");
   const [clientIds, setClientIds] = useState(() => new Set(group?.clientIds ?? []));
   const [clinicIds, setClinicIds] = useState(() => new Set(group?.clinicIds ?? []));
-  const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<LocalizedMessage | null>(null);
 
   const covered = clinics.filter(
@@ -189,7 +194,7 @@ function GroupForm({
     if (isSaving) return;
 
     setError(null);
-    setIsSaving(true);
+    onSavingChange(true);
     try {
       const members = { name, clientIds: [...clientIds], clinicIds: [...clinicIds] };
       if (group === null) {
@@ -201,7 +206,7 @@ function GroupForm({
     } catch (cause) {
       setError(localizedError(cause, (t) => t.reports.groups.manager.saveFailed));
     } finally {
-      setIsSaving(false);
+      onSavingChange(false);
     }
   }
 
@@ -300,6 +305,9 @@ export function ReportGroupsDialog({
   const [groupToDelete, setGroupToDelete] = useState<ReportGroup | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<LocalizedMessage | null>(null);
+  // A save in flight is the dialog's to wait for: it closes when the request
+  // answers, so the answer cannot land on the draft of the next visit.
+  const [isSaving, setIsSaving] = useState(false);
 
   const entries = byClient(clinics);
 
@@ -327,12 +335,19 @@ export function ReportGroupsDialog({
     <>
       <Dialog
         open={open}
-        onOpenChange={(next) => {
+        onOpenChange={(next, eventDetails) => {
           if (next) return;
+          // The close button, the overlay and the escape key all land here. A
+          // dialog closed over a save it started would answer into the next
+          // draft, so the save is waited out instead.
+          if (isSaving) {
+            eventDetails.cancel();
+            return;
+          }
           close();
         }}
       >
-        <DialogContent className="sm:max-w-2xl">
+        <DialogContent className="sm:max-w-2xl" showCloseButton={!isSaving}>
           {mode.kind === "list" ? (
             <>
               <DialogHeader>
@@ -401,6 +416,8 @@ export function ReportGroupsDialog({
               group={mode.kind === "edit" ? mode.group : null}
               entries={entries}
               clinics={clinics}
+              isSaving={isSaving}
+              onSavingChange={setIsSaving}
               onSaved={() => setMode({ kind: "list" })}
               onCancel={() => setMode({ kind: "list" })}
             />
