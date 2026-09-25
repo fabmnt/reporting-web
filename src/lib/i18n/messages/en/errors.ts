@@ -21,6 +21,8 @@ export const errors = {
   CLIENT_DISABLED: "This client is disabled.",
   CLIENT_NOT_ASSIGNED: "This client is not assigned to you.",
   SERVICE_ACCOUNT_NOT_FOUND: "This service account does not exist any more.",
+  SERVICE_ACCOUNT_LIMIT: (limit: number) =>
+    `You can store up to ${limit} service accounts. Remove one before adding another.`,
   SERVICE_ACCOUNT_EMAIL_INVALID: "The address inside the key file is not a valid address.",
   SERVICE_ACCOUNT_EMAIL_TAKEN: "Another service account already uses this email.",
   SERVICE_ACCOUNT_KEY_REQUIRED: "The service account key is required.",

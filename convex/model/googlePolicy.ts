@@ -103,6 +103,16 @@ export function actionDeadline(): number {
 }
 
 /**
+ * How long one request may take before it is dropped: whatever is left of the
+ * action's budget. A connection that stalls without an answer would otherwise
+ * outlive the action, and Convex would kill it instead of letting it report the
+ * sheets it did not read.
+ */
+export function requestTimeoutMs(deadlineMs: number): number {
+  return Math.max(deadlineMs - Date.now(), 1);
+}
+
+/**
  * Runs one Google call, retrying the failures Google expects callers to retry.
  * `attempt` answers whether the call landed, `beforeAttempt` is where a caller
  * paces itself against its quota, and `failure` builds the error for a call that

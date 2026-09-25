@@ -200,6 +200,9 @@ export function AdminServiceAccountsPanel() {
   const [pendingAccountId, setPendingAccountId] = useState<
     ServiceAccountView["serviceAccountId"] | null
   >(null);
+  // One operation at a time, so the answer of a test cannot land on the row of
+  // another one that was started after it.
+  const pending = pendingAccountId !== null;
   const [formMode, setFormMode] = useState<"closed" | "creating" | "replacing">("closed");
   const [replacingAccount, setReplacingAccount] = useState<ServiceAccountView | null>(null);
   // Bumped on every open so the form remounts with an empty paste. Cancelling a
@@ -356,7 +359,7 @@ export function AdminServiceAccountsPanel() {
                       <TableCell>
                         <ServiceAccountActions
                           account={account}
-                          disabled={pendingAccountId === account.serviceAccountId}
+                          disabled={pending}
                           onReplace={openReplace}
                           onTest={runTest}
                           onDelete={setAccountToDelete}
@@ -385,7 +388,7 @@ export function AdminServiceAccountsPanel() {
                   <DataCardRow>
                     <ServiceAccountActions
                       account={account}
-                      disabled={pendingAccountId === account.serviceAccountId}
+                      disabled={pending}
                       onReplace={openReplace}
                       onTest={runTest}
                       onDelete={setAccountToDelete}

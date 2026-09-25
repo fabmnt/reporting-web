@@ -48,6 +48,13 @@ export default defineSchema({
   googleServiceAccounts: defineTable({
     email: v.string(),
     privateKey: v.string(),
+    // How many clients read their sheets with this account, so the accounts
+    // list and the delete confirmation do not have to read the clients table
+    // once per account. Every mutation that links or unlinks a client writes it
+    // in the same transaction. It stays optional until
+    // migrations/backfillServiceAccountClientCounts has run everywhere, so this
+    // push does not reject rows the deployment already holds.
+    clientCount: v.optional(v.number()),
   }).index("by_email", ["email"]),
 
   clients: defineTable({

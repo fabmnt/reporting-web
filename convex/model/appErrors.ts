@@ -23,6 +23,7 @@ export type AppErrorPayload =
   | { code: "CLIENT_DISABLED" }
   | { code: "CLIENT_NOT_ASSIGNED" }
   | { code: "SERVICE_ACCOUNT_NOT_FOUND" }
+  | { code: "SERVICE_ACCOUNT_LIMIT"; limit: number }
   | { code: "SERVICE_ACCOUNT_EMAIL_INVALID" }
   | { code: "SERVICE_ACCOUNT_EMAIL_TAKEN" }
   | { code: "SERVICE_ACCOUNT_KEY_REQUIRED" }

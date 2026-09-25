@@ -20,6 +20,8 @@ export const errors = {
   CLIENT_DISABLED: "Este cliente está deshabilitado.",
   CLIENT_NOT_ASSIGNED: "Este cliente no está asignado a tu cuenta.",
   SERVICE_ACCOUNT_NOT_FOUND: "Esta cuenta de servicio ya no existe.",
+  SERVICE_ACCOUNT_LIMIT: (limit: number) =>
+    `Puedes guardar hasta ${limit} cuentas de servicio. Elimina una antes de añadir otra.`,
   SERVICE_ACCOUNT_EMAIL_INVALID:
     "El correo dentro del archivo de clave no es una dirección válida.",
   SERVICE_ACCOUNT_EMAIL_TAKEN: "Otra cuenta de servicio ya usa este correo.",

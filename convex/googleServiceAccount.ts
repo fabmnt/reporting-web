@@ -15,6 +15,7 @@ import { toSheetGrid, type SheetGrid } from "./model/googleGrid";
 import {
   actionDeadline,
   failureOf,
+  requestTimeoutMs,
   sendGoogleCall,
   type GoogleFailure,
 } from "./model/googlePolicy";
@@ -143,17 +144,19 @@ async function loadKey(
 }
 
 // Runs one Sheets call through the shared retry policy, paced against the budget
-// of the service account that makes it.
+// of the service account that makes it. The request is dropped when the action's
+// budget runs out, so a connection that stalls cannot outlive the action and
+// take the sheets it had not read with it.
 async function callSheets<T>(
   ctx: ActionCtx,
   account: { serviceAccountId: Id<"googleServiceAccounts">; key: ServiceAccountKey },
-  call: () => Promise<T>
+  call: (timeoutMs: number) => Promise<T>
 ): Promise<T> {
   const deadlineMs = actionDeadline();
   return await sendGoogleCall({
     attempt: async () => {
       try {
-        return { kind: "success", value: await call() } as const;
+        return { kind: "success", value: await call(requestTimeoutMs(deadlineMs)) } as const;
       } catch (error) {
         return { kind: "failure", failure: googleFailureOf(error) } as const;
       }
@@ -203,11 +206,17 @@ export const readTabTitles = internalAction({
   handler: async (ctx, args): Promise<string[]> => {
     const key = await loadKey(ctx, args.serviceAccountId);
     const sheets = sheetsClientFor(args.serviceAccountId, key);
-    const response = await callSheets(ctx, { serviceAccountId: args.serviceAccountId, key }, () =>
-      sheets.spreadsheets.get({
-        spreadsheetId: args.spreadsheetId,
-        fields: "sheets.properties.title",
-      })
+    const response = await callSheets(
+      ctx,
+      { serviceAccountId: args.serviceAccountId, key },
+      (timeoutMs) =>
+        sheets.spreadsheets.get(
+          {
+            spreadsheetId: args.spreadsheetId,
+            fields: "sheets.properties.title",
+          },
+          { signal: AbortSignal.timeout(timeoutMs) }
+        )
     );
 
     return (response.data.sheets ?? [])
@@ -229,11 +238,17 @@ export const readTabValues = internalAction({
   handler: async (ctx, args): Promise<SheetGrid[]> => {
     const key = await loadKey(ctx, args.serviceAccountId);
     const sheets = sheetsClientFor(args.serviceAccountId, key);
-    const response = await callSheets(ctx, { serviceAccountId: args.serviceAccountId, key }, () =>
-      sheets.spreadsheets.values.batchGet({
-        spreadsheetId: args.spreadsheetId,
-        ranges: args.ranges,
-      })
+    const response = await callSheets(
+      ctx,
+      { serviceAccountId: args.serviceAccountId, key },
+      (timeoutMs) =>
+        sheets.spreadsheets.values.batchGet(
+          {
+            spreadsheetId: args.spreadsheetId,
+            ranges: args.ranges,
+          },
+          { signal: AbortSignal.timeout(timeoutMs) }
+        )
     );
 
     const valueRanges = response.data.valueRanges ?? [];

@@ -2,6 +2,7 @@ import { importPKCS8 } from "jose";
 import { type Infer, v } from "convex/values";
 
 import type { Id } from "../_generated/dataModel";
+import type { MutationCtx } from "../_generated/server";
 import { appError } from "./appErrors";
 
 // Which Google account reads a client's sheets. A client without a service
@@ -22,6 +23,33 @@ export type GoogleCredential = Infer<typeof googleCredential>;
 
 // The credential of every client that has no service account.
 export const OAUTH_CREDENTIAL: GoogleCredential = { kind: "oauth" };
+
+/**
+ * Moves the stored client count of a service account by `delta`. The accounts
+ * list shows the count and the delete confirmation reads it, so every mutation
+ * that links or unlinks a client calls this in the same transaction as the
+ * client write.
+ *
+ * An account whose count predates the backfill has none, and unlinking a client
+ * from it would leave a negative number, so both floor at zero.
+ * migrations/backfillServiceAccountClientCounts recounts the whole table from
+ * the clients themselves, and that is the value that counts.
+ *
+ * An account that is gone is left alone: the delete clears the link of the
+ * clients that point at it, and the count it would have kept goes with the row.
+ */
+export async function adjustServiceAccountClientCount(
+  ctx: MutationCtx,
+  serviceAccountId: Id<"googleServiceAccounts">,
+  delta: number
+): Promise<void> {
+  const account = await ctx.db.get("googleServiceAccounts", serviceAccountId);
+  if (account === null) return;
+
+  await ctx.db.patch(serviceAccountId, {
+    clientCount: Math.max(0, (account.clientCount ?? 0) + delta),
+  });
+}
 
 // The bucket of the Sheets budget a service account's requests are paced
 // against.

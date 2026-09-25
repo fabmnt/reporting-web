@@ -9,6 +9,7 @@ import { MAX_ASSIGNED_CLINICS, usableClinicIds } from "./model/assignments";
 import { clientKeyFromName } from "./model/clientKey";
 import { adjustClientClinicCount } from "./model/clients";
 import { clinicSheetColumns } from "./model/clinicSheetColumns";
+import { adjustServiceAccountClientCount } from "./model/googleCredentials";
 import { listProfileClinics } from "./model/reporting";
 import { requireAdmin, requireOperator } from "./model/staff";
 
@@ -564,6 +565,10 @@ export const createClient = mutation({
       ...(serviceAccountId === null ? {} : { serviceAccountId }),
     });
 
+    if (serviceAccountId !== null) {
+      await adjustServiceAccountClientCount(ctx, serviceAccountId, 1);
+    }
+
     return await readClientView(ctx, clientId);
   },
 });
@@ -589,6 +594,18 @@ export const updateClient = mutation({
     const name = cleanRequiredText(args.name, { code: "CLIENT_NAME_REQUIRED" });
     const key = await assertClientNameAvailable(ctx, name, args.clientId);
     await assertServiceAccountExists(ctx, args.serviceAccountId);
+
+    // The link decides which account reads the client's sheets, so the counts
+    // of the account it leaves and of the one it joins both move with it.
+    const previousServiceAccountId = client.serviceAccountId ?? null;
+    if (previousServiceAccountId !== args.serviceAccountId) {
+      if (previousServiceAccountId !== null) {
+        await adjustServiceAccountClientCount(ctx, previousServiceAccountId, -1);
+      }
+      if (args.serviceAccountId !== null) {
+        await adjustServiceAccountClientCount(ctx, args.serviceAccountId, 1);
+      }
+    }
 
     await ctx.db.patch(args.clientId, {
       key,
@@ -628,6 +645,10 @@ export const removeClient = mutation({
         clientName: client.name,
         clinicCount: ownedClinics.length,
       });
+    }
+
+    if (client.serviceAccountId !== undefined) {
+      await adjustServiceAccountClientCount(ctx, client.serviceAccountId, -1);
     }
 
     await ctx.db.delete("clients", args.clientId);

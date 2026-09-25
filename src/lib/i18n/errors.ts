@@ -48,6 +48,8 @@ function renderAppError(payload: AppErrorPayload, t: Messages): string | null {
       return e.CLIENT_NOT_ASSIGNED;
     case "SERVICE_ACCOUNT_NOT_FOUND":
       return e.SERVICE_ACCOUNT_NOT_FOUND;
+    case "SERVICE_ACCOUNT_LIMIT":
+      return e.SERVICE_ACCOUNT_LIMIT(payload.limit);
     case "SERVICE_ACCOUNT_EMAIL_INVALID":
       return e.SERVICE_ACCOUNT_EMAIL_INVALID;
     case "SERVICE_ACCOUNT_EMAIL_TAKEN":

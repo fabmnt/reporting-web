@@ -7,6 +7,7 @@ import { appError } from "./model/appErrors";
 import {
   actionDeadline,
   failureOf,
+  requestTimeoutMs,
   sendGoogleCall,
   sleep,
   type GoogleAttempt,
@@ -47,6 +48,9 @@ type GoogleRequest = {
   method?: "POST";
   headers: Record<string, string>;
   body?: string;
+  // How long the request may take before it is dropped, so a connection that
+  // stalls does not outlive the action that asked for it.
+  timeoutMs: number;
 };
 
 function parseJson(text: string): unknown {
@@ -68,6 +72,7 @@ async function attemptGoogleRequest(request: GoogleRequest): Promise<GoogleAttem
       method: request.method ?? "GET",
       headers: request.headers,
       body: request.body,
+      signal: AbortSignal.timeout(request.timeoutMs),
     });
     text = await response.text();
   } catch (error) {
@@ -151,6 +156,7 @@ function sheetsFailureMessage(failure: GoogleFailure): string {
 
 // The token endpoint has its own quota, so it is retried but not paced.
 export async function refreshAccessToken(): Promise<string> {
+  const deadlineMs = actionDeadline();
   const body = await sendGoogleCall({
     attempt: () =>
       attemptGoogleRequest({
@@ -163,8 +169,9 @@ export async function refreshAccessToken(): Promise<string> {
           refresh_token: env.GOOGLE_REFRESH_TOKEN,
           grant_type: "refresh_token",
         }).toString(),
+        timeoutMs: requestTimeoutMs(deadlineMs),
       }),
-    deadlineMs: actionDeadline(),
+    deadlineMs,
     failure: (failure) =>
       failure.quotaRejection
         ? new Error("Google rate limited the token refresh. Try again in a minute.")
@@ -194,6 +201,7 @@ export async function fetchSheetsJson(
       attemptGoogleRequest({
         url: `${GOOGLE_SHEETS_BASE}/${path}`,
         headers: { authorization: `Bearer ${token}` },
+        timeoutMs: requestTimeoutMs(deadlineMs),
       }),
     beforeAttempt: () => awaitSheetsSlot(ctx, deadlineMs, credentialKey),
     deadlineMs,
