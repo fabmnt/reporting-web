@@ -18,6 +18,13 @@ export const errors = {
   PASSWORD_SETUP_LINK_INVALID: "Este enlace ya no es válido. Pídele a un administrador uno nuevo.",
   CLIENT_NOT_FOUND: "No se encontró el cliente.",
   CLIENT_DISABLED: "Este cliente está deshabilitado.",
+  SERVICE_ACCOUNT_NOT_FOUND: "Esta cuenta de servicio ya no existe.",
+  SERVICE_ACCOUNT_EMAIL_INVALID:
+    "El correo dentro del archivo de clave no es una dirección válida.",
+  SERVICE_ACCOUNT_EMAIL_TAKEN: "Otra cuenta de servicio ya usa este correo.",
+  SERVICE_ACCOUNT_KEY_REQUIRED: "La clave de la cuenta de servicio es obligatoria.",
+  SERVICE_ACCOUNT_KEY_INVALID:
+    "Esto no es un archivo de clave de cuenta de servicio. Pega el archivo JSON que te dio Google.",
   CLINIC_NOT_FOUND: "No se encontró la clínica.",
   CLINIC_NOT_ASSIGNED: "Esta clínica no está asignada a tu cuenta.",
   CLINIC_ASSIGNMENT_LIMIT: (limit: number) =>

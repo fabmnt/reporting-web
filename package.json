@@ -21,6 +21,7 @@
     "e2e": "playwright test",
     "typecheck": "astro check",
     "google:token": "node --env-file-if-exists=.env.local scripts/generate-google-token.ts",
+    "google:test-sheet": "node --env-file-if-exists=.env.local --env-file-if-exists=.env.e2e scripts/create-google-test-sheet.ts",
     "import:ccc-directory": "node --env-file-if-exists=.env.local scripts/import-ccc-directory.ts",
     "import:legacy-clinics": "node --env-file-if-exists=.env.local scripts/import-legacy-clinics.ts",
     "import:legacy-staff": "node --env-file-if-exists=.env.local scripts/import-legacy-staff.ts"
@@ -39,6 +40,8 @@
     "cn": "^0.2.6",
     "convex": "^1.45.0",
     "date-fns": "^4.4.0",
+    "google-auth-library": "^11.1.0",
+    "googleapis": "^182.0.0",
     "jose": "^6.2.10",
     "lucide-react": "^1.39.0",
     "react": "^19.2.8",

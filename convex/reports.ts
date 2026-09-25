@@ -268,6 +268,7 @@ async function runReportSheets(
     runId,
     clinics: config.clinics.map((c) => ({
       clinicId: c.clinicId,
+      clientId: c.clientId,
       googleSheetId: c.googleSheetId,
     })),
     startDate: params.startDate,
@@ -343,6 +344,7 @@ async function runReportSheets(
     try {
       tabResults = await ctx.runAction(internal.sheets.readSheetTabsValues, {
         runId,
+        clientId: clinic.clientId,
         googleSheetId: clinic.googleSheetId,
         tabTitles: tabs,
       });

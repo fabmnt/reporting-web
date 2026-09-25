@@ -21,6 +21,11 @@ export type AppErrorPayload =
   | { code: "PASSWORD_SETUP_LINK_INVALID" }
   | { code: "CLIENT_NOT_FOUND" }
   | { code: "CLIENT_DISABLED" }
+  | { code: "SERVICE_ACCOUNT_NOT_FOUND" }
+  | { code: "SERVICE_ACCOUNT_EMAIL_INVALID" }
+  | { code: "SERVICE_ACCOUNT_EMAIL_TAKEN" }
+  | { code: "SERVICE_ACCOUNT_KEY_REQUIRED" }
+  | { code: "SERVICE_ACCOUNT_KEY_INVALID" }
   | { code: "CLINIC_NOT_FOUND" }
   | { code: "CLINIC_NOT_ASSIGNED" }
   | { code: "CLINIC_ASSIGNMENT_LIMIT"; limit: number }

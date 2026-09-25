@@ -19,6 +19,12 @@ export const errors = {
     "This link is not valid any more. Ask an administrator for a new one.",
   CLIENT_NOT_FOUND: "Client was not found.",
   CLIENT_DISABLED: "This client is disabled.",
+  SERVICE_ACCOUNT_NOT_FOUND: "This service account does not exist any more.",
+  SERVICE_ACCOUNT_EMAIL_INVALID: "The address inside the key file is not a valid address.",
+  SERVICE_ACCOUNT_EMAIL_TAKEN: "Another service account already uses this email.",
+  SERVICE_ACCOUNT_KEY_REQUIRED: "The service account key is required.",
+  SERVICE_ACCOUNT_KEY_INVALID:
+    "This is not a service account key file. Paste the JSON file Google gave you.",
   CLINIC_NOT_FOUND: "Clinic was not found.",
   CLINIC_NOT_ASSIGNED: "This clinic is not assigned to you.",
   CLINIC_ASSIGNMENT_LIMIT: (limit: number) =>

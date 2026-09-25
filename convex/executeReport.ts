@@ -157,6 +157,7 @@ export async function runExecuteReport(
     runId: config.runId,
     clinics: config.clinics.map((clinic) => ({
       clinicId: clinic.clinicId,
+      clientId: clinic.clientId,
       googleSheetId: clinic.googleSheetId,
     })),
     startDate: config.startDate,
@@ -279,6 +280,7 @@ export async function runExecuteReport(
     try {
       tabResults = await ctx.runAction(internal.sheets.readSheetTabsValues, {
         runId: config.runId,
+        clientId: clinic.clientId,
         googleSheetId: clinic.googleSheetId,
         tabTitles: tabs,
       });

@@ -44,6 +44,16 @@ function renderAppError(payload: AppErrorPayload, t: Messages): string | null {
       return e.CLIENT_NOT_FOUND;
     case "CLIENT_DISABLED":
       return e.CLIENT_DISABLED;
+    case "SERVICE_ACCOUNT_NOT_FOUND":
+      return e.SERVICE_ACCOUNT_NOT_FOUND;
+    case "SERVICE_ACCOUNT_EMAIL_INVALID":
+      return e.SERVICE_ACCOUNT_EMAIL_INVALID;
+    case "SERVICE_ACCOUNT_EMAIL_TAKEN":
+      return e.SERVICE_ACCOUNT_EMAIL_TAKEN;
+    case "SERVICE_ACCOUNT_KEY_REQUIRED":
+      return e.SERVICE_ACCOUNT_KEY_REQUIRED;
+    case "SERVICE_ACCOUNT_KEY_INVALID":
+      return e.SERVICE_ACCOUNT_KEY_INVALID;
     case "CLINIC_NOT_FOUND":
       return e.CLINIC_NOT_FOUND;
     case "CLINIC_NOT_ASSIGNED":

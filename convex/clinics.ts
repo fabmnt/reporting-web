@@ -4,6 +4,7 @@ import { type Infer, v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { mutation, query } from "./_generated/server";
+import { MAX_SERVICE_ACCOUNTS } from "./googleAccounts";
 import { appError, type AppErrorPayload } from "./model/appErrors";
 import { MAX_ASSIGNED_CLINICS, usableClinicIds } from "./model/assignments";
 import { clientKeyFromName } from "./model/clientKey";
@@ -40,6 +41,11 @@ const clientView = v.object({
   key: v.string(),
   name: v.string(),
   isActive: v.boolean(),
+  // The service account a client's sheets are read with, and its address. The
+  // address is the one a sheet has to be shared with, so both the client list
+  // and the client form show it. Null means the app's own Google account.
+  serviceAccountId: v.union(v.id("googleServiceAccounts"), v.null()),
+  serviceAccountEmail: v.union(v.string(), v.null()),
 });
 
 // The client list also reports how many clinics the client owns, because that
@@ -147,17 +153,75 @@ async function withClientNames<T extends { clientId: Id<"clients"> }>(
 }
 
 /**
- * A client as both lists of the clients table show it. The count comes from the
- * client row, so showing it costs no clinic reads.
+ * The address of each service account, resolved once per read so a page of
+ * clients costs one read per account instead of one per client. The private key
+ * is not part of what this returns: only the address is ever shown.
  */
-function toClientListView(client: Doc<"clients">): Infer<typeof clientListView> {
+async function serviceAccountEmails(
+  ctx: QueryCtx
+): Promise<Map<Id<"googleServiceAccounts">, string>> {
+  const rows = await ctx.db.query("googleServiceAccounts").take(MAX_SERVICE_ACCOUNTS);
+  return new Map(rows.map((account) => [account._id, account.email]));
+}
+
+/** A client as both lists of the clients table show it. */
+function toClientView(client: Doc<"clients">, serviceAccountEmail: string | null) {
   return {
     clientId: client._id,
     key: client.key,
     name: client.name,
     isActive: client.isActive,
+    serviceAccountId: client.serviceAccountId ?? null,
+    serviceAccountEmail,
+  };
+}
+
+/**
+ * The client list also reports how many clinics the client owns, because that
+ * is the list the assignments dialog opens onto.
+ */
+function toClientListView(
+  client: Doc<"clients">,
+  serviceAccountEmails: Map<Id<"googleServiceAccounts">, string>
+): Infer<typeof clientListView> {
+  const serviceAccountId = client.serviceAccountId ?? null;
+
+  return {
+    ...toClientView(
+      client,
+      serviceAccountId === null ? null : (serviceAccountEmails.get(serviceAccountId) ?? null)
+    ),
     clinicCount: client.clinicCount ?? 0,
   };
+}
+
+/**
+ * The client a mutation answers with, read back with the address of its service
+ * account so create and update return what the lists show.
+ */
+async function readClientView(
+  ctx: MutationCtx,
+  clientId: Id<"clients">
+): Promise<Infer<typeof clientView>> {
+  const client = await ctx.db.get("clients", clientId);
+  if (client === null) throw appError({ code: "CLIENT_NOT_FOUND" });
+
+  const serviceAccountId = client.serviceAccountId ?? null;
+  const account =
+    serviceAccountId === null ? null : await ctx.db.get("googleServiceAccounts", serviceAccountId);
+
+  return toClientView(client, account?.email ?? null);
+}
+
+// A link to an account that does not exist would fail only when a sheet is read,
+// so it is refused where it is written.
+async function assertServiceAccountExists(
+  ctx: MutationCtx,
+  serviceAccountId: Id<"googleServiceAccounts"> | null
+): Promise<void> {
+  if (serviceAccountId === null) return;
+  const account = await ctx.db.get("googleServiceAccounts", serviceAccountId);
+  if (account === null) throw appError({ code: "SERVICE_ACCOUNT_NOT_FOUND" });
 }
 
 /**
@@ -381,8 +445,10 @@ export const listClients = query({
             .filter((builder) => builder.eq(builder.field("isActive"), status === "active"))
             .paginate(args.paginationOpts);
 
+    const emails = await serviceAccountEmails(ctx);
+
     return {
-      page: page.page.map(toClientListView),
+      page: page.page.map((client) => toClientListView(client, emails)),
       isDone: page.isDone,
       continueCursor: page.continueCursor,
     };
@@ -421,9 +487,12 @@ export const searchClients = query({
     const matches = scanned
       .slice(0, MAX_SEARCH_SCAN)
       .filter((client) => clientMatchesSearch(client, needle));
+    const emails = await serviceAccountEmails(ctx);
 
     return {
-      clients: matches.slice(0, MAX_SEARCH_RESULTS).map(toClientListView),
+      clients: matches
+        .slice(0, MAX_SEARCH_RESULTS)
+        .map((client) => toClientListView(client, emails)),
       hasMore: scanned.length > MAX_SEARCH_SCAN || matches.length > MAX_SEARCH_RESULTS,
     };
   },
@@ -447,29 +516,46 @@ export const listClientChoices = query({
       .query("clients")
       .withIndex("by_key")
       .take(MAX_CLIENTS + 1);
-    const clients = rows.slice(0, MAX_CLIENTS).map((client) => ({
-      clientId: client._id,
-      key: client.key,
-      name: client.name,
-      isActive: client.isActive,
-    }));
+    const emails = await serviceAccountEmails(ctx);
+    const clients = rows.slice(0, MAX_CLIENTS).map((client) => {
+      const serviceAccountId = client.serviceAccountId ?? null;
+      return toClientView(
+        client,
+        serviceAccountId === null ? null : (emails.get(serviceAccountId) ?? null)
+      );
+    });
     clients.sort((a, b) => a.name.localeCompare(b.name));
 
     return { clients, limit: MAX_CLIENTS, hasMore: rows.length > MAX_CLIENTS };
   },
 });
 
+/**
+ * Creates a client. The service account is optional: without one the client's
+ * sheets are read with the app's own Google account.
+ */
 export const createClient = mutation({
-  args: { name: v.string() },
+  args: {
+    name: v.string(),
+    serviceAccountId: v.optional(v.union(v.id("googleServiceAccounts"), v.null())),
+  },
   returns: clientView,
   handler: async (ctx, args) => {
     await requireAdmin(ctx);
 
     const name = cleanRequiredText(args.name, { code: "CLIENT_NAME_REQUIRED" });
     const key = await assertClientNameAvailable(ctx, name);
+    const serviceAccountId = args.serviceAccountId ?? null;
+    await assertServiceAccountExists(ctx, serviceAccountId);
 
-    const clientId = await ctx.db.insert("clients", { key, name, isActive: true });
-    return { clientId, key, name, isActive: true };
+    const clientId = await ctx.db.insert("clients", {
+      key,
+      name,
+      isActive: true,
+      ...(serviceAccountId === null ? {} : { serviceAccountId }),
+    });
+
+    return await readClientView(ctx, clientId);
   },
 });
 
@@ -478,6 +564,9 @@ export const updateClient = mutation({
     clientId: v.id("clients"),
     name: v.string(),
     isActive: v.boolean(),
+    // Always sent by the client form: null clears the link, which is how a
+    // client goes back to being read with the app's own account.
+    serviceAccountId: v.union(v.id("googleServiceAccounts"), v.null()),
   },
   returns: clientView,
   handler: async (ctx, args) => {
@@ -490,10 +579,16 @@ export const updateClient = mutation({
 
     const name = cleanRequiredText(args.name, { code: "CLIENT_NAME_REQUIRED" });
     const key = await assertClientNameAvailable(ctx, name, args.clientId);
+    await assertServiceAccountExists(ctx, args.serviceAccountId);
 
-    await ctx.db.patch(args.clientId, { key, name, isActive: args.isActive });
+    await ctx.db.patch(args.clientId, {
+      key,
+      name,
+      isActive: args.isActive,
+      serviceAccountId: args.serviceAccountId ?? undefined,
+    });
 
-    return { clientId: args.clientId, key, name, isActive: args.isActive };
+    return await readClientView(ctx, args.clientId);
   },
 });
 

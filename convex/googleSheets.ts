@@ -1,56 +1,56 @@
 import { v } from "convex/values";
 
-import { action, query } from "./_generated/server";
 import { internal } from "./_generated/api.js";
-import { actionDeadline, fetchSheetsJson, refreshAccessToken } from "./googleApi";
+import { action, query } from "./_generated/server";
+import { checkCredential, credentialForClient, sheetsSessions } from "./googleSheetsAccess";
 import { listProfileClinics } from "./model/reporting";
 import { requireOperator } from "./model/staff";
 
-type SheetsTabListResponse = {
-  sheets?: Array<{ properties?: { title?: string } }>;
-};
-
+// Reports which Google account reads a client's sheets and whether that account
+// can be used at all. A caller that names no client is answered about the app's
+// own account, which is what a client without a service account is read with.
+//
 // Runs as the operator who called it: the action asks the currentOperator
 // internal query to check staffProfiles with the caller's auth. Throws
 // FORBIDDEN for disabled accounts and roles without operator access.
 export const googleAuthStatus = action({
-  args: {},
+  args: { clientId: v.optional(v.id("clients")) },
   returns: v.object({
-    sheetsScope: v.boolean(),
+    credential: v.union(v.literal("oauth"), v.literal("serviceAccount")),
+    // The address of the service account, which is what a sheet has to be shared
+    // with. Null when the app's own account reads the client.
+    account: v.union(v.string(), v.null()),
     tokenOk: v.boolean(),
     error: v.union(v.string(), v.null()),
   }),
-  handler: async (ctx) => {
+  handler: async (ctx, args) => {
     await ctx.runQuery(internal.staffAuth.currentOperator, {});
-    try {
-      await refreshAccessToken();
-      return { sheetsScope: true, tokenOk: true, error: null };
-    } catch (error) {
-      return {
-        sheetsScope: false,
-        tokenOk: false,
-        error: error instanceof Error ? error.message : String(error),
-      };
-    }
+
+    const credential = await credentialForClient(ctx, args.clientId ?? null);
+    const status = await checkCredential(ctx, credential);
+
+    return {
+      credential: credential.kind,
+      account: credential.kind === "serviceAccount" ? credential.email : null,
+      tokenOk: status.ok,
+      error: status.error,
+    };
   },
 });
 
+// The tabs of one spreadsheet, read with the account of the client it belongs
+// to. A caller that names no client reads it with the app's own account.
 export const listSheetTabs = action({
-  args: { googleSheetId: v.string() },
+  args: {
+    googleSheetId: v.string(),
+    clientId: v.optional(v.id("clients")),
+  },
   returns: v.object({ tabs: v.array(v.string()) }),
   handler: async (ctx, args) => {
     await ctx.runQuery(internal.staffAuth.currentOperator, {});
-    const token = await refreshAccessToken();
-    const data = (await fetchSheetsJson(
-      ctx,
-      args.googleSheetId,
-      token,
-      actionDeadline()
-    )) as SheetsTabListResponse;
-    const tabs = (data.sheets ?? [])
-      .map((sheet) => sheet.properties?.title ?? "")
-      .filter((title) => title !== "");
-    return { tabs };
+
+    const session = await sheetsSessions(ctx).forClient(args.clientId ?? null);
+    return { tabs: await session.listTabTitles(args.googleSheetId) };
   },
 });
 
