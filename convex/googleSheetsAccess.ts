@@ -214,18 +214,16 @@ function fallingBackSession(input: {
  *
  * A client whose own account cannot be used is read with the app's own account,
  * and the session says so, so the result marks the sheets that were read that
- * way. The account that was left is remembered for the action, so the second
- * clinic of a client whose account Google turns away is not turned away once
- * more. Anything else that goes wrong is the error of every sheet that client
- * owns.
+ * way. Whose account cannot be used belongs to the session of one caller and not
+ * to the account: Google refuses a spreadsheet the account was not given, so the
+ * clinic that follows one refused sheet still asks its own with the account it is
+ * linked to. Anything else that goes wrong is the error of every sheet that
+ * client owns.
  */
 export function sheetsSessions(ctx: ActionCtx): {
   forClient(clientId: Id<"clients"> | null): Promise<SheetsSession>;
 } {
   const opened = new Map<string, Promise<SheetsSession>>();
-  // One deciding session per service account for the whole action: the clinics
-  // of a client share it, and so do the clients linked to the same account.
-  const falling = new Map<string, SheetsSession>();
 
   function sessionFor(credential: GoogleCredential): Promise<SheetsSession> {
     const key = credentialKey(credential);
@@ -234,23 +232,6 @@ export function sheetsSessions(ctx: ActionCtx): {
     if (session === undefined) {
       session = openSession(ctx, credential);
       opened.set(key, session);
-    }
-    return session;
-  }
-
-  function fallingFor(
-    linked: Extract<GoogleCredential, { kind: "serviceAccount" }>
-  ): SheetsSession {
-    const key = credentialKey(linked);
-
-    let session = falling.get(key);
-    if (session === undefined) {
-      session = fallingBackSession({
-        linked,
-        linkedSession: sessionFor(linked),
-        appSession: () => sessionFor(OAUTH_CREDENTIAL),
-      });
-      falling.set(key, session);
     }
     return session;
   }
@@ -271,7 +252,11 @@ export function sheetsSessions(ctx: ActionCtx): {
 
       if (credential.kind === "oauth") return await sessionFor(credential);
 
-      return fallingFor(credential);
+      return fallingBackSession({
+        linked: credential,
+        linkedSession: sessionFor(credential),
+        appSession: () => sessionFor(OAUTH_CREDENTIAL),
+      });
     },
   };
 }
