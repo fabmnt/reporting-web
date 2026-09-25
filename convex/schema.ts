@@ -120,6 +120,21 @@ export default defineSchema({
     updatedAt: v.number(),
   }).index("by_ownerUserId", ["ownerUserId"]),
 
+  // Saved selections of clients and clinics an operator runs reports over. A
+  // group belongs to the account that made it: only its owner reads and edits
+  // it. It never widens what a run reads, because the clinics of a run are
+  // still matched against the assignment of the account that starts it.
+  reportGroups: defineTable({
+    ownerUserId: v.id("users"),
+    name: v.string(),
+    // Whole clients, which stand for every clinic they own, including the ones
+    // added after the group was saved, beside the single clinics it names.
+    clientIds: v.array(v.id("clients")),
+    clinicIds: v.array(v.id("clinics")),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  }).index("by_ownerUserId", ["ownerUserId"]),
+
   reportRuns: defineTable({
     initiatedByUserId: v.id("users"),
     // The type may be renamed or deleted later, so the name travels with the

@@ -7,6 +7,10 @@ export type ReportFilters = {
   endDate: string;
   reportTypeId: string | null;
   verification: VerificationFilter;
+  // The report groups the run is held to. None of them means every assigned
+  // clinic is covered. Ids the account does not own any more are ignored where
+  // the selection is matched against the groups the form holds.
+  groupIds: string[];
   // The assigned clinics the run leaves out. Ids the account is not assigned to
   // are ignored where the selection is matched against the assigned clinics.
   excludedClinicIds: string[];
@@ -19,6 +23,7 @@ const START_DATE_PARAM = "startDate";
 const END_DATE_PARAM = "endDate";
 const REPORT_TYPE_PARAM = "reportType";
 const VERIFICATION_PARAM = "verification";
+const GROUPS_PARAM = "groups";
 const EXCLUDED_CLINICS_PARAM = "excludedClinics";
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -38,14 +43,14 @@ function readDate(params: URLSearchParams, name: string, fallback: string): stri
   return ISO_DATE.test(value) ? value : fallback;
 }
 
-// Clinic ids are compared with the ones the account holds, so a value that is
-// not one of them costs nothing and needs no check of its own.
-function readClinicIds(value: string | null): string[] {
+// Group and clinic ids are compared with the ones the account holds, so a value
+// that is not one of them costs nothing and needs no check of its own.
+function readIds(value: string | null): string[] {
   if (value === null) return [];
   return value
     .split(",")
-    .map((clinicId) => clinicId.trim())
-    .filter((clinicId) => clinicId !== "");
+    .map((id) => id.trim())
+    .filter((id) => id !== "");
 }
 
 export function readReportFilters(search: string): ReportFilters {
@@ -60,7 +65,8 @@ export function readReportFilters(search: string): ReportFilters {
     // fallback of the picker.
     reportTypeId: params.get(REPORT_TYPE_PARAM) || null,
     verification: isVerificationFilter(verification) ? verification : "all",
-    excludedClinicIds: readClinicIds(params.get(EXCLUDED_CLINICS_PARAM)),
+    groupIds: readIds(params.get(GROUPS_PARAM)),
+    excludedClinicIds: readIds(params.get(EXCLUDED_CLINICS_PARAM)),
   };
 }
 
@@ -77,6 +83,12 @@ export function replaceReportFilters(filters: ReportFilters): void {
   });
 
   if (filters.reportTypeId !== null) params.set(REPORT_TYPE_PARAM, filters.reportTypeId);
+
+  // Running over every assigned clinic is the default, so the common case keeps
+  // the query string short whatever the account is assigned to.
+  if (filters.groupIds.length > 0) {
+    params.set(GROUPS_PARAM, filters.groupIds.join(","));
+  }
 
   // Leaving nothing out is the default, so the common case keeps the query
   // string short whatever the account is assigned to.

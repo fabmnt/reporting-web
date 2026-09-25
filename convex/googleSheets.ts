@@ -90,12 +90,16 @@ export const listSheetTabs = action({
   },
 });
 
+// The clinics a run may read, as the run form lists them. The client travels
+// with each clinic, because a report group holds whole clients besides single
+// clinics, and the form resolves both against this list.
 export const listAssignedReportClinics = query({
   args: {},
   returns: v.object({
     clinics: v.array(
       v.object({
         clinicId: v.id("clinics"),
+        clientId: v.id("clients"),
         name: v.string(),
         clientName: v.string(),
       })
@@ -115,6 +119,7 @@ export const listAssignedReportClinics = query({
       }
       clinics.push({
         clinicId: clinic._id,
+        clientId: clinic.clientId,
         name: clinic.name,
         clientName,
       });

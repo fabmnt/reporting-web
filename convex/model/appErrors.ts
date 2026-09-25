@@ -49,6 +49,12 @@ export type AppErrorPayload =
   | { code: "REPORT_TYPE_GROUP_REQUIRED" }
   | { code: "REPORT_TYPE_GROUP_LIMIT"; limit: number }
   | { code: "REPORT_TYPE_GROUP_KEYS" }
+  | { code: "REPORT_GROUP_NOT_FOUND" }
+  | { code: "REPORT_GROUP_NAME_REQUIRED" }
+  | { code: "REPORT_GROUP_NAME_TAKEN"; name: string }
+  | { code: "REPORT_GROUP_EMPTY" }
+  | { code: "REPORT_GROUP_MEMBER_LIMIT"; limit: number }
+  | { code: "REPORT_GROUP_LIMIT"; limit: number }
   | { code: "REPORT_RUN_NOT_FOUND" }
   | { code: "REPORT_RUN_ALREADY_STARTED" }
   | { code: "SHEET_RATE_LIMITED" }

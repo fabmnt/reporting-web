@@ -53,6 +53,13 @@ export const errors = {
   REPORT_TYPE_GROUP_LIMIT: (limit: number) =>
     `Un tipo de reporte admite hasta ${limit} grupos de filas.`,
   REPORT_TYPE_GROUP_KEYS: "Las claves de los grupos de filas deben ser únicas y no estar vacías.",
+  REPORT_GROUP_NOT_FOUND: "Este grupo de reportes no existe.",
+  REPORT_GROUP_NAME_REQUIRED: "El grupo de reportes necesita un nombre.",
+  REPORT_GROUP_NAME_TAKEN: (name: string) => `Ya existe un grupo de reportes llamado "${name}".`,
+  REPORT_GROUP_EMPTY: "Elige al menos un cliente o una clínica para el grupo.",
+  REPORT_GROUP_MEMBER_LIMIT: (limit: number) =>
+    `Un grupo de reportes admite hasta ${limit} clientes y clínicas.`,
+  REPORT_GROUP_LIMIT: (limit: number) => `Puedes guardar hasta ${limit} grupos de reportes.`,
   REPORT_RUN_NOT_FOUND: "Esta ejecución de reporte ya no está disponible.",
   REPORT_RUN_ALREADY_STARTED: "Esta ejecución de reporte ya se había iniciado.",
   SHEET_NO_TABS: (startDate: string, endDate: string) =>

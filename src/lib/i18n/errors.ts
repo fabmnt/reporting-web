@@ -100,6 +100,18 @@ function renderAppError(payload: AppErrorPayload, t: Messages): string | null {
       return e.REPORT_TYPE_GROUP_LIMIT(payload.limit);
     case "REPORT_TYPE_GROUP_KEYS":
       return e.REPORT_TYPE_GROUP_KEYS;
+    case "REPORT_GROUP_NOT_FOUND":
+      return e.REPORT_GROUP_NOT_FOUND;
+    case "REPORT_GROUP_NAME_REQUIRED":
+      return e.REPORT_GROUP_NAME_REQUIRED;
+    case "REPORT_GROUP_NAME_TAKEN":
+      return e.REPORT_GROUP_NAME_TAKEN(payload.name);
+    case "REPORT_GROUP_EMPTY":
+      return e.REPORT_GROUP_EMPTY;
+    case "REPORT_GROUP_MEMBER_LIMIT":
+      return e.REPORT_GROUP_MEMBER_LIMIT(payload.limit);
+    case "REPORT_GROUP_LIMIT":
+      return e.REPORT_GROUP_LIMIT(payload.limit);
     case "REPORT_RUN_NOT_FOUND":
       return e.REPORT_RUN_NOT_FOUND;
     case "REPORT_RUN_ALREADY_STARTED":
