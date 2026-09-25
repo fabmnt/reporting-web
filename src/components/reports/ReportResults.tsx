@@ -20,6 +20,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useI18n } from "@/lib/i18n/context";
 import { sheetErrorText } from "@/lib/i18n/errors";
 import { cn } from "@/lib/utils";
@@ -167,6 +168,17 @@ function groupByClinic(sheets: SheetResult[]): ClinicGroup[] {
   }
 
   return groups;
+}
+
+function clinicRowCount(group: ClinicGroup): number {
+  return group.sheets.reduce((total, sheet) => total + sheetRowCount(sheet), 0);
+}
+
+// A clinic whose tabs read no rows has nothing to show, so its tab is left out
+// of the results. A clinic that failed keeps its tab: the error is what the
+// operator has to read.
+function clinicHasContent(group: ClinicGroup): boolean {
+  return group.sheets.some((sheet) => sheetRowCount(sheet) > 0 || sheet.error !== null);
 }
 
 /** Row numbers in the shape they are copied in: '2', '3', '33'. */
@@ -624,11 +636,27 @@ export function OverviewCard({ result }: { result: ReportResult }) {
 }
 
 /**
- * Renders one finished run. Every value comes from the run itself, so editing
- * the report controls afterward never rewrites what the run returned.
+ * Renders one finished run. Each clinic the run found rows for is a tab named
+ * after the clinic and its row count, and inside it the sheet tabs of that
+ * clinic carry the rows. Every value comes from the run itself, so editing the
+ * report controls afterward never rewrites what the run returned.
  */
 export function ResultsCard({ result }: { result: ReportResult }) {
   const { t } = useI18n();
+  // The clinic the reader is looking at. A new run may not hold the clinic the
+  // last one was on, and then the first tab of the new run is what shows.
+  const [selectedClinicId, setSelectedClinicId] = useState<string | null>(null);
+  const groups = groupByClinic(result.sheets).filter(clinicHasContent);
+  const selectedGroup = groups.find((group) => group.clinicId === selectedClinicId) ?? groups[0];
+
+  // A run that read no sheet and a run that found no row both answer with a
+  // sentence instead of tabs.
+  let emptyMessage: string | null = null;
+  if (result.sheets.length === 0) {
+    emptyMessage = t.reports.results.noneProcessed;
+  } else if (groups.length === 0) {
+    emptyMessage = t.reports.results.noMatchingRows;
+  }
 
   return (
     <Card>
@@ -643,60 +671,90 @@ export function ResultsCard({ result }: { result: ReportResult }) {
         </div>
       </CardHeader>
       <CardContent className="flex flex-col gap-6">
-        {result.sheets.length === 0 ? (
-          <p className="text-sm text-muted-foreground">{t.reports.results.noneProcessed}</p>
-        ) : null}
-        {groupByClinic(result.sheets).map((group) => (
-          <div key={group.clinicId} className="flex flex-col gap-3">
-            <h3 className="text-sm font-medium">{group.clinicName}</h3>
-            <div className="flex flex-col gap-4 border-l pl-3">
-              {group.sheets.map((sheet) => {
-                const buckets = sheet.bucketRows.filter((bucket) => bucket.rows.length > 0);
-                // A sheet with neither a tab name nor a row count is a failed
-                // read of a whole sheet: only its error says anything.
-                const hasTabHeading = sheet.tabTitle !== "" || sheet.error === null;
-                return (
-                  <div key={`${sheet.clinicId}-${sheet.tabTitle}`} className="flex flex-col gap-3">
-                    {hasTabHeading ? (
-                      <div className="flex flex-wrap items-center gap-2">
-                        {sheet.tabTitle === "" ? null : (
-                          <h4 className="text-xs font-medium">{sheet.tabTitle}</h4>
-                        )}
-                        {sheet.error === null ? (
-                          <Badge variant="secondary" className="tabular-nums">
-                            {sheetRowCount(sheet)}
-                          </Badge>
-                        ) : null}
-                      </div>
-                    ) : null}
-                    {sheet.error ? (
-                      <Alert variant="destructive">
-                        <AlertTitle>{t.reports.results.sheetError}</AlertTitle>
-                        <AlertDescription>{sheetErrorText(sheet.error, t)}</AlertDescription>
-                      </Alert>
-                    ) : (
-                      <>
-                        {buckets.map((bucket) => (
-                          <ResultBucket
-                            key={bucket.bucketKey}
-                            bucket={bucket}
-                            headers={sheet.headers}
-                            showLabel={buckets.length > 1}
-                          />
-                        ))}
-                        {buckets.length === 0 ? (
-                          <p className="text-sm text-muted-foreground">
-                            {t.reports.results.noMatchingRows}
-                          </p>
-                        ) : null}
-                      </>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        ))}
+        {emptyMessage === null ? null : (
+          <p className="text-sm text-muted-foreground">{emptyMessage}</p>
+        )}
+        {selectedGroup === undefined ? null : (
+          <Tabs
+            value={selectedGroup.clinicId}
+            onValueChange={(value) => setSelectedClinicId(value as string)}
+            className="gap-4"
+          >
+            {/* A run can read many clinics, so the tabs wrap instead of running
+                off the card. The height override carries the same variant as
+                the fixed height the list sets by default, which is what makes
+                one replace the other. */}
+            <TabsList className="group-data-horizontal/tabs:h-auto w-full flex-wrap justify-start">
+              {groups.map((group) => (
+                <TabsTrigger
+                  key={group.clinicId}
+                  value={group.clinicId}
+                  className="flex-initial max-w-full"
+                >
+                  <span className="min-w-0 truncate">{group.clinicName}</span>{" "}
+                  <Badge variant="secondary" className="tabular-nums">
+                    {clinicRowCount(group)}
+                  </Badge>
+                </TabsTrigger>
+              ))}
+            </TabsList>
+            {groups.map((group) => (
+              <TabsContent
+                key={group.clinicId}
+                value={group.clinicId}
+                className="flex flex-col gap-4"
+              >
+                {group.sheets.map((sheet) => {
+                  const buckets = sheet.bucketRows.filter((bucket) => bucket.rows.length > 0);
+                  // A sheet with neither a tab name nor a row count is a failed
+                  // read of a whole sheet: only its error says anything.
+                  const hasTabHeading = sheet.tabTitle !== "" || sheet.error === null;
+                  return (
+                    <div
+                      key={`${sheet.clinicId}-${sheet.tabTitle}`}
+                      className="flex flex-col gap-3"
+                    >
+                      {hasTabHeading ? (
+                        <div className="flex flex-wrap items-center gap-2">
+                          {sheet.tabTitle === "" ? null : (
+                            <h4 className="text-xs font-medium">{sheet.tabTitle}</h4>
+                          )}
+                          {sheet.error === null ? (
+                            <Badge variant="secondary" className="tabular-nums">
+                              {sheetRowCount(sheet)}
+                            </Badge>
+                          ) : null}
+                        </div>
+                      ) : null}
+                      {sheet.error ? (
+                        <Alert variant="destructive">
+                          <AlertTitle>{t.reports.results.sheetError}</AlertTitle>
+                          <AlertDescription>{sheetErrorText(sheet.error, t)}</AlertDescription>
+                        </Alert>
+                      ) : (
+                        <>
+                          {buckets.map((bucket) => (
+                            <ResultBucket
+                              key={bucket.bucketKey}
+                              bucket={bucket}
+                              headers={sheet.headers}
+                              showLabel={buckets.length > 1}
+                            />
+                          ))}
+                          {buckets.length === 0 ? (
+                            <p className="text-sm text-muted-foreground">
+                              {t.reports.results.noMatchingRows}
+                            </p>
+                          ) : null}
+                        </>
+                      )}
+                    </div>
+                  );
+                })}
+              </TabsContent>
+            ))}
+          </Tabs>
+        )}
       </CardContent>
     </Card>
   );
