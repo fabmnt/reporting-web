@@ -5,7 +5,7 @@ import type { ActionCtx } from "./_generated/server";
 import { env } from "./_generated/server";
 import { appError } from "./model/appErrors";
 import {
-  ACTION_BUDGET_MS,
+  actionDeadline,
   failureOf,
   sendGoogleCall,
   sleep,
@@ -143,16 +143,10 @@ function tokenFailureMessage(failure: GoogleFailure): string {
 }
 
 // The wording a sheet reports when a request with the app's own account fails.
-export function sheetsFailureMessage(failure: GoogleFailure): string {
+function sheetsFailureMessage(failure: GoogleFailure): string {
   if (failure.status === 0) return `Google Sheets request failed. ${failure.detail}`;
   const suffix = failure.detail === "" ? "" : ` ${failure.detail}`;
   return `Google Sheets request failed with status ${failure.status}.${suffix}`;
-}
-
-// Absolute time by which every wait of one action has to be finished. Call it
-// once per action, before the requests that action makes.
-export function actionDeadline(): number {
-  return Date.now() + ACTION_BUDGET_MS;
 }
 
 // The token endpoint has its own quota, so it is retried but not paced.

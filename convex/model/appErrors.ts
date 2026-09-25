@@ -21,6 +21,7 @@ export type AppErrorPayload =
   | { code: "PASSWORD_SETUP_LINK_INVALID" }
   | { code: "CLIENT_NOT_FOUND" }
   | { code: "CLIENT_DISABLED" }
+  | { code: "CLIENT_NOT_ASSIGNED" }
   | { code: "SERVICE_ACCOUNT_NOT_FOUND" }
   | { code: "SERVICE_ACCOUNT_EMAIL_INVALID" }
   | { code: "SERVICE_ACCOUNT_EMAIL_TAKEN" }
@@ -71,13 +72,16 @@ export function appErrorPayloadOf(error: unknown): AppErrorPayload | null {
 
 // A report result carries one error per sheet. Failures raised by Google or by
 // a clinic's own configuration keep their text, because only the call that
-// failed knows what went wrong. A rate limit keeps its code instead: the text
-// Google sends is not something to show an operator, and the recovery is the
-// same for every sheet.
+// failed knows what went wrong. Errors whose recovery is the same for every
+// sheet keep a code instead: the text Google sends is not something to show an
+// operator, and the fix is not something a sheet can say on its own.
 export const reportSheetError = v.union(
   v.object({ code: v.literal("SHEET_NO_TABS"), startDate: v.string(), endDate: v.string() }),
   v.object({ code: v.literal("SHEET_INVALID_COLUMN"), column: v.string() }),
   v.object({ code: v.literal("SHEET_RATE_LIMITED") }),
+  // The account that reads the client's sheets is not there any more, which
+  // fails every sheet of that client until an administrator links one again.
+  v.object({ code: v.literal("SHEET_SERVICE_ACCOUNT_MISSING") }),
   v.object({ code: v.literal("SHEET_FAILED"), message: v.string() }),
   // A clinic the carrier engine could not work: it has no Control Central id
   // yet, the API turned the app away, or the clinic has no bot left to run a
@@ -101,6 +105,9 @@ export function sheetErrorFrom(error: unknown): ReportSheetError {
   }
   if (payload !== null && payload.code === "SHEET_RATE_LIMITED") {
     return { code: "SHEET_RATE_LIMITED" };
+  }
+  if (payload !== null && payload.code === "SERVICE_ACCOUNT_NOT_FOUND") {
+    return { code: "SHEET_SERVICE_ACCOUNT_MISSING" };
   }
   return {
     code: "SHEET_FAILED",

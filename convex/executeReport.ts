@@ -2,7 +2,6 @@ import { internal } from "./_generated/api.js";
 import type { Id } from "./_generated/dataModel";
 import type { ActionCtx } from "./_generated/server";
 import { fetchClinicBots, signInCarrierApi, type CarrierFailure } from "./carrierApi";
-import { actionDeadline } from "./googleApi";
 import { appError, sheetErrorFrom, type ReportSheetError } from "./model/appErrors";
 import { carrierMatchers, inactiveCarrierBots, type CarrierMatcher } from "./model/carrierBots";
 import type { ResolvedClinicSheetColumns } from "./model/clinicSheetColumns";
@@ -11,6 +10,7 @@ import {
   verificationMatches,
   type ExecuteVerificationFilter,
 } from "./model/executeRules";
+import { actionDeadline } from "./model/googlePolicy";
 import {
   conditionColumnResolver,
   evaluateConditionSet,

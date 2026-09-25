@@ -8,11 +8,16 @@ import { internal } from "./_generated/api.js";
 import type { Id } from "./_generated/dataModel";
 import { internalAction } from "./_generated/server";
 import type { ActionCtx } from "./_generated/server";
-import { actionDeadline, awaitSheetsSlot } from "./googleApi";
+import { awaitSheetsSlot } from "./googleApi";
 import { appError } from "./model/appErrors";
 import { serviceAccountBucket } from "./model/googleCredentials";
 import { toSheetGrid, type SheetGrid } from "./model/googleGrid";
-import { failureOf, sendGoogleCall, type GoogleFailure } from "./model/googlePolicy";
+import {
+  actionDeadline,
+  failureOf,
+  sendGoogleCall,
+  type GoogleFailure,
+} from "./model/googlePolicy";
 
 /**
  * The Sheets API as a service account reads it: this is the only place the two

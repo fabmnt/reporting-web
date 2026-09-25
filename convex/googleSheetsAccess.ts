@@ -1,9 +1,10 @@
 import { internal } from "./_generated/api.js";
 import type { Id } from "./_generated/dataModel";
 import type { ActionCtx } from "./_generated/server";
-import { actionDeadline, fetchSheetsJson, refreshAccessToken } from "./googleApi";
+import { fetchSheetsJson, refreshAccessToken } from "./googleApi";
 import { OAUTH_CREDENTIAL, credentialKey, type GoogleCredential } from "./model/googleCredentials";
 import { toSheetGrid, type SheetGrid } from "./model/googleGrid";
+import { actionDeadline } from "./model/googlePolicy";
 
 // spreadsheets.get has no batch variant, so listing the tabs of a spreadsheet
 // costs one request each. Values are batched with values:batchGet instead: one

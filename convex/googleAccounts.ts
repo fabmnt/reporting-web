@@ -17,9 +17,9 @@ import { requireAdmin } from "./model/staff";
 // pickers do. An installation holds one account per external organization, so
 // the cap sits far above what anybody stores.
 export const MAX_SERVICE_ACCOUNTS = 200;
-// How many clients the usage count and the unlink on delete read. The count is
-// what the list shows, and deleting an account clears the link of every client
-// that points at it.
+// How many clients the usage count reads. The count is what the list shows and
+// what the delete confirmation says, so it is one capped page like the counts
+// the other lists report.
 const MAX_LINKED_CLIENTS = 1000;
 
 const serviceAccountView = v.object({
@@ -141,7 +141,12 @@ export const updateServiceAccount = mutation({
 /**
  * Deletes a service account and clears the link of every client that used it.
  * Those clients go back to being read with the app's own account rather than
- * pointing at a row that is gone, and the count says how many changed.
+ * pointing at a row that is gone, which is the state their runs fail on.
+ *
+ * The walk iterates the index instead of reading one capped page, because a
+ * link left behind is a client whose runs fail until somebody notices. An
+ * account is one per external organization, so the clients pointing at one are
+ * well inside what a single transaction writes.
  */
 export const removeServiceAccount = mutation({
   args: { serviceAccountId: v.id("googleServiceAccounts") },
@@ -152,18 +157,18 @@ export const removeServiceAccount = mutation({
     const account = await ctx.db.get("googleServiceAccounts", args.serviceAccountId);
     if (account === null) throw appError({ code: "SERVICE_ACCOUNT_NOT_FOUND" });
 
-    const linked = await ctx.db
+    let unlinkedClientCount = 0;
+    for await (const client of ctx.db
       .query("clients")
       .withIndex("by_serviceAccountId", (query) =>
         query.eq("serviceAccountId", args.serviceAccountId)
-      )
-      .take(MAX_LINKED_CLIENTS + 1);
-    for (const client of linked) {
+      )) {
       await ctx.db.patch(client._id, { serviceAccountId: undefined });
+      unlinkedClientCount += 1;
     }
 
     await ctx.db.delete(args.serviceAccountId);
-    return { unlinkedClientCount: linked.length };
+    return { unlinkedClientCount };
   },
 });
 

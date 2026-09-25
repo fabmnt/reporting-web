@@ -3,6 +3,7 @@ import { convexTest } from "convex-test";
 import { describe, expect, it } from "vitest";
 
 import { api } from "./_generated/api";
+import type { Id } from "./_generated/dataModel";
 import schema from "./schema";
 
 const modules = import.meta.glob("./**/*.ts");
@@ -101,5 +102,48 @@ describe("clinics.list", () => {
 
     expect(found.hasMore).toBe(false);
     expect(found.clinics.map((clinic) => clinic.name)).toEqual(["Downtown"]);
+  });
+});
+
+/**
+ * The client table reports the account that reads each client's sheets. The
+ * address is looked up per row, because a table with more accounts than one
+ * page holds would otherwise name the app's own account for the clients linked
+ * past that page.
+ */
+describe("clinics.listClients", () => {
+  // One account more than a single page of accounts used to hold.
+  const ACCOUNTS = 201;
+
+  it("names the account of a client linked past a page of accounts", async () => {
+    const t = convexTest(schema, modules);
+    const identity = await signInAdmin(t);
+
+    await t.run(async (ctx) => {
+      let lastAccountId: Id<"googleServiceAccounts"> | null = null;
+      for (let index = 0; index < ACCOUNTS; index += 1) {
+        lastAccountId = await ctx.db.insert("googleServiceAccounts", {
+          email: `reader-${index}@example.iam.gserviceaccount.com`,
+          privateKey: "test-private-key",
+        });
+      }
+
+      await ctx.db.insert("clients", {
+        key: "last-account-co",
+        name: "Last Account Co",
+        isActive: true,
+        ...(lastAccountId === null ? {} : { serviceAccountId: lastAccountId }),
+      });
+    });
+
+    const page = await t
+      .withIdentity(identity)
+      .query(api.clinics.listClients, { paginationOpts: { numItems: 10, cursor: null } });
+
+    expect(page.page).toHaveLength(1);
+    expect(page.page[0]).toMatchObject({
+      name: "Last Account Co",
+      serviceAccountEmail: `reader-${ACCOUNTS - 1}@example.iam.gserviceaccount.com`,
+    });
   });
 });

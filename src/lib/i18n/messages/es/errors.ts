@@ -18,6 +18,7 @@ export const errors = {
   PASSWORD_SETUP_LINK_INVALID: "Este enlace ya no es válido. Pídele a un administrador uno nuevo.",
   CLIENT_NOT_FOUND: "No se encontró el cliente.",
   CLIENT_DISABLED: "Este cliente está deshabilitado.",
+  CLIENT_NOT_ASSIGNED: "Este cliente no está asignado a tu cuenta.",
   SERVICE_ACCOUNT_NOT_FOUND: "Esta cuenta de servicio ya no existe.",
   SERVICE_ACCOUNT_EMAIL_INVALID:
     "El correo dentro del archivo de clave no es una dirección válida.",
@@ -58,6 +59,8 @@ export const errors = {
     `Columna de hoja no válida "${column}". Usa letras como A, T o AB.`,
   SHEET_RATE_LIMITED:
     "Google limitó la velocidad de nuestras solicitudes. Espera un minuto e inténtalo de nuevo.",
+  SHEET_SERVICE_ACCOUNT_MISSING:
+    "La cuenta de servicio que lee las hojas de este cliente ya no existe. Pide a un administrador que vincule otra.",
   CARRIER_SIGN_IN_REJECTED:
     "La API de carriers rechazó las credenciales de la aplicación. Pide a un administrador que las revise.",
   CARRIER_API_UNAVAILABLE: "La API de carriers no respondió. Inténtalo de nuevo en un momento.",

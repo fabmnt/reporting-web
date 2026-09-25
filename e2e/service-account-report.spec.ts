@@ -11,9 +11,12 @@ import { resolve } from "node:path";
  * them the test skips itself: nothing here reaches Google on its own, so a
  * machine without the account still runs the rest of the suite.
  *
- * The spreadsheet is left in place between runs, and the sheet it holds is what
- * proves the read: the account is the only identity that can read it, because
- * the app's own account was never given access to it.
+ * The fixture's rows are what prove the read: the service account is the only
+ * identity that can read that spreadsheet, because the app's own account was
+ * never given access to it. The suite runs right after a seeding run: the
+ * script makes a new spreadsheet every time, and a clinic can only point at
+ * one, so a fixture that an earlier run already gave a clinic to cannot be
+ * used again.
  */
 
 // Where the seeding script leaves the spreadsheet it created.

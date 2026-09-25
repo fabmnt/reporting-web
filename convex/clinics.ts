@@ -4,7 +4,6 @@ import { type Infer, v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { mutation, query } from "./_generated/server";
-import { MAX_SERVICE_ACCOUNTS } from "./googleAccounts";
 import { appError, type AppErrorPayload } from "./model/appErrors";
 import { MAX_ASSIGNED_CLINICS, usableClinicIds } from "./model/assignments";
 import { clientKeyFromName } from "./model/clientKey";
@@ -153,15 +152,25 @@ async function withClientNames<T extends { clientId: Id<"clients"> }>(
 }
 
 /**
- * The address of each service account, resolved once per read so a page of
- * clients costs one read per account instead of one per client. The private key
- * is not part of what this returns: only the address is ever shown.
+ * The address of each account the given clients point at, looked up per row so
+ * a page of clients costs one read per account it uses instead of one per
+ * client. The private key is not part of what this returns: only the address is
+ * ever shown.
  */
-async function serviceAccountEmails(
-  ctx: QueryCtx
+async function serviceAccountEmails<T extends { serviceAccountId?: Id<"googleServiceAccounts"> }>(
+  ctx: QueryCtx,
+  clients: T[]
 ): Promise<Map<Id<"googleServiceAccounts">, string>> {
-  const rows = await ctx.db.query("googleServiceAccounts").take(MAX_SERVICE_ACCOUNTS);
-  return new Map(rows.map((account) => [account._id, account.email]));
+  const emails = new Map<Id<"googleServiceAccounts">, string>();
+
+  for (const client of clients) {
+    const serviceAccountId = client.serviceAccountId;
+    if (serviceAccountId === undefined || emails.has(serviceAccountId)) continue;
+    const account = await ctx.db.get("googleServiceAccounts", serviceAccountId);
+    if (account !== null) emails.set(serviceAccountId, account.email);
+  }
+
+  return emails;
 }
 
 /** A client as both lists of the clients table show it. */
@@ -445,7 +454,7 @@ export const listClients = query({
             .filter((builder) => builder.eq(builder.field("isActive"), status === "active"))
             .paginate(args.paginationOpts);
 
-    const emails = await serviceAccountEmails(ctx);
+    const emails = await serviceAccountEmails(ctx, page.page);
 
     return {
       page: page.page.map((client) => toClientListView(client, emails)),
@@ -487,12 +496,11 @@ export const searchClients = query({
     const matches = scanned
       .slice(0, MAX_SEARCH_SCAN)
       .filter((client) => clientMatchesSearch(client, needle));
-    const emails = await serviceAccountEmails(ctx);
+    const shown = matches.slice(0, MAX_SEARCH_RESULTS);
+    const emails = await serviceAccountEmails(ctx, shown);
 
     return {
-      clients: matches
-        .slice(0, MAX_SEARCH_RESULTS)
-        .map((client) => toClientListView(client, emails)),
+      clients: shown.map((client) => toClientListView(client, emails)),
       hasMore: scanned.length > MAX_SEARCH_SCAN || matches.length > MAX_SEARCH_RESULTS,
     };
   },
@@ -516,8 +524,9 @@ export const listClientChoices = query({
       .query("clients")
       .withIndex("by_key")
       .take(MAX_CLIENTS + 1);
-    const emails = await serviceAccountEmails(ctx);
-    const clients = rows.slice(0, MAX_CLIENTS).map((client) => {
+    const page = rows.slice(0, MAX_CLIENTS);
+    const emails = await serviceAccountEmails(ctx, page);
+    const clients = page.map((client) => {
       const serviceAccountId = client.serviceAccountId ?? null;
       return toClientView(
         client,
