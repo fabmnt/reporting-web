@@ -1,6 +1,7 @@
 import type { FunctionReturnType } from "convex/server";
 
 import { api } from "../../convex/_generated/api";
+import type { Id } from "../../convex/_generated/dataModel";
 
 // How a report group turns into the clinics a run reads. A group names whole
 // clients and single clinics, so the groups an operator ticked are matched
@@ -11,6 +12,27 @@ export type ReportGroup = FunctionReturnType<typeof api.reportGroups.list>["grou
 export type ReportClinic = FunctionReturnType<
   typeof api.googleSheets.listAssignedReportClinics
 >["clinics"][number];
+
+/** The clinics of one client, as the run form and the group picker list them. */
+export type ClientEntry = {
+  clientId: Id<"clients">;
+  clientName: string;
+  clinics: ReportClinic[];
+};
+
+/** Groups clinics under their client, the clients in name order. */
+export function byClient(clinics: readonly ReportClinic[]): ClientEntry[] {
+  const entries = new Map<string, ClientEntry>();
+  for (const clinic of clinics) {
+    let entry = entries.get(clinic.clientId);
+    if (entry === undefined) {
+      entry = { clientId: clinic.clientId, clientName: clinic.clientName, clinics: [] };
+      entries.set(clinic.clientId, entry);
+    }
+    entry.clinics.push(clinic);
+  }
+  return [...entries.values()].sort((a, b) => a.clientName.localeCompare(b.clientName));
+}
 
 /** Whether a group holds a clinic, either by naming its client or the clinic. */
 export function groupCoversClinic(group: ReportGroup, clinic: ReportClinic): boolean {
