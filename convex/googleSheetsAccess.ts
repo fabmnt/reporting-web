@@ -151,7 +151,7 @@ async function openSession(ctx: ActionCtx, credential: GoogleCredential): Promis
  * client, and a key that Google stopped accepting would keep failing until an
  * administrator noticed.
  *
- * The account that was left is kept for the life of the action, so every call
+ * The account that was left is kept for the life of the session, so every call
  * after the first one goes straight to the app's account, and it travels with
  * the session so the result can name it.
  */
@@ -174,8 +174,10 @@ function fallingBackSession(input: {
       const reason = accountUnusable(error);
       if (reason === null) throw error;
 
-      const app = await input.appSession();
       try {
+        // Opening the app's own session is part of the attempt: a deployment
+        // whose own account cannot be used leaves both accounts unusable.
+        const app = await input.appSession();
         const value = await call(app);
         reading = app;
         fallback = { account: input.linked.email, reason };
@@ -183,7 +185,7 @@ function fallingBackSession(input: {
       } catch {
         // Both accounts failed, so the error of the account the client picked is
         // the one the sheet reports: that is the link an administrator has to
-        // mend, and it names the address the sheet has to be shared with.
+        // mend, and it names the account the sheet's fix belongs to.
         throw error;
       }
     }
@@ -212,13 +214,18 @@ function fallingBackSession(input: {
  *
  * A client whose own account cannot be used is read with the app's own account,
  * and the session says so, so the result marks the sheets that were read that
- * way. Anything else that goes wrong is the error of every sheet that client
+ * way. The account that was left is remembered for the action, so the second
+ * clinic of a client whose account Google turns away is not turned away once
+ * more. Anything else that goes wrong is the error of every sheet that client
  * owns.
  */
 export function sheetsSessions(ctx: ActionCtx): {
   forClient(clientId: Id<"clients"> | null): Promise<SheetsSession>;
 } {
   const opened = new Map<string, Promise<SheetsSession>>();
+  // One deciding session per service account for the whole action: the clinics
+  // of a client share it, and so do the clients linked to the same account.
+  const falling = new Map<string, SheetsSession>();
 
   function sessionFor(credential: GoogleCredential): Promise<SheetsSession> {
     const key = credentialKey(credential);
@@ -227,6 +234,23 @@ export function sheetsSessions(ctx: ActionCtx): {
     if (session === undefined) {
       session = openSession(ctx, credential);
       opened.set(key, session);
+    }
+    return session;
+  }
+
+  function fallingFor(
+    linked: Extract<GoogleCredential, { kind: "serviceAccount" }>
+  ): SheetsSession {
+    const key = credentialKey(linked);
+
+    let session = falling.get(key);
+    if (session === undefined) {
+      session = fallingBackSession({
+        linked,
+        linkedSession: sessionFor(linked),
+        appSession: () => sessionFor(OAUTH_CREDENTIAL),
+      });
+      falling.set(key, session);
     }
     return session;
   }
@@ -247,11 +271,7 @@ export function sheetsSessions(ctx: ActionCtx): {
 
       if (credential.kind === "oauth") return await sessionFor(credential);
 
-      return fallingBackSession({
-        linked: credential,
-        linkedSession: sessionFor(credential),
-        appSession: () => sessionFor(OAUTH_CREDENTIAL),
-      });
+      return fallingFor(credential);
     },
   };
 }
