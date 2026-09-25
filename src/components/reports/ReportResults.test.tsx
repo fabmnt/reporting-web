@@ -180,6 +180,31 @@ describe("ResultsCard", () => {
     expect(screen.getByText(/could not read this sheet/)).toBeVisible();
     expect(screen.queryByText("Read with the app's Google account")).not.toBeInTheDocument();
   });
+
+  it("names the reader of each sheet of a clinic that two accounts read", () => {
+    renderResults(
+      run([
+        {
+          ...sheet("clinic-1", "Abilene", "2026-09-29", [sheetRow(3, "Ana", "Austin")]),
+          credential: {
+            kind: "serviceAccount",
+            serviceAccountId: "account-1" as Id<"googleServiceAccounts">,
+            email: "reader@example.com",
+          },
+        },
+        {
+          ...sheet("clinic-1", "Abilene", "2026-09-28", [sheetRow(5, "Luis", "Dallas")]),
+          credential: { kind: "oauth" },
+          fallback: { account: "reader@example.com", reason: "denied" },
+        },
+      ])
+    );
+
+    // The alert says what was refused and not which rows it cost, so both readers
+    // stay named: the rows read as linked and the ones the refusal cost.
+    expect(screen.getByText("Read with the service account reader@example.com")).toBeVisible();
+    expect(screen.getByText("Read with the app's Google account")).toBeVisible();
+  });
 });
 
 describe("UnmatchedCarrierRowsCard", () => {

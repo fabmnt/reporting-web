@@ -215,6 +215,23 @@ function readWithText(credential: GoogleCredential, t: Messages): string {
     : t.reports.results.readWithAppAccount;
 }
 
+/** How one account is told apart from another when a clinic names two of them. */
+function credentialName(credential: GoogleCredential): string {
+  return credential.kind === "serviceAccount" ? `serviceAccount:${credential.email}` : "oauth";
+}
+
+// Whether the sheets of a clinic were read by more than one account, which is
+// what names the reader of each sheet instead of one between them: a sheet
+// refused while the ones before it were read as linked leaves two accounts behind
+// one clinic.
+function clinicReadByManyAccounts(group: ClinicGroup): boolean {
+  const readers = new Set<string>();
+  for (const sheet of group.sheets) {
+    if (sheet.credential !== undefined) readers.add(credentialName(sheet.credential));
+  }
+  return readers.size > 1;
+}
+
 // The account a clinic's sheets were read instead of, when the run could not use
 // the account the client is linked to. One client stands behind every sheet of
 // the clinic, so the first sheet that carries one answers for all of them.
@@ -757,6 +774,7 @@ export function ResultsCard({ result }: { result: ReportResult }) {
               // by one account names once at the end instead of on every sheet.
               const credential = clinicCredential(group);
               const fallback = clinicFallback(group);
+              const mixedReading = clinicReadByManyAccounts(group);
               return (
                 <TabsContent
                   key={group.clinicId}
@@ -808,13 +826,20 @@ export function ResultsCard({ result }: { result: ReportResult }) {
                             />
                           ))
                         )}
+                        {/* The alert above says what was refused and not which
+                            rows it cost, so a clinic read by two accounts names
+                            the reader of each sheet here. */}
+                        {mixedReading && sheet.credential !== undefined ? (
+                          <p className="text-xs text-muted-foreground">
+                            {readWithText(sheet.credential, t)}
+                          </p>
+                        ) : null}
                       </div>
                     );
                   })}
-                  {/* The alert already says which account read the sheets
-                      instead, so the line names one only while the whole clinic
-                      was read with it. */}
-                  {credential === null || fallback !== null ? null : (
+                  {/* A clinic read by one account with nothing refused names it
+                      once, here. */}
+                  {credential === null || fallback !== null || mixedReading ? null : (
                     <p className="text-xs text-muted-foreground">{readWithText(credential, t)}</p>
                   )}
                 </TabsContent>
