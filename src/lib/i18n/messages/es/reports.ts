@@ -17,6 +17,37 @@ export const reports = {
   includedClinics: "Clínicas incluidas",
   noAssignedClinics:
     "Aún no tienes clínicas asignadas. Pide a un administrador que te asigne clínicas.",
+  groups: {
+    title: "Grupos de reportes",
+    manage: "Administrar grupos",
+    none: "Aún no hay grupos de reportes. Crea uno para guardar un conjunto de clientes y clínicas.",
+    clinicsTitle: "Clínicas",
+    clinicsInGroups: "Clínicas de los grupos seleccionados",
+    count: (count: number) => (count === 1 ? "1 clínica" : `${count} clínicas`),
+    manager: {
+      title: "Grupos de reportes",
+      description:
+        "Guarda los clientes y las clínicas sobre los que ejecutas un reporte, para volver a elegirlos.",
+      newGroup: "Nuevo grupo",
+      empty: "Aún no tienes grupos de reportes.",
+      deleteTitle: (name: string) => `¿Eliminar "${name}"?`,
+      deleteDescription:
+        "El grupo se elimina. Las clínicas y los clientes que contiene se quedan como están.",
+      formCreateTitle: "Nuevo grupo de reportes",
+      formEditTitle: "Editar grupo de reportes",
+      formDescription: "El grupo es solo tuyo. Marca clientes completos, clínicas sueltas o ambos.",
+      name: "Nombre del grupo",
+      namePlaceholder: "ej. Lote de septiembre",
+      members: "Clientes y clínicas",
+      membersHint:
+        "Marcar un cliente incluye todas sus clínicas, también las que se añadan después.",
+      noClinics: "Aún no hay clínicas asignadas para agrupar.",
+      covered: (covered: number, total: number) => `${covered} de ${total} clínicas incluidas.`,
+      create: "Crear grupo",
+      saveFailedTitle: "No se pudo guardar el grupo",
+      saveFailed: "Falló el guardado del grupo.",
+    },
+  },
   noReportTypes:
     "Aún no hay tipos de reporte. Crea uno en Configuración o pide a un administrador que comparta uno integrado.",
   run: "Ejecutar reporte",

@@ -1,7 +1,6 @@
 "use client";
 
 import { useAction, useMutation, useQuery } from "convex/react";
-import type { FunctionReturnType } from "convex/server";
 import { FileText } from "lucide-react";
 import { useState } from "react";
 
@@ -10,7 +9,6 @@ import type { Id } from "../../../convex/_generated/dataModel";
 import { AppLink } from "@/components/app/navigation";
 import { PageHeader } from "@/components/app/PageHeader";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader } from "@/components/ui/card";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
@@ -29,6 +27,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
 import { useDocumentTitle, useI18n } from "@/lib/i18n/context";
 import { localizedError, localizedMessage, type LocalizedMessage } from "@/lib/i18n/errors";
+import { clinicsToRun } from "@/lib/reportGroups";
 import {
   readReportFilters,
   replaceReportFilters,
@@ -37,6 +36,7 @@ import {
 } from "@/lib/reportFilters";
 import { cn } from "@/lib/utils";
 
+import { IncludedClinicsSection } from "./IncludedClinicsSection";
 import {
   InactiveCarriersCard,
   OverviewCard,
@@ -44,17 +44,7 @@ import {
   UnmatchedCarrierRowsCard,
   type ReportResult,
 } from "./ReportResults";
-
-type AssignedClinic = FunctionReturnType<
-  typeof api.googleSheets.listAssignedReportClinics
->["clinics"][number];
-
-// The clinics a run reads: every assigned clinic the operator left enabled.
-function clinicsToRun(assigned: AssignedClinic[], excludedClinicIds: string[]): AssignedClinic[] {
-  if (excludedClinicIds.length === 0) return assigned;
-  const excluded = new Set(excludedClinicIds);
-  return assigned.filter((clinic) => !excluded.has(clinic.clinicId));
-}
+import { ReportGroupsDialog } from "./ReportGroupsDialog";
 
 function ReportRunnerSkeleton() {
   const { t } = useI18n();
@@ -156,6 +146,7 @@ function ConfigureLink() {
 export function ReportRunner() {
   const { t } = useI18n();
   const assignment = useQuery(api.googleSheets.listAssignedReportClinics, {});
+  const groupData = useQuery(api.reportGroups.list, {});
   const typeData = useQuery(api.reportTypes.listRunnable, {});
   const startRun = useMutation(api.reportRuns.startReportRun);
   const cancelRun = useMutation(api.reportRuns.cancelReportRun);
@@ -173,13 +164,22 @@ export function ReportRunner() {
   const [runId, setRunId] = useState<Id<"reportRuns"> | null>(null);
   const [error, setError] = useState<LocalizedMessage | null>(null);
   const [result, setResult] = useState<ReportResult | null>(null);
+  // The dialog that creates, edits and deletes the report groups, which the
+  // section around the run form opens.
+  const [groupManagerOpen, setGroupManagerOpen] = useState(false);
 
   useDocumentTitle(t.app.titles.report);
 
   const types = typeData?.types ?? [];
+  const groups = groupData?.groups ?? [];
   const selectedType = types.find((item) => item.reportTypeId === filters.reportTypeId) ?? types[0];
   const builtinTypes = types.filter((item) => item.owner === "builtin");
   const ownTypes = types.filter((item) => item.owner === "mine");
+  // The ticked groups the form holds. An id that names no group of the account
+  // is left out, so the run always reads what the form shows.
+  const selectedGroupIds = filters.groupIds.filter((groupId) =>
+    groups.some((group) => group.groupId === groupId)
+  );
 
   function updateFilters(next: ReportFilters) {
     setFilters(next);
@@ -199,13 +199,32 @@ export function ReportRunner() {
     updateFilters({ ...filters, excludedClinicIds: [...excluded] });
   }
 
+  // A ticked group holds the run to the clinics it covers, so the run form
+  // reads no clinic but those while one is ticked. The ids are matched against
+  // the groups that exist, so a group that was deleted while it was ticked
+  // reads as no group at all instead of holding the run to nothing.
+  function toggleGroup(groupId: Id<"reportGroups">) {
+    const selected = new Set(selectedGroupIds);
+    if (selected.has(groupId)) {
+      selected.delete(groupId);
+    } else {
+      selected.add(groupId);
+    }
+    updateFilters({ ...filters, groupIds: [...selected] });
+  }
+
   async function handleRun() {
     const assignedClinics = assignment?.clinics ?? [];
     if (assignedClinics.length === 0) {
       setError(localizedMessage((t) => t.reports.outcomes.noAssignedClinics));
       return;
     }
-    const runClinics = clinicsToRun(assignedClinics, filters.excludedClinicIds);
+    const runClinics = clinicsToRun(
+      assignedClinics,
+      groups,
+      selectedGroupIds,
+      filters.excludedClinicIds
+    );
     if (runClinics.length === 0) {
       setError(localizedMessage((t) => t.reports.outcomes.noSelectedClinics));
       return;
@@ -273,13 +292,19 @@ export function ReportRunner() {
     }
   }
 
-  if (assignment === undefined || typeData === undefined) return <ReportRunnerSkeleton />;
+  if (assignment === undefined || groupData === undefined || typeData === undefined) {
+    return <ReportRunnerSkeleton />;
+  }
 
   // A run stopped before it read anything has nothing to show under the notice
   // that says it was stopped.
   const showsResults = result !== null && (!result.cancelled || result.sheets.length > 0);
-  const excludedClinicIds = new Set(filters.excludedClinicIds);
-  const runClinics = clinicsToRun(assignment.clinics, filters.excludedClinicIds);
+  const runClinics = clinicsToRun(
+    assignment.clinics,
+    groups,
+    selectedGroupIds,
+    filters.excludedClinicIds
+  );
 
   return (
     <div className="flex flex-col gap-6">
@@ -388,36 +413,17 @@ export function ReportRunner() {
 
             <Separator />
 
-            <section className="flex flex-col gap-2">
-              <div className="flex items-center justify-between gap-2">
-                <h3 className="text-sm font-medium">{t.reports.includedClinics}</h3>
-                <Badge variant="secondary" className="tabular-nums">
-                  {runClinics.length}
-                </Badge>
-              </div>
-              {assignment.clinics.length === 0 ? (
-                <p className="text-sm text-muted-foreground">{t.reports.noAssignedClinics}</p>
-              ) : (
-                <ul className="flex max-h-56 flex-col gap-2 overflow-y-auto text-sm">
-                  {assignment.clinics.map((clinic) => (
-                    <li key={clinic.clinicId}>
-                      <label className="flex cursor-pointer items-start gap-3 has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-50">
-                        <input
-                          type="checkbox"
-                          checked={!excludedClinicIds.has(clinic.clinicId)}
-                          onChange={() => toggleClinic(clinic.clinicId)}
-                          disabled={running}
-                          className="mt-0.5 size-4 shrink-0 accent-primary"
-                        />
-                        <span className="min-w-0 flex-1">
-                          {clinic.name} <span aria-hidden="true">·</span> {clinic.clientName}
-                        </span>
-                      </label>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </section>
+            <IncludedClinicsSection
+              clinics={assignment.clinics}
+              groups={groups}
+              selectedGroupIds={selectedGroupIds}
+              excludedClinicIds={filters.excludedClinicIds}
+              runClinicCount={runClinics.length}
+              running={running}
+              onToggleClinic={toggleClinic}
+              onToggleGroup={toggleGroup}
+              onManageGroups={() => setGroupManagerOpen(true)}
+            />
           </CardContent>
           <CardFooter className="flex flex-col gap-2">
             <Button
@@ -483,6 +489,13 @@ export function ReportRunner() {
           )}
         </div>
       </div>
+
+      <ReportGroupsDialog
+        open={groupManagerOpen}
+        onOpenChange={setGroupManagerOpen}
+        groups={groups}
+        clinics={assignment.clinics}
+      />
     </div>
   );
 }

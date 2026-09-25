@@ -27,14 +27,19 @@ function nameOf(reference: AnyFunctionReference): string {
 }
 
 const ASSIGNMENT_QUERY = nameOf(api.googleSheets.listAssignedReportClinics);
+const GROUPS_QUERY = nameOf(api.reportGroups.list);
 const TYPES_QUERY = nameOf(api.reportTypes.listRunnable);
 const RUN_ACTION = nameOf(api.reports.runSheetReport);
 const START_RUN_MUTATION = nameOf(api.reportRuns.startReportRun);
 const ABANDON_RUN_MUTATION = nameOf(api.reportRuns.abandonReportRun);
 
 const ASSIGNMENT = {
-  clinics: [{ clinicId: "clinic-1", name: "Downtown", clientName: "Smilist" }],
+  clinics: [
+    { clinicId: "clinic-1", clientId: "client-1", name: "Downtown", clientName: "Smilist" },
+  ],
 };
+
+const GROUPS = { groups: [] };
 
 const REPORT_TYPES = {
   types: [
@@ -132,6 +137,7 @@ beforeEach(() => {
   useQueryMock.mockImplementation((reference: AnyFunctionReference) => {
     const name = nameOf(reference);
     if (name === ASSIGNMENT_QUERY) return ASSIGNMENT;
+    if (name === GROUPS_QUERY) return GROUPS;
     if (name === TYPES_QUERY) return REPORT_TYPES;
     return undefined;
   });
