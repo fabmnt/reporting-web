@@ -5,6 +5,7 @@ import { useState, type SyntheticEvent } from "react";
 
 import { api } from "../../../convex/_generated/api";
 import { ConfirmDeleteDialog } from "@/components/admin/ConfirmDeleteDialog";
+import { ServiceAccountClientsDialog } from "@/components/admin/ServiceAccountClientsDialog";
 import { AdminTabs } from "@/components/app/AdminTabs";
 import { DataCard, DataCardList, DataCardRow, DataTableFrame } from "@/components/app/DataCard";
 import { PageHeader } from "@/components/app/PageHeader";
@@ -150,12 +151,14 @@ function ServiceAccountForm({
 function ServiceAccountActions({
   account,
   disabled,
+  onClients,
   onReplace,
   onTest,
   onDelete,
 }: {
   account: ServiceAccountView;
   disabled: boolean;
+  onClients: (account: ServiceAccountView) => void;
   onReplace: (account: ServiceAccountView) => void;
   onTest: (account: ServiceAccountView) => void;
   onDelete: (account: ServiceAccountView) => void;
@@ -164,6 +167,9 @@ function ServiceAccountActions({
 
   return (
     <div className="flex flex-wrap gap-2">
+      <Button variant="outline" size="sm" disabled={disabled} onClick={() => onClients(account)}>
+        {t.admin.serviceAccounts.clientsDialog.action}
+      </Button>
       <Button variant="outline" size="sm" disabled={disabled} onClick={() => onReplace(account)}>
         {t.admin.serviceAccounts.replaceKey}
       </Button>
@@ -209,6 +215,9 @@ export function AdminServiceAccountsPanel() {
   // draft must not leak into the next open.
   const [formSession, setFormSession] = useState(0);
   const [accountToDelete, setAccountToDelete] = useState<ServiceAccountView | null>(null);
+  // The account whose clients are open, of which the dialog shows the linked
+  // ones and offers the rest.
+  const [clientsAccount, setClientsAccount] = useState<ServiceAccountView | null>(null);
   const [testResult, setTestResult] = useState<TestResult | null>(null);
 
   const accounts = data?.serviceAccounts ?? [];
@@ -360,6 +369,7 @@ export function AdminServiceAccountsPanel() {
                         <ServiceAccountActions
                           account={account}
                           disabled={pending}
+                          onClients={setClientsAccount}
                           onReplace={openReplace}
                           onTest={runTest}
                           onDelete={setAccountToDelete}
@@ -389,6 +399,7 @@ export function AdminServiceAccountsPanel() {
                     <ServiceAccountActions
                       account={account}
                       disabled={pending}
+                      onClients={setClientsAccount}
                       onReplace={openReplace}
                       onTest={runTest}
                       onDelete={setAccountToDelete}
@@ -419,6 +430,13 @@ export function AdminServiceAccountsPanel() {
         onSubmit={submitAccount}
         onCancel={closeForm}
       />
+
+      {clientsAccount === null ? null : (
+        <ServiceAccountClientsDialog
+          account={clientsAccount}
+          onClose={() => setClientsAccount(null)}
+        />
+      )}
 
       <ConfirmDeleteDialog
         open={accountToDelete !== null}
