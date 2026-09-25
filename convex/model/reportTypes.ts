@@ -10,9 +10,15 @@ export const reportTypeBucket = v.object({ key: v.string(), label: v.string() })
 export type ReportTypeBucket = Infer<typeof reportTypeBucket>;
 
 // Which engine reads a report type. `rows` applies the stored conditions,
-// while `execute` runs the rules the app ships in code and asks the Control
-// Central API which bots the clinic has.
-export const reportEngine = v.union(v.literal("rows"), v.literal("execute"));
+// `execute` runs those conditions too but only on the rows whose carrier cell
+// matches one of the bots the Control Central API reports for the clinic, and
+// `executeAll` runs the same conditions without asking the API, so every row
+// they pick is listed whatever carrier it names.
+export const reportEngine = v.union(
+  v.literal("rows"),
+  v.literal("execute"),
+  v.literal("executeAll")
+);
 export type ReportEngine = Infer<typeof reportEngine>;
 
 export function engineOf(row: { engine?: ReportEngine }): ReportEngine {

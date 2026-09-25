@@ -78,6 +78,8 @@ export const reports = {
   },
   overview: {
     title: "Overview",
+    copyAll: "Copy overview",
+    copiedAll: "Overview copied",
     copyFor: (label: string) => `Copy the row numbers of ${label}`,
     copiedFor: (label: string) => `Copied the row numbers of ${label}`,
   },

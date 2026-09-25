@@ -16,6 +16,8 @@ export const conditions = {
   dropDescription: "Rows that do not match are left out of the report.",
   executeNote:
     "This report asks the Control Central API which bots each clinic has, and only rows whose carrier cell matches one of those bots reach the rules below.",
+  executeAllNote:
+    "This report reads every row the rules below pick, whatever carrier the row names. It never asks the Control Central API which bots a clinic has.",
   verificationFilter: "Filter by verification type",
   verificationFilterNote:
     "Shows the verification picker on the run form. The value chosen there narrows every row group.",

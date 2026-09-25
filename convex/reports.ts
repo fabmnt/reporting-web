@@ -222,10 +222,12 @@ async function runReportSheets(
   // for a run that will read nothing.
   if (await reportRunCancelled(ctx, runId)) return await closeStoppedRun(ctx, runId, config);
 
-  // The carrier engine asks the Control Central API which bots each clinic
-  // has, and reads the same stored conditions every other report reads, so
-  // it runs on its own path.
-  if (config.engine === "execute") {
+  // Both carrier engines read their rows on this path, which applies the same
+  // stored conditions every other report reads and narrows them by the
+  // verification choice in code. They differ in whether a row also has to name
+  // a carrier the clinic has a bot for, and only the one that does asks the
+  // Control Central API for the bot list.
+  if (config.engine !== "rows") {
     return await runExecuteReport(ctx, {
       runId,
       clinics: config.clinics,
@@ -240,6 +242,9 @@ async function runReportSheets(
       reportTypeId: params.reportTypeId,
       reportTypeName: config.reportTypeName,
       startedAt: params.startedAt,
+      // Only the execute engine asks the Control Central API which bots a
+      // clinic has, so the rows of any other type are read without it.
+      matchesCarrierBots: config.engine === "execute",
     });
   }
 

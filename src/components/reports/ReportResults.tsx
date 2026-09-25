@@ -262,6 +262,24 @@ function rowNumberList(sheet: SheetResult): string {
   return formatRowNumbers(rowNumbers);
 }
 
+/**
+ * The whole overview as text, which is what its copy button hands over: every
+ * clinic of the card, the sheet tabs read under it, and the row numbers each tab
+ * holds.
+ */
+function overviewText(groups: ClinicGroup[]): string {
+  return groups
+    .flatMap((group) => [
+      group.clinicName,
+      ...group.sheets.map((sheet) =>
+        sheet.tabTitle === ""
+          ? `  ${rowNumberList(sheet)}`
+          : `  ${sheet.tabTitle}: ${rowNumberList(sheet)}`
+      ),
+    ])
+    .join("\n");
+}
+
 /** A record of the phone layout: the cells that picked it are always in view. */
 function ResultRowCard({
   headers,
@@ -482,19 +500,33 @@ function ResultBucket({
 }
 
 /**
- * Copies one sheet's row number list. The button shows the icon alone, so its
- * name is what tells a screen reader which sheet it copies.
+ * Copies text to the clipboard and shows a check once it is there. The button
+ * shows the icon alone unless it is asked to name the action in words, and its
+ * name is what tells a screen reader what it copies.
  */
-function CopyRowNumbers({ label, rowNumbers }: { label: string; rowNumbers: string }) {
-  const { t } = useI18n();
+function CopyButton({
+  text,
+  label,
+  copiedLabel,
+  withText = false,
+  className,
+}: {
+  text: string;
+  label: string;
+  copiedLabel: string;
+  // A list of row numbers reads by the numbers alone, so only the buttons that
+  // stand for a whole card name their action in words.
+  withText?: boolean;
+  className?: string;
+}) {
   const [isCopied, setIsCopied] = useState(false);
 
   async function copy() {
     try {
-      await navigator.clipboard.writeText(rowNumbers);
+      await navigator.clipboard.writeText(text);
       setIsCopied(true);
     } catch {
-      // Browsers refuse clipboard access outside a secure context. The list
+      // Browsers refuse clipboard access outside a secure context. The content
       // stays on screen, so it can still be copied by hand.
     }
   }
@@ -503,9 +535,8 @@ function CopyRowNumbers({ label, rowNumbers }: { label: string; rowNumbers: stri
     <Button
       variant="outline"
       size="sm"
-      aria-label={
-        isCopied ? t.reports.overview.copiedFor(label) : t.reports.overview.copyFor(label)
-      }
+      className={className}
+      aria-label={withText ? undefined : isCopied ? copiedLabel : label}
       onClick={() => void copy()}
     >
       {isCopied ? (
@@ -513,6 +544,7 @@ function CopyRowNumbers({ label, rowNumbers }: { label: string; rowNumbers: stri
       ) : (
         <Copy data-icon="inline-start" aria-hidden="true" />
       )}
+      {withText ? (isCopied ? copiedLabel : label) : null}
     </Button>
   );
 }
@@ -608,7 +640,11 @@ export function UnmatchedCarrierRowsCard({ rows }: { rows: UnmatchedCarrierRowsS
                     {entry.tabTitle === "" ? null : (
                       <h4 className="text-xs text-muted-foreground">{entry.tabTitle}</h4>
                     )}
-                    <CopyRowNumbers label={label} rowNumbers={rowNumbers} />
+                    <CopyButton
+                      text={rowNumbers}
+                      label={t.reports.overview.copyFor(label)}
+                      copiedLabel={t.reports.overview.copiedFor(label)}
+                    />
                   </div>
                   <div className="overflow-hidden rounded-lg border">
                     <Table>
@@ -670,6 +706,13 @@ export function OverviewCard({ result }: { result: ReportResult }) {
           <Badge variant="secondary" className="tabular-nums">
             {t.reports.results.rows(countRows(result))}
           </Badge>
+          <CopyButton
+            className="ml-auto"
+            text={overviewText(groups)}
+            label={t.reports.overview.copyAll}
+            copiedLabel={t.reports.overview.copiedAll}
+            withText
+          />
         </div>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
@@ -690,7 +733,11 @@ export function OverviewCard({ result }: { result: ReportResult }) {
                     )}
                     <div className="flex flex-wrap items-center gap-2">
                       <p className="font-mono text-xs">{rowNumbers}</p>
-                      <CopyRowNumbers label={label} rowNumbers={rowNumbers} />
+                      <CopyButton
+                        text={rowNumbers}
+                        label={t.reports.overview.copyFor(label)}
+                        copiedLabel={t.reports.overview.copiedFor(label)}
+                      />
                     </div>
                   </div>
                 );
@@ -751,16 +798,19 @@ export function ResultsCard({ result }: { result: ReportResult }) {
             onValueChange={(value) => setSelectedClinicId(value as string)}
             className="gap-4"
           >
-            {/* A run can read many clinics, so the tabs wrap instead of running
-                off the card. The height override carries the same variant as
-                the fixed height the list sets by default, which is what makes
-                one replace the other. */}
-            <TabsList className="group-data-horizontal/tabs:h-auto w-full flex-wrap justify-start">
+            {/* A run can read many clinics, so the tabs fill a grid of up to
+                four columns instead of running off the card. The list is
+                inline-flex by default and the utilities layer sorts that after
+                grid, which is why the display override carries the important
+                mark. The height override carries the same variant as the fixed
+                height the list sets by default, which is what makes one replace
+                the other. */}
+            <TabsList className="group-data-horizontal/tabs:h-auto w-full grid! grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {groups.map((group) => (
                 <TabsTrigger
                   key={group.clinicId}
                   value={group.clinicId}
-                  className="flex-initial max-w-full"
+                  className="min-w-0 max-w-full"
                 >
                   <span className="min-w-0 truncate">{group.clinicName}</span>{" "}
                   <Badge variant="secondary" className="tabular-nums">

@@ -28,7 +28,6 @@ import type {
   UnmatchedCarrierRowsEntry,
 } from "./model/reportResults";
 import { reportRunCancelled } from "./model/reportRuns";
-import { PENDING_EXECUTE_REPORT_TYPE } from "./model/reportTypeSeed";
 
 type ExecuteClinic = {
   clinicId: Id<"clinics">;
@@ -52,6 +51,10 @@ export type ExecuteRunConfig = {
   reportTypeId: Id<"reportTypes">;
   reportTypeName: string;
   startedAt: number;
+  // Whether a row has to name a carrier one of the clinic's bots answers to. A
+  // report that reads every row its rules pick runs with this off, so it never
+  // asks the Control Central API which bots the clinic has.
+  matchesCarrierBots: boolean;
 };
 
 type ClinicEntry = {
@@ -115,12 +118,13 @@ function describeCells(row: string[], columns: number[], headers: string[]): str
 }
 
 /**
- * The carrier report: the rows of a clinic that a carrier bot can still work
- * on. A row counts when its carrier cell matches one of the clinic bots, the
- * verification filter takes it, and the conditions stored on the report type
- * match it, the same conditions the configuration panels edit. The bot list
- * comes from the Control Central API, so a clinic whose bots cannot be read
- * keeps its own error and the remaining clinics still return their rows.
+ * The carrier report: the rows of a clinic that still have to run. A row counts
+ * when the verification filter takes it and the conditions stored on the report
+ * type match it, the same conditions the configuration panels edit. A report
+ * whose rows have to name a carrier one of the clinic's bots answers to takes
+ * the bot list from the Control Central API, so a clinic whose bots cannot be
+ * read keeps its own error and the remaining clinics still return their rows;
+ * a report that reads every row its rules pick never calls the API.
  *
  * Every filter logs the rows it drops, which is what makes a missing row
  * explainable while the conditions are being tuned.
@@ -130,18 +134,22 @@ export async function runExecuteReport(
   config: ExecuteRunConfig
 ): Promise<ReportRunResult> {
   const deadlineMs = actionDeadline();
-  const signedIn = await signInCarrierApi(deadlineMs);
-  if (!signedIn.ok) {
-    throw appError({
-      code:
-        signedIn.failure === "unauthorized"
-          ? "CARRIER_SIGN_IN_REJECTED"
-          : "CARRIER_API_UNAVAILABLE",
-    });
-  }
   // One token serves the whole run. A clinic that meets a rejected token signs
-  // in again once, in case the API dropped it while the run was reading.
-  let token = signedIn.value;
+  // in again once, in case the API dropped it while the run was reading. A
+  // report that does not match carriers reads no bot list, so it has no token.
+  let carrierToken: string | null = null;
+  if (config.matchesCarrierBots) {
+    const signedIn = await signInCarrierApi(deadlineMs);
+    if (!signedIn.ok) {
+      throw appError({
+        code:
+          signedIn.failure === "unauthorized"
+            ? "CARRIER_SIGN_IN_REJECTED"
+            : "CARRIER_API_UNAVAILABLE",
+      });
+    }
+    carrierToken = signedIn.value;
+  }
 
   // The labels the report type stores travel with the run, so a group it
   // renamed still reads as the user named it.
@@ -151,9 +159,6 @@ export async function runExecuteReport(
   // being run, because a copy of the built-in type keeps the engine and a
   // deployment can hold several carrier reports.
   const logTag = `[${config.reportTypeName}]`;
-  // The pending-to-execute report lists the rows no bot can take, so an operator
-  // can work them by hand. Every other report drops those rows.
-  const listsUnmatchedRows = config.reportTypeName === PENDING_EXECUTE_REPORT_TYPE.name;
 
   const {
     tabsForClinic,
@@ -202,46 +207,60 @@ export async function runExecuteReport(
       sheets.push({ ...clinicEntry, error });
     };
 
-    // A clinic stored before the directory import ran has no Control Central id
-    // yet, which is the one state the carrier engine cannot read. It goes away
-    // with the import, and with the schema tightening that follows it.
-    if (clinic.externalClinicId === "") {
-      failClinic({ code: "SHEET_CARRIER_ID_MISSING" });
-      continue;
-    }
-
-    let botsResult = await fetchClinicBots(clinic.externalClinicId, token, deadlineMs);
-    if (!botsResult.ok && botsResult.failure === "unauthorized") {
-      const renewed = await signInCarrierApi(deadlineMs);
-      if (renewed.ok) {
-        token = renewed.value;
-        botsResult = await fetchClinicBots(clinic.externalClinicId, token, deadlineMs);
+    // The bots of the clinic, which only a report whose rows have to match one
+    // of them reads. Every other report leaves the list empty and reads the
+    // rows its rules pick.
+    let matchers: CarrierMatcher[] = [];
+    if (carrierToken !== null) {
+      // A clinic stored before the directory import ran has no Control Central
+      // id yet, which is the one state the carrier match cannot read. It goes
+      // away with the import, and with the schema tightening that follows it.
+      if (clinic.externalClinicId === "") {
+        failClinic({ code: "SHEET_CARRIER_ID_MISSING" });
+        continue;
       }
-    }
-    if (!botsResult.ok) {
-      failClinic(carrierFailureError(botsResult.failure));
-      continue;
-    }
 
-    const { matchers, unsupported } = carrierMatchers(botsResult.value);
-    // The card carries every bot of the clinic the report cannot use: the ones
-    // the API reports as not active, and the ones whose pattern this app will
-    // not run, whose rows would otherwise go missing without a word.
-    const unusableBots = [
-      ...inactiveCarrierBots(botsResult.value),
-      ...unsupported.map((bot) => ({ name: bot.name, status: bot.status, unsupported: true })),
-    ];
-    if (unusableBots.length > 0) {
-      inactiveCarriers.push({
-        clinicId: clinic.clinicId,
-        clinicName: clinic.name,
-        bots: unusableBots,
-      });
-    }
+      let botsResult = await fetchClinicBots(clinic.externalClinicId, carrierToken, deadlineMs);
+      if (!botsResult.ok && botsResult.failure === "unauthorized") {
+        const renewed = await signInCarrierApi(deadlineMs);
+        if (renewed.ok) {
+          carrierToken = renewed.value;
+          botsResult = await fetchClinicBots(clinic.externalClinicId, carrierToken, deadlineMs);
+        }
+      }
+      if (!botsResult.ok) {
+        failClinic(carrierFailureError(botsResult.failure));
+        continue;
+      }
 
-    if (matchers.length === 0 && !listsUnmatchedRows) {
-      failClinic({ code: "SHEET_NO_CARRIER_BOTS" });
-      continue;
+      const parsed = carrierMatchers(botsResult.value);
+      matchers = parsed.matchers;
+      // The card carries every bot of the clinic the report cannot use: the
+      // ones the API reports as not active, and the ones whose pattern this app
+      // will not run, whose rows would otherwise go missing without a word.
+      const unusableBots = [
+        ...inactiveCarrierBots(botsResult.value),
+        ...parsed.unsupported.map((bot) => ({
+          name: bot.name,
+          status: bot.status,
+          unsupported: true,
+        })),
+      ];
+      if (unusableBots.length > 0) {
+        inactiveCarriers.push({
+          clinicId: clinic.clinicId,
+          clinicName: clinic.name,
+          bots: unusableBots,
+        });
+      }
+
+      // Without a usable bot no row of the clinic can match, which is the
+      // error that sends the operator to the bot list instead of an empty
+      // report.
+      if (matchers.length === 0) {
+        failClinic({ code: "SHEET_NO_CARRIER_BOTS" });
+        continue;
+      }
     }
 
     let indexes: ConditionColumnResolver;
@@ -332,8 +351,8 @@ export async function runExecuteReport(
         // results show for row reports too.
         label: bucketLabels.get(bucket.bucketKey) ?? bucket.bucketKey,
         rows: [],
-        // The carrier match and the verification choice decide every row beside
-        // the rules of the group itself.
+        // The carrier cell names the row whatever the report matches, and the
+        // verification choice decides it beside the rules of the group itself.
         filterColumns: [
           ...new Set([
             CARRIER_COLUMN_INDEX,
@@ -343,24 +362,16 @@ export async function runExecuteReport(
         ].sort((left, right) => left - right),
       }));
       const rowsByBucket = new Map(bucketRows.map((bucket) => [bucket.bucketKey, bucket.rows]));
-      // Rows that pass the filters but no bot can take, with the carrier cell
-      // they read from. Only the report type that lists them keeps this
-      // non-empty; every other type drops them above.
+      // Rows that pass the filters but name a carrier no bot can take, with the
+      // carrier cell they read from. Only a report that matches carriers fills
+      // this: it lists them for the operator to work by hand instead of dropping
+      // them without a word.
       const unmatchedRows: UnmatchedCarrierRow[] = [];
-      let droppedByCarrier = 0;
       let droppedByVerification = 0;
       let droppedByRules = 0;
       tabResult.values.forEach((row, index) => {
         const rowNumber = index + 2;
-        const carriers = matchedCarriers(row, matchers);
-        if (carriers.length === 0 && !listsUnmatchedRows) {
-          droppedByCarrier += 1;
-          console.log(
-            `${logTag} dropped by the carrier filter: ${clinic.name} ${tabResult.tabTitle} ` +
-              `row ${rowNumber}, carrier="${(row[CARRIER_COLUMN_INDEX] ?? "").trim()}"`
-          );
-          return;
-        }
+        const carriers = config.matchesCarrierBots ? matchedCarriers(row, matchers) : [];
         const verification = (row[indexes("verificationType")] ?? "").trim();
         if (!verificationMatches(verification, config.verificationFilter)) {
           droppedByVerification += 1;
@@ -387,7 +398,7 @@ export async function runExecuteReport(
         // card instead of a bucket, which is what keeps it out of the results.
         // The carrier cell travels with it, because that is the name the bots
         // did not match.
-        if (carriers.length === 0) {
+        if (config.matchesCarrierBots && carriers.length === 0) {
           unmatchedRows.push({
             rowNumber,
             carrier: (row[CARRIER_COLUMN_INDEX] ?? "").trim(),
@@ -402,8 +413,8 @@ export async function runExecuteReport(
       console.log(
         `${logTag} ${clinic.name} ${tabResult.tabTitle}: ${tabResult.values.length} rows read, ` +
           `${keptRows} kept, ${unmatchedRows.length} without a matching bot, ` +
-          `${droppedByCarrier} dropped by the carrier filter, ` +
-          `${droppedByVerification} by the verification filter, ${droppedByRules} by the conditions`
+          `${droppedByVerification} dropped by the verification filter, ` +
+          `${droppedByRules} by the conditions`
       );
 
       // The rows no bot can take travel on their own card, so they stay out of

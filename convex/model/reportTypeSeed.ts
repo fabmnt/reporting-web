@@ -126,3 +126,16 @@ export const PENDING_EXECUTE_REPORT_TYPE: ReportTypeDraft = {
     ],
   },
 };
+
+// The same report without the carrier match: it reads the rules above on every
+// row, whatever carrier the row names, and never asks the Control Central API
+// which bots a clinic has. It is the report for a clinic whose bots cannot be
+// read and for the rows no bot covers, which the report above leaves to its
+// card of rows without a matching bot.
+export const PENDING_EXECUTE_ALL_REPORT_TYPE: ReportTypeDraft = {
+  name: "Pending to execute (all carriers)",
+  description: "Rows that still have to run, whether or not a clinic bot can take them.",
+  usesVerificationFilter: true,
+  buckets: [{ key: "pending", label: "Pending to execute" }],
+  conditions: PENDING_EXECUTE_REPORT_TYPE.conditions,
+};

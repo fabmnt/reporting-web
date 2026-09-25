@@ -19,6 +19,8 @@ export const conditions = {
   dropDescription: "Las filas que no coinciden quedan fuera del reporte.",
   executeNote:
     "Este reporte le pregunta a la API de Control Central qué bots tiene cada clínica, y solo las filas cuya celda de carrier coincide con uno de esos bots llegan a las reglas de abajo.",
+  executeAllNote:
+    "Este reporte lee cada fila que eligen las reglas de abajo, sin importar el carrier que indique la fila. Nunca le pregunta a la API de Control Central qué bots tiene una clínica.",
   verificationFilter: "Filtrar por tipo de verificación",
   verificationFilterNote:
     "Muestra el selector de verificación en el formulario del reporte. El valor elegido allí restringe todos los grupos de filas.",

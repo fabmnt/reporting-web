@@ -5,7 +5,7 @@ import { Plus } from "lucide-react";
 import { useState } from "react";
 
 import { api } from "../../../convex/_generated/api";
-import type { ReportTypeDraft } from "../../../convex/model/reportTypes";
+import type { ReportEngine, ReportTypeDraft } from "../../../convex/model/reportTypes";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card";
@@ -22,6 +22,7 @@ import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useI18n } from "@/lib/i18n/context";
 import { localizedError, type LocalizedMessage } from "@/lib/i18n/errors";
+import type { Messages } from "@/lib/i18n/messages";
 
 import { NewReportTypeDialog, type CreatedReportType } from "./NewReportTypeDialog";
 import { ReportTypeEditor } from "./ReportTypeEditor";
@@ -48,6 +49,19 @@ function useScopeMutations(scope: ReportTypeScope) {
     return { create: createMine, save: saveMine, remove: removeMine };
   }
   return { create: createBuiltin, save: saveBuiltin, remove: removeBuiltin };
+}
+
+/** What the header of a report type says about the way its rows are read. */
+function engineDescription(
+  engine: ReportEngine,
+  draft: ReportTypeDraft | undefined,
+  t: Messages
+): string {
+  if (engine === "execute") return t.conditions.executeNote;
+  if (engine === "executeAll") return t.conditions.executeAllNote;
+  return draft !== undefined && draft.buckets.length > 1
+    ? t.conditions.firstMatchDescription
+    : t.conditions.dropDescription;
 }
 
 export function ReportTypesPanel({ scope }: { scope: ReportTypeScope }) {
@@ -273,11 +287,7 @@ export function ReportTypesPanel({ scope }: { scope: ReportTypeScope }) {
                 {draft?.name ?? ""}
               </h2>
               <CardDescription>
-                {selected?.engine === "execute"
-                  ? t.conditions.executeNote
-                  : draft !== undefined && draft.buckets.length > 1
-                    ? t.conditions.firstMatchDescription
-                    : t.conditions.dropDescription}
+                {engineDescription(selected?.engine ?? "rows", draft, t)}
               </CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-6">

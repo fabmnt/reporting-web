@@ -1,7 +1,11 @@
 import { v } from "convex/values";
 
 import { internalMutation } from "../_generated/server";
-import { PENDING_AUDIT_REPORT_TYPE, PENDING_EXECUTE_REPORT_TYPE } from "../model/reportTypeSeed";
+import {
+  PENDING_AUDIT_REPORT_TYPE,
+  PENDING_EXECUTE_ALL_REPORT_TYPE,
+  PENDING_EXECUTE_REPORT_TYPE,
+} from "../model/reportTypeSeed";
 import {
   cleanTypeDraft,
   engineOf,
@@ -18,6 +22,7 @@ import {
 const SEEDS: Array<{ draft: ReportTypeDraft; engine: ReportEngine }> = [
   { draft: PENDING_AUDIT_REPORT_TYPE, engine: "rows" },
   { draft: PENDING_EXECUTE_REPORT_TYPE, engine: "execute" },
+  { draft: PENDING_EXECUTE_ALL_REPORT_TYPE, engine: "executeAll" },
 ];
 
 export const run = internalMutation({

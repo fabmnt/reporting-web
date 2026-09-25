@@ -80,6 +80,8 @@ export const reports = {
   },
   overview: {
     title: "Resumen",
+    copyAll: "Copiar resumen",
+    copiedAll: "Resumen copiado",
     copyFor: (label: string) => `Copiar los números de fila de ${label}`,
     copiedFor: (label: string) => `Se copiaron los números de fila de ${label}`,
   },
