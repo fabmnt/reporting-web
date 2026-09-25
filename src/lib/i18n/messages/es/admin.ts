@@ -66,6 +66,7 @@ export const admin = {
       clinics: "Clínicas",
       key: "Clave",
       status: "Estado",
+      serviceAccount: "Cuenta de servicio",
     },
     assign: "Asignar",
     assignDialog: {
@@ -91,6 +92,9 @@ export const admin = {
         "Los clientes son organizaciones que poseen una o más clínicas, como una marca dental o una organización de soporte.",
       name: "Nombre del cliente",
       namePlaceholder: "p. ej. Smilist",
+      serviceAccount: "Cuenta de servicio",
+      serviceAccountHint:
+        "La cuenta que lee las hojas de este cliente. Cada hoja del cliente debe estar compartida con su correo.",
       active: "Activo",
       saveFailedTitle: "No se pudo guardar el cliente",
       create: "Crear cliente",
@@ -163,5 +167,52 @@ export const admin = {
   reportTypes: {
     pageTitle: "Tipos de reporte",
     accessDeniedBody: "Tu cuenta no puede gestionar los tipos de reporte integrados.",
+  },
+  serviceAccounts: {
+    pageTitle: "Cuentas de servicio",
+    accessDeniedBody: "Tu cuenta no puede gestionar cuentas de servicio de Google.",
+    addAccount: "Añadir cuenta de servicio",
+    replaceKey: "Reemplazar clave",
+    noAccounts:
+      "Aún no hay cuentas de servicio. Hasta que añadas una, todos los clientes se leen con la cuenta de Google de la aplicación.",
+    listing: (limit: number) => `Mostrando hasta ${limit} cuentas de servicio.`,
+    appAccount: "Cuenta de la aplicación",
+    table: {
+      account: "Cuenta de servicio",
+      clients: "Clientes",
+    },
+    form: {
+      createTitle: "Nueva cuenta de servicio",
+      replaceTitle: "Reemplazar la clave",
+      description:
+        "Una cuenta de servicio es la identidad de Google que lee las hojas de los clientes vinculados a ella. Pega el archivo JSON de clave que te da Google y comparte esas hojas con el correo que contiene el archivo.",
+      replaceDescription:
+        "Pega un archivo JSON de clave nuevo para esta cuenta. Su correo y su clave reemplazan a los guardados, así que las hojas compartidas con el correo anterior deben compartirse con el nuevo.",
+      key: "Archivo de clave (JSON)",
+      keyPlaceholder: "Pega el archivo JSON que te dio Google",
+      keyHint:
+        "El archivo se lee una sola vez: su correo y su clave se guardan en el servidor y no se vuelven a mostrar.",
+      keyRequired: "Pega el archivo JSON que te dio Google.",
+      saveFailedTitle: "No se pudo guardar la cuenta de servicio",
+      create: "Crear cuenta de servicio",
+      saveFailed: "No se pudo guardar la cuenta de servicio.",
+    },
+    test: {
+      action: "Probar",
+      okTitle: "Clave aceptada",
+      okBody:
+        "Google firmó un token con esta clave. Cada hoja todavía debe estar compartida con la cuenta.",
+      failedTitle: "Clave rechazada",
+      requestFailed: "No se pudo probar la clave.",
+    },
+    delete: {
+      title: "Eliminar cuenta de servicio",
+      description: (email: string, clientCount: number) =>
+        clientCount === 0
+          ? `¿Eliminar "${email}"? Esta acción no se puede deshacer.`
+          : `¿Eliminar "${email}"? ${clientCount} ${clientCount === 1 ? "cliente vuelve" : "clientes vuelven"} a la cuenta de Google de la aplicación. Esta acción no se puede deshacer.`,
+      deleteAccount: "Eliminar cuenta de servicio",
+      accountFailed: "No se pudo eliminar la cuenta de servicio.",
+    },
   },
 };

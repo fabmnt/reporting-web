@@ -67,6 +67,7 @@ export const admin = {
       clinics: "Clinics",
       key: "Key",
       status: "Status",
+      serviceAccount: "Service account",
     },
     assign: "Assign",
     assignDialog: {
@@ -92,6 +93,9 @@ export const admin = {
         "Clients are organizations that own one or more clinics, like a dental brand or support organization.",
       name: "Client name",
       namePlaceholder: "e.g. Smilist",
+      serviceAccount: "Service account",
+      serviceAccountHint:
+        "The account that reads this client's sheets. Every sheet of the client has to be shared with its address.",
       active: "Active",
       saveFailedTitle: "Could not save client",
       create: "Create client",
@@ -162,5 +166,54 @@ export const admin = {
   reportTypes: {
     pageTitle: "Report types",
     accessDeniedBody: "Your account cannot manage built-in report types.",
+  },
+  serviceAccounts: {
+    pageTitle: "Service accounts",
+    accessDeniedBody: "Your account cannot manage Google service accounts.",
+    addAccount: "Add service account",
+    replaceKey: "Replace key",
+    noAccounts:
+      "No service accounts yet. Until you add one, every client is read with the app's own Google account.",
+    listing: (limit: number) => `Showing up to ${limit} service accounts.`,
+    // The option that means "no service account", in the client form and in the
+    // clients table.
+    appAccount: "App account",
+    table: {
+      account: "Service account",
+      clients: "Clients",
+    },
+    form: {
+      createTitle: "New service account",
+      replaceTitle: "Replace the key",
+      description:
+        "A service account is the Google identity that reads the sheets of the clients linked to it. Paste the JSON key file Google gives you, and share those sheets with the address it holds.",
+      replaceDescription:
+        "Paste a new JSON key file for this account. Its address and key replace the stored ones, so the sheets shared with the old address have to be shared with the new one.",
+      key: "Key file (JSON)",
+      keyPlaceholder: "Paste the JSON key file Google gave you",
+      keyHint:
+        "The file is read once: its address and key are stored on the server and never shown again.",
+      keyRequired: "Paste the JSON key file Google gave you.",
+      saveFailedTitle: "Could not save the service account",
+      create: "Create service account",
+      saveFailed: "Saving the service account failed.",
+    },
+    test: {
+      action: "Test",
+      okTitle: "Key accepted",
+      okBody:
+        "Google signed a token with this key. Each sheet still has to be shared with the account.",
+      failedTitle: "Key turned down",
+      requestFailed: "Testing the key failed.",
+    },
+    delete: {
+      title: "Delete service account",
+      description: (email: string, clientCount: number) =>
+        clientCount === 0
+          ? `Delete "${email}"? This cannot be undone.`
+          : `Delete "${email}"? ${clientCount} ${clientCount === 1 ? "client goes" : "clients go"} back to the app's own Google account. This cannot be undone.`,
+      deleteAccount: "Delete service account",
+      accountFailed: "Deleting the service account failed.",
+    },
   },
 };

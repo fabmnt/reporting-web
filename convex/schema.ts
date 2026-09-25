@@ -42,10 +42,29 @@ export default defineSchema({
     .index("by_tokenHash", ["tokenHash"])
     .index("by_userId", ["userId"]),
 
+  // The credentials a client's sheets are read with instead of the deployment
+  // wide OAuth account. The key never leaves the server: no query returns it,
+  // and only the internal functions that mint a Google token read it.
+  googleServiceAccounts: defineTable({
+    email: v.string(),
+    privateKey: v.string(),
+    // How many clients read their sheets with this account, so the accounts
+    // list and the delete confirmation do not have to read the clients table
+    // once per account. Every mutation that links or unlinks a client writes it
+    // in the same transaction. It stays optional until
+    // migrations/backfillServiceAccountClientCounts has run everywhere, so this
+    // push does not reject rows the deployment already holds.
+    clientCount: v.optional(v.number()),
+  }).index("by_email", ["email"]),
+
   clients: defineTable({
     key: v.string(),
     name: v.string(),
     isActive: v.boolean(),
+    // The service account this client's sheets are read with. Missing means the
+    // app falls back to its own Google account, which is how every client was
+    // read before service accounts existed.
+    serviceAccountId: v.optional(v.id("googleServiceAccounts")),
     // How many clinics the client owns, so the client list does not have to
     // read the clinics table to count them. Every mutation that adds, moves or
     // deletes a clinic writes it in the same transaction. It stays optional
@@ -53,7 +72,11 @@ export default defineSchema({
     // push whose schema rejects documents the deployment already holds. Tighten
     // this to v.number() after the backfill.
     clinicCount: v.optional(v.number()),
-  }).index("by_key", ["key"]),
+  })
+    .index("by_key", ["key"])
+    // Deleting a service account reads the clients that point at it, so the
+    // links can be cleared in the same transaction.
+    .index("by_serviceAccountId", ["serviceAccountId"]),
 
   clinics: defineTable({
     // The Control Central id the carrier API reads a clinic's bots with. Every

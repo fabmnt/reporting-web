@@ -18,6 +18,16 @@ export const errors = {
   PASSWORD_SETUP_LINK_INVALID: "Este enlace ya no es válido. Pídele a un administrador uno nuevo.",
   CLIENT_NOT_FOUND: "No se encontró el cliente.",
   CLIENT_DISABLED: "Este cliente está deshabilitado.",
+  CLIENT_NOT_ASSIGNED: "Este cliente no está asignado a tu cuenta.",
+  SERVICE_ACCOUNT_NOT_FOUND: "Esta cuenta de servicio ya no existe.",
+  SERVICE_ACCOUNT_LIMIT: (limit: number) =>
+    `Puedes guardar hasta ${limit} cuentas de servicio. Elimina una antes de añadir otra.`,
+  SERVICE_ACCOUNT_EMAIL_INVALID:
+    "El correo dentro del archivo de clave no es una dirección válida.",
+  SERVICE_ACCOUNT_EMAIL_TAKEN: "Otra cuenta de servicio ya usa este correo.",
+  SERVICE_ACCOUNT_KEY_REQUIRED: "La clave de la cuenta de servicio es obligatoria.",
+  SERVICE_ACCOUNT_KEY_INVALID:
+    "Esto no es un archivo de clave de cuenta de servicio. Pega el archivo JSON que te dio Google.",
   CLINIC_NOT_FOUND: "No se encontró la clínica.",
   CLINIC_NOT_ASSIGNED: "Esta clínica no está asignada a tu cuenta.",
   CLINIC_ASSIGNMENT_LIMIT: (limit: number) =>
@@ -51,6 +61,8 @@ export const errors = {
     `Columna de hoja no válida "${column}". Usa letras como A, T o AB.`,
   SHEET_RATE_LIMITED:
     "Google limitó la velocidad de nuestras solicitudes. Espera un minuto e inténtalo de nuevo.",
+  SHEET_SERVICE_ACCOUNT_MISSING:
+    "La cuenta de servicio que lee las hojas de este cliente ya no existe. Pide a un administrador que vincule otra.",
   CARRIER_SIGN_IN_REJECTED:
     "La API de carriers rechazó las credenciales de la aplicación. Pide a un administrador que las revise.",
   CARRIER_API_UNAVAILABLE: "La API de carriers no respondió. Inténtalo de nuevo en un momento.",

@@ -44,6 +44,20 @@ function renderAppError(payload: AppErrorPayload, t: Messages): string | null {
       return e.CLIENT_NOT_FOUND;
     case "CLIENT_DISABLED":
       return e.CLIENT_DISABLED;
+    case "CLIENT_NOT_ASSIGNED":
+      return e.CLIENT_NOT_ASSIGNED;
+    case "SERVICE_ACCOUNT_NOT_FOUND":
+      return e.SERVICE_ACCOUNT_NOT_FOUND;
+    case "SERVICE_ACCOUNT_LIMIT":
+      return e.SERVICE_ACCOUNT_LIMIT(payload.limit);
+    case "SERVICE_ACCOUNT_EMAIL_INVALID":
+      return e.SERVICE_ACCOUNT_EMAIL_INVALID;
+    case "SERVICE_ACCOUNT_EMAIL_TAKEN":
+      return e.SERVICE_ACCOUNT_EMAIL_TAKEN;
+    case "SERVICE_ACCOUNT_KEY_REQUIRED":
+      return e.SERVICE_ACCOUNT_KEY_REQUIRED;
+    case "SERVICE_ACCOUNT_KEY_INVALID":
+      return e.SERVICE_ACCOUNT_KEY_INVALID;
     case "CLINIC_NOT_FOUND":
       return e.CLINIC_NOT_FOUND;
     case "CLINIC_NOT_ASSIGNED":
@@ -140,6 +154,8 @@ export function sheetErrorText(error: ReportSheetError, t: Messages): string {
       return t.errors.SHEET_INVALID_COLUMN(error.column);
     case "SHEET_RATE_LIMITED":
       return t.errors.SHEET_RATE_LIMITED;
+    case "SHEET_SERVICE_ACCOUNT_MISSING":
+      return t.errors.SHEET_SERVICE_ACCOUNT_MISSING;
     case "SHEET_CARRIER_ID_MISSING":
       return t.errors.SHEET_CARRIER_ID_MISSING;
     case "SHEET_CARRIER_ACCESS_DENIED":

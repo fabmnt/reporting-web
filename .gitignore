@@ -30,3 +30,7 @@ pnpm-debug.log*
 
 # migration script output
 scripts/output/
+
+# playwright output: failure traces, screenshots and the html report
+test-results/
+playwright-report/

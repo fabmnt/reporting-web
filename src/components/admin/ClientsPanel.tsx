@@ -22,8 +22,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Field, FieldError, FieldLabel } from "@/components/ui/field";
+import { Field, FieldDescription, FieldError, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -42,14 +50,25 @@ import { statusFilterArg, TABLE_PAGE_SIZE, type StatusFilter } from "@/lib/table
 type ClientList = FunctionReturnType<typeof api.clinics.listClients>;
 type ClientView = ClientList["page"][number];
 
+type ServiceAccountChoices = FunctionReturnType<
+  typeof api.googleAccounts.listServiceAccounts
+>["serviceAccounts"];
+type ServiceAccountId = ServiceAccountChoices[number]["serviceAccountId"];
+
+// The select option that means "read this client's sheets with the app's own
+// account". The accounts are picked by id, and an id is never this.
+const NO_SERVICE_ACCOUNT = "app-account";
+
 type ClientFormValues = {
   name: string;
   isActive: boolean;
+  serviceAccountId: ServiceAccountId | null;
 };
 
 const EMPTY_CLIENT_FORM: ClientFormValues = {
   name: "",
   isActive: true,
+  serviceAccountId: null,
 };
 
 /** Shared by the client table and the narrow-screen cards. */
@@ -94,6 +113,7 @@ function ClientForm({
   onOpenChange,
   isEditing,
   initialValues,
+  serviceAccounts,
   pending,
   error,
   onSubmit,
@@ -103,6 +123,7 @@ function ClientForm({
   onOpenChange: (open: boolean) => void;
   isEditing: boolean;
   initialValues: ClientFormValues;
+  serviceAccounts: ServiceAccountChoices;
   pending: boolean;
   error: LocalizedMessage | null;
   onSubmit: (values: ClientFormValues) => Promise<void>;
@@ -122,7 +143,11 @@ function ClientForm({
       return;
     }
 
-    await onSubmit({ name, isActive: values.isActive });
+    await onSubmit({
+      name,
+      isActive: values.isActive,
+      serviceAccountId: values.serviceAccountId,
+    });
   }
 
   return (
@@ -173,6 +198,50 @@ function ClientForm({
               <FieldLabel htmlFor="client-active">{t.admin.clients.form.active}</FieldLabel>
             </Field>
           ) : null}
+          <Field>
+            <FieldLabel htmlFor="client-service-account">
+              {t.admin.clients.form.serviceAccount}
+            </FieldLabel>
+            <Select
+              items={[
+                { value: NO_SERVICE_ACCOUNT, label: t.admin.serviceAccounts.appAccount },
+                ...serviceAccounts.map((account) => ({
+                  value: account.serviceAccountId as string,
+                  label: account.email,
+                })),
+              ]}
+              value={values.serviceAccountId ?? NO_SERVICE_ACCOUNT}
+              // The picker answers with an id or with the option that means
+              // none, and looking the id up keeps the value typed as one.
+              onValueChange={(value) => {
+                const chosen = serviceAccounts.find(
+                  (account) => account.serviceAccountId === value
+                );
+                setValues((current) => ({
+                  ...current,
+                  serviceAccountId: chosen?.serviceAccountId ?? null,
+                }));
+              }}
+              disabled={pending}
+            >
+              <SelectTrigger aria-label={t.admin.clients.form.serviceAccount} className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectGroup>
+                  <SelectItem value={NO_SERVICE_ACCOUNT}>
+                    {t.admin.serviceAccounts.appAccount}
+                  </SelectItem>
+                  {serviceAccounts.map((account) => (
+                    <SelectItem key={account.serviceAccountId} value={account.serviceAccountId}>
+                      {account.email}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+            <FieldDescription>{t.admin.clients.form.serviceAccountHint}</FieldDescription>
+          </Field>
           {error ? (
             <Alert variant="destructive">
               <AlertTitle>{t.admin.clients.form.saveFailedTitle}</AlertTitle>
@@ -225,6 +294,13 @@ export function AdminClientsPanel() {
   const createClient = useMutation(api.clinics.createClient);
   const updateClient = useMutation(api.clinics.updateClient);
   const removeClient = useMutation(api.clinics.removeClient);
+  // The service accounts a client can be linked to. Only an administrator reads
+  // this list, which is the same one the service accounts tab shows.
+  const serviceAccountsData = useQuery(
+    api.googleAccounts.listServiceAccounts,
+    canManage ? {} : "skip"
+  );
+  const serviceAccounts = serviceAccountsData?.serviceAccounts ?? [];
 
   const [formError, setFormError] = useState<LocalizedMessage | null>(null);
   const [deleteError, setDeleteError] = useState<LocalizedMessage | null>(null);
@@ -285,9 +361,10 @@ export function AdminClientsPanel() {
           clientId: editingClient.clientId,
           name: values.name,
           isActive: values.isActive,
+          serviceAccountId: values.serviceAccountId,
         });
       } else {
-        await createClient({ name: values.name });
+        await createClient({ name: values.name, serviceAccountId: values.serviceAccountId });
       }
       closeForm();
     } catch (cause) {
@@ -394,6 +471,7 @@ export function AdminClientsPanel() {
                     <TableHead>{t.admin.clients.table.client}</TableHead>
                     <TableHead>{t.admin.clients.table.clinics}</TableHead>
                     <TableHead>{t.admin.clients.table.key}</TableHead>
+                    <TableHead>{t.admin.clients.table.serviceAccount}</TableHead>
                     <TableHead>{t.admin.clients.table.status}</TableHead>
                     <TableHead>{t.common.actions}</TableHead>
                   </TableRow>
@@ -407,6 +485,17 @@ export function AdminClientsPanel() {
                         <TableCell className="tabular-nums">{client.clinicCount}</TableCell>
                         <TableCell className="font-mono text-xs text-muted-foreground">
                           {client.key}
+                        </TableCell>
+                        <TableCell className="text-xs">
+                          {client.serviceAccountEmail === null ? (
+                            <span className="text-muted-foreground">
+                              {t.admin.serviceAccounts.appAccount}
+                            </span>
+                          ) : (
+                            <span className="font-mono text-muted-foreground">
+                              {client.serviceAccountEmail}
+                            </span>
+                          )}
                         </TableCell>
                         <TableCell>
                           <Badge variant={client.isActive ? "secondary" : "outline"}>
@@ -443,6 +532,11 @@ export function AdminClientsPanel() {
                 >
                   <DataCardRow label={t.admin.clients.table.clinics}>
                     <span className="tabular-nums">{client.clinicCount}</span>
+                  </DataCardRow>
+                  <DataCardRow label={t.admin.clients.table.serviceAccount}>
+                    <span className="font-mono text-xs text-muted-foreground">
+                      {client.serviceAccountEmail ?? t.admin.serviceAccounts.appAccount}
+                    </span>
                   </DataCardRow>
                   <DataCardRow>
                     <ClientActions
@@ -490,9 +584,14 @@ export function AdminClientsPanel() {
         isEditing={formMode === "editing"}
         initialValues={
           formMode === "editing" && editingClient !== null
-            ? { name: editingClient.name, isActive: editingClient.isActive }
+            ? {
+                name: editingClient.name,
+                isActive: editingClient.isActive,
+                serviceAccountId: editingClient.serviceAccountId,
+              }
             : EMPTY_CLIENT_FORM
         }
+        serviceAccounts={serviceAccounts}
         pending={isSaving}
         error={formError}
         onSubmit={submitClient}

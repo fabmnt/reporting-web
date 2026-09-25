@@ -114,7 +114,14 @@ describe("AdminClientsPanel", () => {
     await user.type(within(dialog).getByLabelText("Client name"), "New Co");
     await user.click(within(dialog).getByRole("button", { name: "Create client" }));
 
-    await waitFor(() => expect(mutations.createClient).toHaveBeenCalledWith({ name: "New Co" }));
+    // A new client with no service account picked is read with the app's own
+    // Google account, which the form sends as an empty link.
+    await waitFor(() =>
+      expect(mutations.createClient).toHaveBeenCalledWith({
+        name: "New Co",
+        serviceAccountId: null,
+      })
+    );
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
   });
 

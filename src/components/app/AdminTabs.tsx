@@ -8,6 +8,7 @@ const ADMIN_TABS = [
   { href: "/admin", labelKey: "accounts" },
   { href: "/admin/clients", labelKey: "clients" },
   { href: "/admin/clinics", labelKey: "clinics" },
+  { href: "/admin/service-accounts", labelKey: "serviceAccounts" },
   { href: "/admin/report-types", labelKey: "reportTypes" },
 ] as const;
 

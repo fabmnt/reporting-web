@@ -19,6 +19,15 @@ export const errors = {
     "This link is not valid any more. Ask an administrator for a new one.",
   CLIENT_NOT_FOUND: "Client was not found.",
   CLIENT_DISABLED: "This client is disabled.",
+  CLIENT_NOT_ASSIGNED: "This client is not assigned to you.",
+  SERVICE_ACCOUNT_NOT_FOUND: "This service account does not exist any more.",
+  SERVICE_ACCOUNT_LIMIT: (limit: number) =>
+    `You can store up to ${limit} service accounts. Remove one before adding another.`,
+  SERVICE_ACCOUNT_EMAIL_INVALID: "The address inside the key file is not a valid address.",
+  SERVICE_ACCOUNT_EMAIL_TAKEN: "Another service account already uses this email.",
+  SERVICE_ACCOUNT_KEY_REQUIRED: "The service account key is required.",
+  SERVICE_ACCOUNT_KEY_INVALID:
+    "This is not a service account key file. Paste the JSON file Google gave you.",
   CLINIC_NOT_FOUND: "Clinic was not found.",
   CLINIC_NOT_ASSIGNED: "This clinic is not assigned to you.",
   CLINIC_ASSIGNMENT_LIMIT: (limit: number) =>
@@ -50,6 +59,8 @@ export const errors = {
   SHEET_INVALID_COLUMN: (column: string) =>
     `Invalid sheet column "${column}". Use letters like A, T, or AB.`,
   SHEET_RATE_LIMITED: "Google rate limited our requests. Wait a minute and try again.",
+  SHEET_SERVICE_ACCOUNT_MISSING:
+    "The service account that reads this client's sheets is gone. Ask an administrator to link one again.",
   CARRIER_SIGN_IN_REJECTED:
     "The carrier API rejected the app credentials. Ask an administrator to check them.",
   CARRIER_API_UNAVAILABLE: "The carrier API did not answer. Try again in a moment.",
