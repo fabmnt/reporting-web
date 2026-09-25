@@ -174,11 +174,17 @@ function clinicRowCount(group: ClinicGroup): number {
   return group.sheets.reduce((total, sheet) => total + sheetRowCount(sheet), 0);
 }
 
-// A clinic whose tabs read no rows has nothing to show, so its tab is left out
-// of the results. A clinic that failed keeps its tab: the error is what the
-// operator has to read.
+// A sheet that read no rows has nothing to show, so its section is left out of
+// the results. A sheet that failed keeps its section, because the error is what
+// the operator has to read.
+function sheetHasContent(sheet: SheetResult): boolean {
+  return sheetRowCount(sheet) > 0 || sheet.error !== null;
+}
+
+// A clinic none of whose sheet tabs has anything to show is left out of the
+// results whole.
 function clinicHasContent(group: ClinicGroup): boolean {
-  return group.sheets.some((sheet) => sheetRowCount(sheet) > 0 || sheet.error !== null);
+  return group.sheets.some(sheetHasContent);
 }
 
 /** Row numbers in the shape they are copied in: '2', '3', '33'. */
@@ -638,8 +644,10 @@ export function OverviewCard({ result }: { result: ReportResult }) {
 /**
  * Renders one finished run. Each clinic the run found rows for is a tab named
  * after the clinic and its row count, and inside it the sheet tabs of that
- * clinic carry the rows. Every value comes from the run itself, so editing the
- * report controls afterward never rewrites what the run returned.
+ * clinic carry the rows they found. A clinic or a sheet tab with nothing to
+ * show is left out, unless it failed, in which case its error stays in view.
+ * Every value comes from the run itself, so editing the report controls
+ * afterward never rewrites what the run returned.
  */
 export function ResultsCard({ result }: { result: ReportResult }) {
   const { t } = useI18n();
@@ -704,7 +712,7 @@ export function ResultsCard({ result }: { result: ReportResult }) {
                 value={group.clinicId}
                 className="flex flex-col gap-4"
               >
-                {group.sheets.map((sheet) => {
+                {group.sheets.filter(sheetHasContent).map((sheet) => {
                   const buckets = sheet.bucketRows.filter((bucket) => bucket.rows.length > 0);
                   // A sheet with neither a tab name nor a row count is a failed
                   // read of a whole sheet: only its error says anything.
@@ -732,21 +740,14 @@ export function ResultsCard({ result }: { result: ReportResult }) {
                           <AlertDescription>{sheetErrorText(sheet.error, t)}</AlertDescription>
                         </Alert>
                       ) : (
-                        <>
-                          {buckets.map((bucket) => (
-                            <ResultBucket
-                              key={bucket.bucketKey}
-                              bucket={bucket}
-                              headers={sheet.headers}
-                              showLabel={buckets.length > 1}
-                            />
-                          ))}
-                          {buckets.length === 0 ? (
-                            <p className="text-sm text-muted-foreground">
-                              {t.reports.results.noMatchingRows}
-                            </p>
-                          ) : null}
-                        </>
+                        buckets.map((bucket) => (
+                          <ResultBucket
+                            key={bucket.bucketKey}
+                            bucket={bucket}
+                            headers={sheet.headers}
+                            showLabel={buckets.length > 1}
+                          />
+                        ))
                       )}
                     </div>
                   );
