@@ -59,6 +59,7 @@ export const reports = {
   unmatchedCarrierRows: {
     title: "Rows without a matching bot",
     note: "Rows that are pending to execute but no clinic bot can run, so they stay out of the results above.",
+    carrier: "Carrier",
   },
   results: {
     title: "Results",
