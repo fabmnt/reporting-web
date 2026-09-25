@@ -102,6 +102,8 @@ export const reports = {
     fallbackTitle: "Read with the app's account",
     fallbackDenied: (email: string) =>
       `The service account ${email} could not read this sheet, so it was read with the app's own Google account. Share the sheet with that address.`,
+    fallbackKeyRefused: (email: string) =>
+      `Google turned the key of the service account ${email} down, so the sheet was read with the app's own Google account. Ask an administrator to replace its key.`,
     fallbackMissing:
       "The service account this client is linked to is gone, so the sheet was read with the app's own Google account. Ask an administrator to link one again.",
     noMatchingRows: "No matching rows.",

@@ -141,6 +141,27 @@ describe("ResultsCard", () => {
     expect(screen.queryByRole("tab")).not.toBeInTheDocument();
   });
 
+  it("names the refused key of a sheet that fell back, not a missing share", () => {
+    renderResults(
+      run([
+        {
+          ...sheet("clinic-1", "Abilene", "2026-09-29", [sheetRow(3, "Ana", "Austin")]),
+          credential: { kind: "oauth" },
+          fallback: { account: "reader@example.com", reason: "keyRefused" },
+        },
+      ])
+    );
+
+    // Sharing the sheet does not fix a key Google will not sign with, so the
+    // sheet asks for the key instead, and the alert alone says which account read
+    // the sheets.
+    expect(
+      screen.getByText(/Google turned the key of the service account reader@example.com down/)
+    ).toBeVisible();
+    expect(screen.queryByText(/Share the sheet with that address/)).not.toBeInTheDocument();
+    expect(screen.queryByText("Read with the app's Google account")).not.toBeInTheDocument();
+  });
+
   it("keeps the tab of a clinic that fell back even when it read no row", () => {
     renderResults(
       run([

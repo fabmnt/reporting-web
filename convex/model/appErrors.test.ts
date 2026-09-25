@@ -38,4 +38,18 @@ describe("sheetErrorFrom", () => {
       email: "reader@example.com",
     });
   });
+
+  it("reports a key Google will not sign with as its own failure", () => {
+    // Sharing the sheet does not fix a refused key, so the sheet says the key is
+    // the problem instead of carrying the payload of the error as a message.
+    const error = appError({
+      code: "SERVICE_ACCOUNT_KEY_REFUSED",
+      email: "reader@example.com",
+    });
+
+    expect(sheetErrorFrom(error)).toEqual({
+      code: "SHEET_SERVICE_ACCOUNT_KEY_REFUSED",
+      email: "reader@example.com",
+    });
+  });
 });

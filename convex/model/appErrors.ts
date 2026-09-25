@@ -99,6 +99,9 @@ export const reportSheetError = v.union(
   // The account is linked but Google turns it away, which fails every sheet of
   // that client until someone shares the sheet with its address.
   v.object({ code: v.literal("SHEET_SERVICE_ACCOUNT_DENIED"), email: v.string() }),
+  // Google will not sign a token with the account's key, which fails every sheet
+  // of that client until an administrator replaces the key.
+  v.object({ code: v.literal("SHEET_SERVICE_ACCOUNT_KEY_REFUSED"), email: v.string() }),
   v.object({ code: v.literal("SHEET_FAILED"), message: v.string() }),
   // A clinic the carrier engine could not work: it has no Control Central id
   // yet, the API turned the app away, or the clinic has no bot left to run a
@@ -140,6 +143,9 @@ export function sheetErrorFrom(error: unknown): ReportSheetError {
   }
   if (payload !== null && payload.code === "SERVICE_ACCOUNT_DENIED") {
     return { code: "SHEET_SERVICE_ACCOUNT_DENIED", email: payload.email };
+  }
+  if (payload !== null && payload.code === "SERVICE_ACCOUNT_KEY_REFUSED") {
+    return { code: "SHEET_SERVICE_ACCOUNT_KEY_REFUSED", email: payload.email };
   }
   return {
     code: "SHEET_FAILED",

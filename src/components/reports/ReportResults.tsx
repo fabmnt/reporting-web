@@ -224,8 +224,11 @@ function clinicFallback(group: ClinicGroup): CredentialFallback | null {
 
 /** Why a clinic's sheets were read with the app's own account instead. */
 function fallbackText(fallback: CredentialFallback, t: Messages): string {
-  return fallback.account === null
-    ? t.reports.results.fallbackMissing
+  if (fallback.account === null) return t.reports.results.fallbackMissing;
+  // A key Google turns down is not fixed by sharing the sheet, so it asks for
+  // the key in place of the share a denied account is asked for.
+  return fallback.reason === "keyRefused"
+    ? t.reports.results.fallbackKeyRefused(fallback.account)
     : t.reports.results.fallbackDenied(fallback.account);
 }
 

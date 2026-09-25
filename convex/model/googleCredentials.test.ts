@@ -95,9 +95,11 @@ describe("accountUnusable", () => {
     expect(
       accountUnusable(appError({ code: "SERVICE_ACCOUNT_DENIED", email: KEY_FILE_EMAIL }))
     ).toBe("denied");
+    // A key Google will not sign with says so, because sharing the sheet would
+    // not fix it.
     expect(
       accountUnusable(appError({ code: "SERVICE_ACCOUNT_KEY_REFUSED", email: KEY_FILE_EMAIL }))
-    ).toBe("denied");
+    ).toBe("keyRefused");
   });
 
   it("leaves the failures another account would not fix alone", () => {
