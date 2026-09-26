@@ -1,6 +1,9 @@
+import { ChevronDown } from "lucide-react";
+
 import type { Id } from "../../../convex/_generated/dataModel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useI18n } from "@/lib/i18n/context";
 import {
   byClient,
@@ -15,7 +18,8 @@ import {
  * the account, and beneath them the clinics the ticked groups cover (every
  * assigned clinic while none is ticked), listed under their client. A clinic
  * can be left out on its own, and the client it is listed under stands for all
- * of its own at once.
+ * of its own at once. The row of a client folds, which puts its clinics out of
+ * the way while its tick and its count stay in place.
  */
 export function IncludedClinicsSection({
   clinics,
@@ -112,10 +116,11 @@ export function IncludedClinicsSection({
               ).length;
               const whole = includedCount === entry.clinics.length;
               return (
-                <div key={entry.clientId} className="flex flex-col gap-2">
-                  <label className="flex cursor-pointer items-center gap-3 font-medium has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-50">
+                <Collapsible key={entry.clientId} defaultOpen className="flex flex-col gap-2">
+                  <div className="flex items-center gap-3 font-medium has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-50">
                     <input
                       type="checkbox"
+                      aria-label={entry.clientName}
                       // A callback ref re-runs on every render, which is what
                       // keeps the half-ticked state in step with the list.
                       ref={(node) => {
@@ -126,30 +131,38 @@ export function IncludedClinicsSection({
                       disabled={running}
                       className="size-4 shrink-0 accent-primary"
                     />
-                    <span className="min-w-0 flex-1 truncate">{entry.clientName}</span>
-                    <Badge variant="secondary" className="tabular-nums">
-                      {entry.clinics.length}
-                    </Badge>
-                  </label>
-                  <ul className="flex flex-col gap-2 pl-7">
-                    {entry.clinics.map((clinic) => (
-                      <li key={clinic.clinicId}>
-                        <label className="flex cursor-pointer items-center gap-3 has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-50">
-                          <input
-                            type="checkbox"
-                            checked={!excluded.has(clinic.clinicId)}
-                            onChange={() => onToggleClinic(clinic.clinicId)}
-                            disabled={running}
-                            className="size-4 shrink-0 accent-primary"
-                          />
-                          <span className="min-w-0 flex-1 truncate text-muted-foreground">
-                            {clinic.name}
-                          </span>
-                        </label>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
+                    <CollapsibleTrigger className="group/client flex min-w-0 flex-1 items-center gap-3">
+                      <span className="min-w-0 flex-1 truncate">{entry.clientName}</span>
+                      <Badge variant="secondary" className="tabular-nums">
+                        {entry.clinics.length}
+                      </Badge>
+                      <ChevronDown
+                        className="size-4 shrink-0 text-muted-foreground transition-transform group-data-[panel-open]/client:rotate-180"
+                        aria-hidden="true"
+                      />
+                    </CollapsibleTrigger>
+                  </div>
+                  <CollapsiblePanel>
+                    <ul className="flex flex-col gap-2 pl-7">
+                      {entry.clinics.map((clinic) => (
+                        <li key={clinic.clinicId}>
+                          <label className="flex cursor-pointer items-center gap-3 has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-50">
+                            <input
+                              type="checkbox"
+                              checked={!excluded.has(clinic.clinicId)}
+                              onChange={() => onToggleClinic(clinic.clinicId)}
+                              disabled={running}
+                              className="size-4 shrink-0 accent-primary"
+                            />
+                            <span className="min-w-0 flex-1 truncate text-muted-foreground">
+                              {clinic.name}
+                            </span>
+                          </label>
+                        </li>
+                      ))}
+                    </ul>
+                  </CollapsiblePanel>
+                </Collapsible>
               );
             })}
           </div>
