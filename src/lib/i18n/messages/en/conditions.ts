@@ -100,6 +100,7 @@ export const conditions = {
   columns: {
     L: "Execution (column L)",
     M: "Message (column M)",
+    carrierName: "Carrier Name",
     updateStatus: "Update status",
     uploadStatus: "Upload status",
     verificationType: "Verification type",

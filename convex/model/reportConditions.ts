@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import type { Infer } from "convex/values";
 
 import type { ResolvedClinicSheetColumns } from "./clinicSheetColumns";
+import { CARRIER_COLUMN_INDEX } from "./executeRules";
 import { columnLetterToIndex } from "./reporting";
 
 type SheetRow = string[];
@@ -14,12 +15,13 @@ function cell(row: SheetRow, index: number): string {
 // Vocabulary
 // ---------------------------------------------------------------------------
 
-// Columns a condition can read. L (execution) and M (message) are fixed
-// positions in every sheet; the rest come from the clinic's sheetColumns
-// mapping, so the stored conditions stay portable between clinics.
+// Columns a condition can read. L (execution), M (message) and the carrier
+// name are fixed positions in every sheet; the rest come from the clinic's
+// sheetColumns mapping, so the stored conditions stay portable between clinics.
 export const conditionColumn = v.union(
   v.literal("L"),
   v.literal("M"),
+  v.literal("carrierName"),
   v.literal("updateStatus"),
   v.literal("uploadStatus"),
   v.literal("verificationType"),
@@ -152,9 +154,11 @@ export function conditionColumnResolver(
   buckets: ConditionBucket[],
   extraFilters: ConditionClause[] = []
 ): ConditionColumnResolver {
-  // L and M are the same cells in every sheet; every other role points at the
-  // column the clinic mapped it to.
-  const letters: Record<ConditionColumn, string> = {
+  // L, M and the carrier cell are the same cells in every sheet; every other
+  // role points at the column the clinic mapped it to. The carrier cell is the
+  // one the execute engine matches the clinic's bots against, so a condition on
+  // it and that match read the same cell.
+  const letters: Record<Exclude<ConditionColumn, "carrierName">, string> = {
     L: "L",
     M: "M",
     updateStatus: columns.updateStatus,
@@ -166,7 +170,8 @@ export function conditionColumnResolver(
   const indexOf: ConditionColumnResolver = (column) => {
     const known = parsed.get(column);
     if (known !== undefined) return known;
-    const index = columnLetterToIndex(letters[column]);
+    const index =
+      column === "carrierName" ? CARRIER_COLUMN_INDEX : columnLetterToIndex(letters[column]);
     parsed.set(column, index);
     return index;
   };

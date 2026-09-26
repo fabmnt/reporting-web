@@ -10,6 +10,7 @@ import {
 export const CONDITION_COLUMNS: ReadonlyArray<ConditionColumn> = [
   "L",
   "M",
+  "carrierName",
   "updateStatus",
   "uploadStatus",
   "verificationType",

@@ -42,6 +42,7 @@ const ROW_LENGTH = COLUMNS("fileUrl") + 1;
 type RowValues = {
   l?: string;
   m?: string;
+  carrier?: string;
   verification?: string;
   updateStatus?: string;
   uploadStatus?: string;
@@ -52,6 +53,7 @@ function sheetRow(values: RowValues): string[] {
   const row = Array.from({ length: ROW_LENGTH }, () => "");
   row[COLUMNS("L")] = values.l ?? "";
   row[COLUMNS("M")] = values.m ?? "";
+  row[COLUMNS("carrierName")] = values.carrier ?? "";
   row[COLUMNS("updateStatus")] = values.updateStatus ?? "";
   row[COLUMNS("uploadStatus")] = values.uploadStatus ?? "";
   row[COLUMNS("verificationType")] = values.verification ?? "";
@@ -330,6 +332,7 @@ describe("operators", () => {
   const COLUMN_ROWS: Record<ConditionClause["column"], (cell: string) => RowValues> = {
     L: (cell) => ({ l: cell }),
     M: (cell) => ({ m: cell }),
+    carrierName: (cell) => ({ carrier: cell }),
     updateStatus: (cell) => ({ updateStatus: cell }),
     uploadStatus: (cell) => ({ uploadStatus: cell }),
     verificationType: (cell) => ({ verification: cell }),
