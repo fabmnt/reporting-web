@@ -65,7 +65,9 @@ function ClientPicker({
           disabled={disabled}
           className="size-4 shrink-0 accent-primary"
         />
-        <span className="min-w-0 flex-1 truncate">{entry.clientName}</span>
+        <span className="min-w-0 flex-1 truncate" title={entry.clientName}>
+          {entry.clientName}
+        </span>
         <Badge variant="secondary" className="tabular-nums">
           {entry.clinics.length}
         </Badge>
@@ -81,7 +83,9 @@ function ClientPicker({
                 disabled={disabled}
                 className="size-4 shrink-0 accent-primary"
               />
-              <span className="min-w-0 flex-1 truncate text-muted-foreground">{clinic.name}</span>
+              <span className="min-w-0 flex-1 truncate text-muted-foreground" title={clinic.name}>
+                {clinic.name}
+              </span>
             </label>
           </li>
         ))}
@@ -351,7 +355,9 @@ export function ReportGroupsDialog({
                       className="flex items-center justify-between gap-3 rounded-lg border px-3 py-2"
                     >
                       <div className="flex min-w-0 flex-col">
-                        <span className="truncate text-sm font-medium">{group.name}</span>
+                        <span className="truncate text-sm font-medium" title={group.name}>
+                          {group.name}
+                        </span>
                         <span className="text-xs text-muted-foreground tabular-nums">
                           {t.reports.groups.count(groupClinicCount(clinics, group))}
                         </span>

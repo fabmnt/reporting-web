@@ -6,9 +6,10 @@ import { cn } from "@/lib/utils";
 
 /**
  * One line of text that shows its full content when the reader asks for it: a
- * press on a phone, Enter or Space on a keyboard. The text becomes a control
- * only where it is actually clipped, so a value that already fits adds no tab
- * stop to the page.
+ * hover tooltip where the pointer rests on it, a press on a phone, Enter or
+ * Space on a keyboard. The text becomes a control only where it is actually
+ * clipped, so a value that already fits adds no tab stop to the page and
+ * carries no tooltip either.
  *
  * Pass isPressOnly for text inside a button, like the cells of a row card: a
  * button must not hold a focusable descendant, so those reveal on press and
@@ -60,6 +61,7 @@ export function TruncatedText({
       }}
       role={isControl ? "button" : undefined}
       tabIndex={isControl ? 0 : undefined}
+      title={isClipped ? children : undefined}
       className={cn(
         "block outline-none",
         isControl && "cursor-pointer focus-visible:ring-3 focus-visible:ring-ring",

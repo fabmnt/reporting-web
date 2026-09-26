@@ -39,8 +39,12 @@ function ClientRow({
   return (
     <div className="flex items-center justify-between gap-3">
       <div className="flex min-w-0 flex-col">
-        <span className="truncate text-sm">{client.name}</span>
-        <span className="truncate font-mono text-xs text-muted-foreground">{client.key}</span>
+        <span className="truncate text-sm" title={client.name}>
+          {client.name}
+        </span>
+        <span className="truncate font-mono text-xs text-muted-foreground" title={client.key}>
+          {client.key}
+        </span>
       </div>
       {client.isActive ? null : <Badge variant="outline">{t.common.inactive}</Badge>}
       {onLink === undefined ? null : (

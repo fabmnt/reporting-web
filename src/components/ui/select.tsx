@@ -16,12 +16,24 @@ function SelectGroup({ className, ...props }: SelectPrimitive.Group.Props) {
   );
 }
 
-function SelectValue({ className, ...props }: SelectPrimitive.Value.Props) {
+function SelectValue({ className, ...props }: React.ComponentProps<typeof SelectPrimitive.Value>) {
+  // The trigger clips a value wider than itself, and the label is not a prop of
+  // this wrapper. The element is measured on every attach instead, since the
+  // callback below is a new function on each render: that is what keeps the
+  // tooltip in step with the selected value, and a value that fits carries none.
   return (
     <SelectPrimitive.Value
       data-slot="select-value"
       className={cn("flex flex-1 text-left", className)}
       {...props}
+      ref={(node) => {
+        if (node === null) return;
+        if (node.scrollWidth > node.clientWidth) {
+          node.title = node.textContent ?? "";
+        } else {
+          node.removeAttribute("title");
+        }
+      }}
     />
   );
 }

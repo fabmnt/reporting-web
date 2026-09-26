@@ -54,6 +54,7 @@ function ClinicOption({
   onToggle: () => void;
 }) {
   const { t } = useI18n();
+  const details = `${t.clinics.externalId(clinic.externalClinicId)} · ${clinic.googleSheetId} · ${formatSheetColumnSummary(clinic.sheetColumns)}`;
 
   return (
     <label className="flex cursor-pointer items-start gap-3 text-sm has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-50">
@@ -66,14 +67,15 @@ function ClinicOption({
       />
       <span className="flex min-w-0 flex-1 flex-col gap-1">
         <span className="flex min-w-0 items-center gap-2">
-          <span className="truncate">{clinic.name}</span>
+          <span className="truncate" title={clinic.name}>
+            {clinic.name}
+          </span>
           <Badge variant={clinic.isActive ? "secondary" : "outline"}>
             {clinic.isActive ? t.common.active : t.common.inactive}
           </Badge>
         </span>
-        <span className="truncate font-mono text-xs text-muted-foreground">
-          {t.clinics.externalId(clinic.externalClinicId)} · {clinic.googleSheetId} ·{" "}
-          {formatSheetColumnSummary(clinic.sheetColumns)}
+        <span className="truncate font-mono text-xs text-muted-foreground" title={details}>
+          {details}
         </span>
       </span>
     </label>

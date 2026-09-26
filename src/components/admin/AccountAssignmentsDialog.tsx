@@ -95,7 +95,9 @@ function ClinicOption({
         className="mt-0.5 size-4 shrink-0 accent-primary"
       />
       <span className="flex min-w-0 flex-1 items-center gap-2">
-        <span className="truncate">{clinic.name}</span>
+        <span className="truncate" title={clinic.name}>
+          {clinic.name}
+        </span>
         {clinic.isActive ? null : <Badge variant="outline">{t.common.inactive}</Badge>}
       </span>
     </label>
@@ -169,7 +171,9 @@ function ClientSection({
               isOpen && "rotate-90"
             )}
           />
-          <span className="truncate text-sm font-medium">{client.name}</span>
+          <span className="truncate text-sm font-medium" title={client.name}>
+            {client.name}
+          </span>
           {client.isActive ? null : <Badge variant="outline">{t.common.inactive}</Badge>}
           {assignedCount === 0 ? null : (
             <Badge variant="secondary">

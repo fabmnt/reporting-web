@@ -812,7 +812,9 @@ export function ResultsCard({ result }: { result: ReportResult }) {
                   value={group.clinicId}
                   className="min-w-0 max-w-full"
                 >
-                  <span className="min-w-0 truncate">{group.clinicName}</span>{" "}
+                  <span className="min-w-0 truncate" title={group.clinicName}>
+                    {group.clinicName}
+                  </span>{" "}
                   <Badge variant="secondary" className="tabular-nums">
                     {clinicRowCount(group)}
                   </Badge>

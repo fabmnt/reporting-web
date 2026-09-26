@@ -79,14 +79,21 @@ export function AccountMenu({
           aria-label={t.app.account.menu}
         >
           <CircleUser className="size-5" aria-hidden="true" />
-          <span className="max-w-full truncate px-1">{account.username}</span>
+          <span className="max-w-full truncate px-1" title={account.username ?? undefined}>
+            {account.username}
+          </span>
         </DropdownMenuTrigger>
       ) : (
         <DropdownMenuTrigger
           render={<Button variant="ghost" className="h-10 gap-1 px-2" />}
           aria-label={t.app.account.menu}
         >
-          <span className="max-w-28 truncate text-sm font-medium">{account.username}</span>
+          <span
+            className="max-w-28 truncate text-sm font-medium"
+            title={account.username ?? undefined}
+          >
+            {account.username}
+          </span>
           <ChevronDown className="size-4 text-muted-foreground" />
         </DropdownMenuTrigger>
       )}

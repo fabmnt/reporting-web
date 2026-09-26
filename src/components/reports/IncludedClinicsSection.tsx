@@ -88,7 +88,9 @@ export function IncludedClinicsSection({
                     disabled={running}
                     className="size-4 shrink-0 accent-primary"
                   />
-                  <span className="min-w-0 flex-1 truncate">{group.name}</span>
+                  <span className="min-w-0 flex-1 truncate" title={group.name}>
+                    {group.name}
+                  </span>
                   <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
                     {t.reports.groups.count(groupClinicCount(clinics, group))}
                   </span>
@@ -132,7 +134,9 @@ export function IncludedClinicsSection({
                       className="size-4 shrink-0 accent-primary"
                     />
                     <CollapsibleTrigger className="group/client flex min-w-0 flex-1 items-center gap-3">
-                      <span className="min-w-0 flex-1 truncate">{entry.clientName}</span>
+                      <span className="min-w-0 flex-1 truncate" title={entry.clientName}>
+                        {entry.clientName}
+                      </span>
                       <Badge variant="secondary" className="tabular-nums">
                         {entry.clinics.length}
                       </Badge>
@@ -154,7 +158,10 @@ export function IncludedClinicsSection({
                               disabled={running}
                               className="size-4 shrink-0 accent-primary"
                             />
-                            <span className="min-w-0 flex-1 truncate text-muted-foreground">
+                            <span
+                              className="min-w-0 flex-1 truncate text-muted-foreground"
+                              title={clinic.name}
+                            >
                               {clinic.name}
                             </span>
                           </label>

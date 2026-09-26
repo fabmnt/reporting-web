@@ -52,7 +52,9 @@ export function MarkerListField({
               title={t.conditions.markers.remove(value)}
               className="group inline-flex max-w-full shrink-0 cursor-pointer items-center gap-1.5 rounded-full bg-secondary py-1 pr-1.5 pl-2.5 text-xs font-medium text-secondary-foreground transition-colors hover:bg-destructive/10 hover:text-destructive disabled:cursor-not-allowed disabled:opacity-40"
             >
-              <span className="truncate">{value}</span>
+              <span className="truncate" title={value}>
+                {value}
+              </span>
               <X
                 className="size-3 shrink-0 text-muted-foreground transition-colors group-hover:text-destructive"
                 aria-hidden="true"
