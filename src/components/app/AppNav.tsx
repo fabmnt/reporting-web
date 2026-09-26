@@ -31,14 +31,15 @@ const NAV_ITEMS: NavItem[] = [
   { href: ADMIN_PATH, labelKey: "admin", Icon: ShieldCheck },
 ];
 
-// The sections this account may open.
+// The sections this account may open. Every role works on clinics, and a
+// workflow account gets them assigned by an administrator instead of picking
+// them.
 function visibleNavItems(account: CurrentAccount): NavItem[] {
-  const canConfigureClinics =
-    account.status === "active" && (account.role === "admin" || account.role === "operator");
-  const canAdmin = account.role === "admin" && account.status === "active";
+  const isActive = account.status === "active";
+  const canAdmin = account.role === "admin" && isActive;
 
   return NAV_ITEMS.filter((item) => {
-    if (item.href === CLINICS_PATH) return canConfigureClinics;
+    if (item.href === CLINICS_PATH) return isActive;
     if (item.href === ADMIN_PATH) return canAdmin;
     return true;
   });

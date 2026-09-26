@@ -14,6 +14,8 @@ export const errors = {
   PROFILE_NOT_FOUND: "Staff profile was not found.",
   CANNOT_CHANGE_OWN_ROLE: "You cannot change your own role.",
   CANNOT_DISABLE_SELF: "You cannot disable your own account.",
+  CANNOT_ASSIGN_OWN_CLINICS:
+    "Only an administrator can change the clinics assigned to your account.",
   PASSWORD_TOO_SHORT: "The password must be at least 8 characters long.",
   PASSWORD_SETUP_LINK_INVALID:
     "This link is not valid any more. Ask an administrator for a new one.",

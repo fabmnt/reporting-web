@@ -5,6 +5,7 @@ export const app = {
   roles: {
     admin: "Admin",
     operator: "Operator",
+    workflow: "Workflow",
   },
   nav: {
     primary: "Primary",

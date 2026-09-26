@@ -3,6 +3,9 @@ export const clinics = {
   accessDeniedTitle: "Se requiere una cuenta de personal activa",
   accessDeniedBody: "Tu cuenta no puede configurar clínicas.",
   noneAssigned: "Aún no tienes clínicas asignadas. Añade las clínicas en las que trabajas.",
+  noneAssignedByAdmin:
+    "Aún no tienes clínicas asignadas. Pídele a un administrador que las asigne.",
+  assignedByAdmin: "Un administrador asigna las clínicas en las que trabajas.",
   addClinic: "Añadir clínica",
   addFailedTitle: "No se pudo añadir la clínica",
   addFailed: "No se pudo añadir la clínica.",

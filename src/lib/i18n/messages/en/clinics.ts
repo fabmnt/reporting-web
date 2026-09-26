@@ -3,6 +3,8 @@ export const clinics = {
   accessDeniedTitle: "Active staff access required",
   accessDeniedBody: "Your account cannot configure clinics.",
   noneAssigned: "No clinics are assigned to you yet. Add the clinics you work on.",
+  noneAssignedByAdmin: "No clinics are assigned to you yet. Ask an administrator to assign them.",
+  assignedByAdmin: "An administrator assigns the clinics you work on.",
   addClinic: "Add clinic",
   addFailedTitle: "Could not add the clinic",
   addFailed: "Adding the clinic failed.",

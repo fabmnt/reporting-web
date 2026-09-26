@@ -17,6 +17,7 @@ export type AppErrorPayload =
   | { code: "PROFILE_NOT_FOUND" }
   | { code: "CANNOT_CHANGE_OWN_ROLE" }
   | { code: "CANNOT_DISABLE_SELF" }
+  | { code: "CANNOT_ASSIGN_OWN_CLINICS" }
   | { code: "PASSWORD_TOO_SHORT" }
   | { code: "PASSWORD_SETUP_LINK_INVALID" }
   | { code: "CLIENT_NOT_FOUND" }

@@ -10,8 +10,8 @@ import { clientKeyFromName } from "./model/clientKey";
 import { adjustClientClinicCount } from "./model/clients";
 import { clinicSheetColumns } from "./model/clinicSheetColumns";
 import { adjustServiceAccountClientCount } from "./model/googleCredentials";
-import { listProfileClinics } from "./model/reporting";
-import { requireAdmin, requireOperator } from "./model/staff";
+import { listProfileClinics, type StaffProfileForReporting } from "./model/reporting";
+import { requireAdmin, requireOperator, requireSelfAssignment } from "./model/staff";
 
 // The pickers still read one capped page, because a select cannot page: the
 // caps sit above the Control Central directory, which is larger than the 500
@@ -412,7 +412,7 @@ async function removeClinicFromStaffProfiles(ctx: MutationCtx, clinicId: Id<"cli
 
 async function requireAssignedClinic(
   ctx: MutationCtx,
-  profile: { role: "admin" | "operator"; assignedClinicIds?: Id<"clinics">[] },
+  profile: StaffProfileForReporting,
   clinicId: Id<"clinics">
 ) {
   const accessible = await listProfileClinics(ctx, profile);
@@ -1025,13 +1025,14 @@ export const listAssigned = query({
 /**
  * Adds one clinic to the caller's own assignment. Assignments are the only
  * source of the report scope, so an operator can widen their own scope without
- * an admin.
+ * an admin. A workflow account is scoped by an administrator, so it is turned
+ * away here and only an admin changes its assignment.
  */
 export const addAssigned = mutation({
   args: { clinicId: v.id("clinics") },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const { profile } = await requireOperator(ctx);
+    const { profile } = await requireSelfAssignment(ctx);
     const assignedClinicIds = profile.assignedClinicIds ?? [];
     if (assignedClinicIds.includes(args.clinicId)) {
       return null;
@@ -1061,12 +1062,16 @@ export const addAssigned = mutation({
   },
 });
 
-/** Drops one clinic from the caller's own assignment. */
+/**
+ * Drops one clinic from the caller's own assignment. A workflow account is
+ * turned away for the same reason as `addAssigned`: an administrator owns its
+ * scope.
+ */
 export const removeAssigned = mutation({
   args: { clinicId: v.id("clinics") },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const { profile } = await requireOperator(ctx);
+    const { profile } = await requireSelfAssignment(ctx);
     const assignedClinicIds = profile.assignedClinicIds ?? [];
     if (!assignedClinicIds.includes(args.clinicId)) {
       return null;

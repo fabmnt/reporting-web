@@ -271,9 +271,11 @@ function AddClinicDialog({
 export function AssignedClinicsPanel() {
   const { t } = useI18n();
   const current = useQuery(api.staffAccounts.current, {});
-  const canConfigure =
-    current?.status === "active" && (current.role === "admin" || current.role === "operator");
-  const assignedData = useQuery(api.clinics.listAssigned, canConfigure ? {} : "skip");
+  const isActive = current?.status === "active";
+  // An administrator assigns the clinics of a workflow account, so it is the
+  // only role that does not add or drop its own.
+  const canAssignClinics = current?.role !== "workflow";
+  const assignedData = useQuery(api.clinics.listAssigned, isActive ? {} : "skip");
   const updateAssigned = useMutation(api.clinics.updateAssigned);
   const removeAssigned = useMutation(api.clinics.removeAssigned);
 
@@ -333,7 +335,7 @@ export function AssignedClinicsPanel() {
     <PageHeader
       title={t.clinics.pageTitle}
       actions={
-        canConfigure ? (
+        canAssignClinics ? (
           <Button onClick={() => setIsAdding(true)}>
             <Plus aria-hidden="true" />
             {t.clinics.addClinic}
@@ -345,7 +347,7 @@ export function AssignedClinicsPanel() {
 
   if (current === undefined) return <Skeleton className="h-80 w-full" />;
 
-  if (!canConfigure) {
+  if (!isActive) {
     return (
       <div className="flex flex-col gap-6">
         {header}
@@ -361,6 +363,10 @@ export function AssignedClinicsPanel() {
     <div className="flex flex-col gap-6">
       {header}
 
+      {canAssignClinics ? null : (
+        <p className="text-sm text-muted-foreground">{t.clinics.assignedByAdmin}</p>
+      )}
+
       {removeError ? (
         <Alert variant="destructive">
           <AlertTitle>{t.clinics.removeFailedTitle}</AlertTitle>
@@ -371,7 +377,9 @@ export function AssignedClinicsPanel() {
       {assignedData === undefined ? (
         <Skeleton className="h-64 w-full" />
       ) : assignedData.clinics.length === 0 ? (
-        <p className="text-sm text-muted-foreground">{t.clinics.noneAssigned}</p>
+        <p className="text-sm text-muted-foreground">
+          {canAssignClinics ? t.clinics.noneAssigned : t.clinics.noneAssignedByAdmin}
+        </p>
       ) : (
         <>
           <DataTableFrame>
@@ -413,15 +421,17 @@ export function AssignedClinicsPanel() {
                           <Button variant="outline" size="sm" onClick={() => openEdit(clinic)}>
                             {t.clinics.table.configure}
                           </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-                            disabled={isPending}
-                            onClick={() => void removeClinic(clinic)}
-                          >
-                            {t.common.remove}
-                          </Button>
+                          {canAssignClinics ? (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                              disabled={isPending}
+                              onClick={() => void removeClinic(clinic)}
+                            >
+                              {t.common.remove}
+                            </Button>
+                          ) : null}
                         </div>
                       </TableCell>
                     </TableRow>
@@ -455,15 +465,17 @@ export function AssignedClinicsPanel() {
                   <Button variant="outline" size="sm" onClick={() => openEdit(clinic)}>
                     {t.clinics.table.configure}
                   </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-                    disabled={pendingClinicId === clinic.clinicId}
-                    onClick={() => void removeClinic(clinic)}
-                  >
-                    {t.common.remove}
-                  </Button>
+                  {canAssignClinics ? (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                      disabled={pendingClinicId === clinic.clinicId}
+                      onClick={() => void removeClinic(clinic)}
+                    >
+                      {t.common.remove}
+                    </Button>
+                  ) : null}
                 </DataCardRow>
               </DataCard>
             ))}

@@ -6,7 +6,9 @@ import { clinicSheetColumns } from "./model/clinicSheetColumns";
 import { reportConditionSet } from "./model/reportConditions";
 import { reportEngine, reportTypeBucket } from "./model/reportTypes";
 
-export const staffRole = v.union(v.literal("admin"), v.literal("operator"));
+// A workflow account works like an operator, except that an administrator
+// assigns the clinics it works on: the role never changes its own assignment.
+export const staffRole = v.union(v.literal("admin"), v.literal("operator"), v.literal("workflow"));
 export const staffStatus = v.union(v.literal("active"), v.literal("disabled"));
 // The language the user picked in the app. Missing means "follow the device".
 export const staffLanguage = v.union(v.literal("en"), v.literal("es"));

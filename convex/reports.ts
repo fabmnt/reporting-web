@@ -78,7 +78,10 @@ async function reportRunConfigForUser(
   if (profile === null || profile.status !== "active") {
     throw appError({ code: "ACTIVE_STAFF_REQUIRED" });
   }
-  if (profile.role !== "admin" && profile.role !== "operator") {
+  // The same roles `requireOperator` admits, checked here because a run reads
+  // the settings back as an internal query for the account that opened it
+  // instead of the account that is calling.
+  if (profile.role !== "admin" && profile.role !== "operator" && profile.role !== "workflow") {
     throw appError({ code: "OPERATOR_REQUIRED" });
   }
 

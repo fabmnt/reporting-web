@@ -36,6 +36,8 @@ function renderAppError(payload: AppErrorPayload, t: Messages): string | null {
       return e.CANNOT_CHANGE_OWN_ROLE;
     case "CANNOT_DISABLE_SELF":
       return e.CANNOT_DISABLE_SELF;
+    case "CANNOT_ASSIGN_OWN_CLINICS":
+      return e.CANNOT_ASSIGN_OWN_CLINICS;
     case "PASSWORD_TOO_SHORT":
       return e.PASSWORD_TOO_SHORT;
     case "PASSWORD_SETUP_LINK_INVALID":

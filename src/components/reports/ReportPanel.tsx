@@ -131,8 +131,8 @@ const CONFIGURATION_PATH = "/configuration";
 function ConfigureLink() {
   const { t } = useI18n();
   const current = useQuery(api.staffAccounts.current, {});
-  const canConfigure =
-    current?.status === "active" && (current.role === "admin" || current.role === "operator");
+  // Every role runs reports and configures its own report types.
+  const canConfigure = current?.status === "active";
 
   if (!canConfigure) return null;
 

@@ -42,11 +42,12 @@ import {
 import { useDocumentTitle, useI18n } from "@/lib/i18n/context";
 import { localizedError, type LocalizedMessage } from "@/lib/i18n/errors";
 
-type StaffRole = "admin" | "operator";
-
 type ManagedAccountView = FunctionReturnType<
   typeof api.staffAccounts.listManaged
 >["accounts"][number];
+
+// Read from the schema, so the picker cannot name a role the backend rejects.
+type StaffRole = ManagedAccountView["role"];
 
 /** The account controls are shared by the table and the narrow-screen cards. */
 function RoleSelect({
@@ -65,6 +66,7 @@ function RoleSelect({
       items={[
         { value: "admin", label: t.app.roles.admin },
         { value: "operator", label: t.app.roles.operator },
+        { value: "workflow", label: t.app.roles.workflow },
       ]}
       value={account.role}
       onValueChange={(role) => {
@@ -82,6 +84,7 @@ function RoleSelect({
         <SelectGroup>
           <SelectItem value="admin">{t.app.roles.admin}</SelectItem>
           <SelectItem value="operator">{t.app.roles.operator}</SelectItem>
+          <SelectItem value="workflow">{t.app.roles.workflow}</SelectItem>
         </SelectGroup>
       </SelectContent>
     </Select>

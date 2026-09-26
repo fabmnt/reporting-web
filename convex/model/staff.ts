@@ -49,12 +49,26 @@ export async function requireActiveStaff(ctx: StaffCtx) {
   return { userId, profile };
 }
 
-// Operators run reports. Admins can do everything operators can.
+// Operators run reports. Admins can do everything operators can, and a workflow
+// account only differs in who assigns its clinics.
 export async function requireOperator(ctx: StaffCtx) {
   const { userId, profile } = await requireActiveStaff(ctx);
 
-  if (profile.role !== "admin" && profile.role !== "operator") {
+  if (profile.role !== "admin" && profile.role !== "operator" && profile.role !== "workflow") {
     throw appError({ code: "OPERATOR_REQUIRED" });
+  }
+
+  return { userId, profile };
+}
+
+// Editing the clinics of the caller's own assignment. Operators and admins do
+// this themselves, while a workflow account is scoped by an administrator and
+// never widens or narrows its own scope.
+export async function requireSelfAssignment(ctx: StaffCtx) {
+  const { userId, profile } = await requireOperator(ctx);
+
+  if (profile.role === "workflow") {
+    throw appError({ code: "CANNOT_ASSIGN_OWN_CLINICS" });
   }
 
   return { userId, profile };
