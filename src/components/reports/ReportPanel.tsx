@@ -401,6 +401,7 @@ export function ReportRunner() {
                 <Select
                   items={[
                     { value: "all", label: t.reports.verificationAll },
+                    { value: "both", label: t.reports.verificationBoth },
                     { value: "fbd", label: "FBD" },
                     { value: "elg", label: "ELG" },
                   ]}
@@ -408,7 +409,7 @@ export function ReportRunner() {
                   onValueChange={(value) =>
                     updateFilters({
                       ...filters,
-                      verification: (value as VerificationFilter) ?? "all",
+                      verification: (value as VerificationFilter) ?? "both",
                     })
                   }
                   disabled={running}
@@ -419,6 +420,7 @@ export function ReportRunner() {
                   <SelectContent>
                     <SelectGroup>
                       <SelectItem value="all">{t.reports.verificationAll}</SelectItem>
+                      <SelectItem value="both">{t.reports.verificationBoth}</SelectItem>
                       <SelectItem value="fbd">FBD</SelectItem>
                       <SelectItem value="elg">ELG</SelectItem>
                     </SelectGroup>

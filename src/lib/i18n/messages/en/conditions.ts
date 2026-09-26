@@ -20,9 +20,9 @@ export const conditions = {
     "This report reads every row the rules below pick, whatever carrier the row names. It never asks the Control Central API which bots a clinic has.",
   verificationFilter: "Filter by verification type",
   verificationFilterNote:
-    "Shows the verification picker on the run form. The value chosen there narrows every row group.",
+    "Shows the verification picker on the run form. The choice made there decides which verification types every row group keeps.",
   verificationFilterExecuteNote:
-    "Shows the verification picker on the run form. The value chosen there narrows the rows the report reads.",
+    "Shows the verification picker on the run form. The choice made there decides which verification types the report reads.",
   confirmDelete: "Confirm delete",
   deleteType: "Delete report type",
   saveType: "Save report type",

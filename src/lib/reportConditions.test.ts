@@ -13,6 +13,10 @@ import {
   type ConditionExpression,
   type ReportConditionSet,
 } from "../../convex/model/reportConditions";
+import {
+  verificationClause,
+  type ExecuteVerificationFilter,
+} from "../../convex/model/executeRules";
 import { AUDIT_EXCLUDE_STATUS, PENDING_AUDIT_REPORT_TYPE } from "../../convex/model/reportTypeSeed";
 import { bucketCatalog } from "../../convex/model/reportTypes";
 
@@ -73,11 +77,6 @@ function singleBucket(expression: ConditionExpression, catchAll = false): Report
   return { buckets: [{ bucketKey: "audit", catchAll, expression }] };
 }
 
-// What the report form sends when the verification type is not "all".
-function verificationFilters(filter: "all" | "fbd" | "elg"): ConditionClause[] {
-  return filter === "all" ? [] : [clause("verificationType", "contains", [filter.toUpperCase()])];
-}
-
 describe("the seeded pending audit report type", () => {
   it("reproduces the legacy pending audit rule", () => {
     const conditions = PENDING_AUDIT_CONDITIONS;
@@ -115,7 +114,7 @@ describe("evaluateConditionSet with the pending audit rules", () => {
   const cases: Array<{
     name: string;
     row: RowValues;
-    filter: "all" | "fbd" | "elg";
+    filter: ExecuteVerificationFilter;
     expected: string | null;
   }> = [
     {
@@ -152,6 +151,24 @@ describe("evaluateConditionSet with the pending audit rules", () => {
       row: { l: "DONE", verification: "ELG", updateStatus: "WAITING", uploadStatus: "EMPTY" },
       filter: "fbd",
       expected: null,
+    },
+    {
+      name: "keeps a row of either type when the run asks for both",
+      row: { l: "DONE", verification: "ELG", updateStatus: "WAITING", uploadStatus: "EMPTY" },
+      filter: "both",
+      expected: "audit",
+    },
+    {
+      name: "drops a row without a verification type when the run asks for both",
+      row: { l: "DONE", updateStatus: "WAITING", uploadStatus: "EMPTY" },
+      filter: "both",
+      expected: null,
+    },
+    {
+      name: "keeps a row without a verification type when the run takes every type",
+      row: { l: "DONE", updateStatus: "WAITING", uploadStatus: "EMPTY" },
+      filter: "all",
+      expected: "audit",
     },
     {
       name: "drops a done row whose column M is excluded",
@@ -198,7 +215,7 @@ describe("evaluateConditionSet with the pending audit rules", () => {
 
   it.each(cases)("$name", ({ row, filter, expected }) => {
     expect(
-      evaluateConditionSet(sheetRow(row), COLUMNS, conditions, verificationFilters(filter))
+      evaluateConditionSet(sheetRow(row), COLUMNS, conditions, verificationClause(filter))
     ).toBe(expected);
   });
 
@@ -264,7 +281,7 @@ describe("filterColumnsForBucket", () => {
 
   it("adds the column of the run-level filters", () => {
     expect(
-      filterColumnsForBucket(conditions.buckets, auditBucket!, verificationFilters("fbd"), COLUMNS)
+      filterColumnsForBucket(conditions.buckets, auditBucket!, verificationClause("fbd"), COLUMNS)
     ).toEqual([11, 12, 13, 14, 15]);
   });
 
@@ -280,7 +297,7 @@ describe("filterColumnsForBucket", () => {
 
     expect(filterColumnsForBucket(buckets, buckets[1]!, [], COLUMNS)).toEqual([13]);
     expect(
-      filterColumnsForBucket(buckets, buckets[1]!, verificationFilters("elg"), COLUMNS)
+      filterColumnsForBucket(buckets, buckets[1]!, verificationClause("elg"), COLUMNS)
     ).toEqual([13, 15]);
   });
 });
@@ -322,7 +339,7 @@ describe("conditionColumnResolver", () => {
       conditionColumnResolver(
         { ...clinic, verificationType: "ZZZZZZZ" },
         [],
-        verificationFilters("fbd")
+        verificationClause("fbd")
       )
     ).toThrow();
   });
@@ -591,7 +608,7 @@ describe("expressions", () => {
         { bucketKey: "review", catchAll: true, expression: { filters: [], groups: [] } },
       ],
     };
-    const filters = verificationFilters("fbd");
+    const filters = verificationClause("fbd");
 
     expect(evaluateConditionSet(sheetRow({ verification: "FBD" }), COLUMNS, set, filters)).toBe(
       "ready"
@@ -604,7 +621,7 @@ describe("expressions", () => {
   it("requires the columns of the extra filters to exist", () => {
     const set = singleBucket({ filters: [], groups: [] });
     const shortRow = Array.from({ length: COLUMNS("verificationType") }, () => "FBD");
-    expect(evaluateConditionSet(shortRow, COLUMNS, set, verificationFilters("fbd"))).toBeNull();
+    expect(evaluateConditionSet(shortRow, COLUMNS, set, verificationClause("fbd"))).toBeNull();
   });
 });
 

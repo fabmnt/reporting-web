@@ -8,7 +8,7 @@ import { internal } from "./_generated/api.js";
 import { runExecuteReport } from "./executeReport";
 import { appError, messageOf, sheetErrorFrom, type ReportSheetError } from "./model/appErrors";
 import type { ResolvedClinicSheetColumns } from "./model/clinicSheetColumns";
-import type { ExecuteVerificationFilter } from "./model/executeRules";
+import { verificationClause, type ExecuteVerificationFilter } from "./model/executeRules";
 import type { CredentialFallback, GoogleCredential } from "./model/googleCredentials";
 import {
   reportRunResult,
@@ -124,7 +124,9 @@ async function reportRunConfigForUser(
 export const runSheetReport = action({
   args: {
     runId: v.id("reportRuns"),
-    verificationFilter: v.optional(v.union(v.literal("all"), v.literal("fbd"), v.literal("elg"))),
+    verificationFilter: v.optional(
+      v.union(v.literal("all"), v.literal("both"), v.literal("fbd"), v.literal("elg"))
+    ),
     // The assigned clinics to read. Left out, the run covers every assigned
     // clinic.
     clinicIds: v.optional(v.array(v.id("clinics"))),
@@ -145,7 +147,8 @@ export const runSheetReport = action({
         ctx,
         args.runId,
         claim.params,
-        args.verificationFilter ?? "all",
+        // Without a choice the run reads the rows the old tool listed.
+        args.verificationFilter ?? "both",
         args.clinicIds
       );
     } catch (error) {
@@ -238,9 +241,9 @@ async function runReportSheets(
       startDate: params.startDate,
       endDate: params.endDate,
       // A carrier report narrows by verification type in code, so a type
-      // that hides the picker runs with the engine default instead of a
-      // choice left over from another report type.
-      verificationFilter: config.usesVerificationFilter ? verificationFilter : "all",
+      // that hides the picker runs with the two types the old tool listed
+      // instead of a choice left over from another report type.
+      verificationFilter: config.usesVerificationFilter ? verificationFilter : "both",
       userId: params.userId,
       reportTypeId: params.reportTypeId,
       reportTypeName: config.reportTypeName,
@@ -253,17 +256,11 @@ async function runReportSheets(
 
   // The verification choice is a run-level narrowing, not part of the stored
   // rules: it becomes one more clause every bucket has to satisfy. Only the
-  // report types that ask for it offer the picker.
-  const extraFilters: ConditionClause[] =
-    config.usesVerificationFilter && verificationFilter !== "all"
-      ? [
-          {
-            column: "verificationType",
-            operator: "contains",
-            values: [verificationFilter.toUpperCase()],
-          },
-        ]
-      : [];
+  // report types that ask for it offer the picker, and the choice that takes
+  // every row adds no clause.
+  const extraFilters: ConditionClause[] = config.usesVerificationFilter
+    ? verificationClause(verificationFilter)
+    : [];
 
   const bucketLabels = new Map(config.buckets.map((bucket) => [bucket.key, bucket.label]));
 

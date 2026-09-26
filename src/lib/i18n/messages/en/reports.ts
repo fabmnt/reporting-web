@@ -14,6 +14,7 @@ export const reports = {
   myReportTypes: "My report types",
   verificationType: "Verification type",
   verificationAll: "All",
+  verificationBoth: "Both",
   includedClinics: "Included clinics",
   noAssignedClinics: "No clinics assigned yet. Ask an admin to assign clinics to your account.",
   groups: {

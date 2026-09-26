@@ -1,6 +1,11 @@
+import type { ExecuteVerificationFilter } from "../../convex/model/executeRules";
+
 import { todayIso } from "./dates";
 
-export type VerificationFilter = "all" | "fbd" | "elg";
+// The verification types the run form offers, the same vocabulary the engines
+// read: `all` takes every row whatever its verification cell holds, and `both`
+// is the FBD or ELG narrowing the form has always opened with.
+export type VerificationFilter = ExecuteVerificationFilter;
 
 export type ReportFilters = {
   startDate: string;
@@ -28,7 +33,7 @@ const EXCLUDED_CLINICS_PARAM = "excludedClinics";
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
-const VERIFICATION_FILTERS: ReadonlyArray<VerificationFilter> = ["all", "fbd", "elg"];
+const VERIFICATION_FILTERS: ReadonlyArray<VerificationFilter> = ["all", "both", "fbd", "elg"];
 
 function isVerificationFilter(value: string | null): value is VerificationFilter {
   return VERIFICATION_FILTERS.some((filter) => filter === value);
@@ -64,7 +69,7 @@ export function readReportFilters(search: string): ReportFilters {
     // A missing report type means "the first one offered", which is also the
     // fallback of the picker.
     reportTypeId: params.get(REPORT_TYPE_PARAM) || null,
-    verification: isVerificationFilter(verification) ? verification : "all",
+    verification: isVerificationFilter(verification) ? verification : "both",
     groupIds: readIds(params.get(GROUPS_PARAM)),
     excludedClinicIds: readIds(params.get(EXCLUDED_CLINICS_PARAM)),
   };

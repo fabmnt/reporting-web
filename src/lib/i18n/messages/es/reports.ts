@@ -14,6 +14,7 @@ export const reports = {
   myReportTypes: "Mis tipos de reporte",
   verificationType: "Tipo de verificación",
   verificationAll: "Todos",
+  verificationBoth: "Ambos",
   includedClinics: "Clínicas incluidas",
   noAssignedClinics:
     "Aún no tienes clínicas asignadas. Pide a un administrador que te asigne clínicas.",

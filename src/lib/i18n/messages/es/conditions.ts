@@ -23,9 +23,9 @@ export const conditions = {
     "Este reporte lee cada fila que eligen las reglas de abajo, sin importar el carrier que indique la fila. Nunca le pregunta a la API de Control Central qué bots tiene una clínica.",
   verificationFilter: "Filtrar por tipo de verificación",
   verificationFilterNote:
-    "Muestra el selector de verificación en el formulario del reporte. El valor elegido allí restringe todos los grupos de filas.",
+    "Muestra el selector de verificación en el formulario del reporte. La opción elegida allí decide qué tipos de verificación conserva cada grupo de filas.",
   verificationFilterExecuteNote:
-    "Muestra el selector de verificación en el formulario del reporte. El valor elegido allí restringe las filas que lee el reporte.",
+    "Muestra el selector de verificación en el formulario del reporte. La opción elegida allí decide qué tipos de verificación lee el reporte.",
   confirmDelete: "Confirmar eliminación",
   deleteType: "Eliminar tipo de reporte",
   saveType: "Guardar tipo de reporte",
