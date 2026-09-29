@@ -254,6 +254,27 @@ function formatRowNumbers(rowNumbers: number[]): string {
   return rowNumbers.map((rowNumber) => `'${rowNumber}'`).join(", ");
 }
 
+// The unmatched rows of one tab grouped by the carrier cell they were read from.
+// Every group keeps its rows in sheet order, and the groups read by carrier name
+// with the rows whose carrier cell is empty, which name nothing, at the end.
+function groupRowsByCarrier(
+  rows: UnmatchedCarrierRow[]
+): Array<{ carrier: string; rowNumbers: number[] }> {
+  const rowNumbersByCarrier = new Map<string, number[]>();
+  for (const row of rows) {
+    const rowNumbers = rowNumbersByCarrier.get(row.carrier);
+    if (rowNumbers === undefined) rowNumbersByCarrier.set(row.carrier, [row.rowNumber]);
+    else rowNumbers.push(row.rowNumber);
+  }
+  return [...rowNumbersByCarrier.entries()]
+    .map(([carrier, rowNumbers]) => ({ carrier, rowNumbers: rowNumbers.sort((a, b) => a - b) }))
+    .sort((left, right) => {
+      if (left.carrier === "") return 1;
+      if (right.carrier === "") return -1;
+      return left.carrier.localeCompare(right.carrier);
+    });
+}
+
 /** The row numbers of one sheet in the shape they are copied in. */
 function rowNumberList(sheet: SheetResult): string {
   const rowNumbers = sheet.bucketRows
@@ -632,7 +653,6 @@ export function UnmatchedCarrierRowsCard({ rows }: { rows: UnmatchedCarrierRowsS
               const label = entry.tabTitle
                 ? `${entry.clinicName} · ${entry.tabTitle}`
                 : entry.clinicName;
-              const rowNumbers = formatRowNumbers(entry.rows.map((row) => row.rowNumber));
               return (
                 <div key={`${entry.clinicId}-${entry.tabTitle}`} className="flex flex-col gap-1.5">
                   <div className="flex flex-wrap items-center gap-2">
@@ -640,31 +660,41 @@ export function UnmatchedCarrierRowsCard({ rows }: { rows: UnmatchedCarrierRowsS
                     {entry.tabTitle === "" ? null : (
                       <h4 className="text-xs text-muted-foreground">{entry.tabTitle}</h4>
                     )}
-                    <CopyButton
-                      text={rowNumbers}
-                      label={t.reports.overview.copyFor(label)}
-                      copiedLabel={t.reports.overview.copiedFor(label)}
-                    />
                   </div>
                   <div className="overflow-hidden rounded-lg border">
                     <Table>
                       <TableHeader className="bg-muted/40">
                         <TableRow>
-                          <TableHead>{t.common.row}</TableHead>
                           <TableHead>{t.reports.unmatchedCarrierRows.carrier}</TableHead>
+                          <TableHead>{t.reports.unmatchedCarrierRows.rows}</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {entry.rows.map((row) => (
-                          <TableRow key={row.rowNumber}>
-                            <TableCell className="font-mono tabular-nums">
-                              {row.rowNumber}
-                            </TableCell>
-                            <TableCell className="max-w-40">
-                              <TruncatedText>{row.carrier || t.common.none}</TruncatedText>
-                            </TableCell>
-                          </TableRow>
-                        ))}
+                        {groupRowsByCarrier(entry.rows).map(({ carrier, rowNumbers }) => {
+                          const carrierName = carrier || t.common.none;
+                          const rowNumbersText = formatRowNumbers(rowNumbers);
+                          return (
+                            <TableRow key={carrier}>
+                              <TableCell className="max-w-40">
+                                <TruncatedText>{carrierName}</TruncatedText>
+                              </TableCell>
+                              <TableCell>
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <span className="font-mono text-xs tabular-nums">
+                                    {rowNumbersText}
+                                  </span>
+                                  <CopyButton
+                                    text={rowNumbersText}
+                                    label={t.reports.overview.copyFor(`${label} · ${carrierName}`)}
+                                    copiedLabel={t.reports.overview.copiedFor(
+                                      `${label} · ${carrierName}`
+                                    )}
+                                  />
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
                       </TableBody>
                     </Table>
                   </div>

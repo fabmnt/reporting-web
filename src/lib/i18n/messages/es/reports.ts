@@ -95,6 +95,7 @@ export const reports = {
     title: "Filas sin un bot que coincida",
     note: "Filas pendientes de ejecutar que ningún bot de la clínica puede ejecutar, por eso quedan fuera de los resultados de arriba.",
     carrier: "Carrier",
+    rows: "Filas",
   },
   results: {
     title: "Resultados",

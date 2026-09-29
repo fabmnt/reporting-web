@@ -208,7 +208,7 @@ describe("ResultsCard", () => {
 });
 
 describe("UnmatchedCarrierRowsCard", () => {
-  it("shows the carrier cell of every row without a matching bot", () => {
+  it("groups the rows without a matching bot by their carrier cell", () => {
     render(
       <I18nProvider>
         <UnmatchedCarrierRowsCard
@@ -218,8 +218,10 @@ describe("UnmatchedCarrierRowsCard", () => {
               clinicName: "Abilene",
               tabTitle: "2026-09-29",
               rows: [
-                { rowNumber: 4, carrier: "United Concordia" },
                 { rowNumber: 7, carrier: "" },
+                { rowNumber: 4, carrier: "United Concordia" },
+                { rowNumber: 5, carrier: "MetLife" },
+                { rowNumber: 9, carrier: "United Concordia" },
               ],
             },
           ]}
@@ -227,9 +229,15 @@ describe("UnmatchedCarrierRowsCard", () => {
       </I18nProvider>
     );
 
-    expect(screen.getByRole("cell", { name: "4" })).toBeVisible();
-    expect(screen.getByRole("cell", { name: "United Concordia" })).toBeVisible();
-    // A row whose carrier cell is empty is the one case with nothing to name.
-    expect(screen.getByRole("cell", { name: "—" })).toBeVisible();
+    expect(screen.getByRole("columnheader", { name: "Carrier" })).toBeVisible();
+    expect(screen.getByRole("columnheader", { name: "Rows" })).toBeVisible();
+    // The groups read by carrier name and the rows of each group keep their
+    // sheet order, both in the shape they are copied in.
+    const rowCells = screen.getAllByRole("row").slice(1);
+    expect(rowCells[0]).toHaveTextContent("MetLife'5'");
+    expect(rowCells[1]).toHaveTextContent("United Concordia'4', '9'");
+    // A row whose carrier cell is empty is the one case with nothing to name,
+    // so it reads after every carrier that does.
+    expect(rowCells[2]).toHaveTextContent("—'7'");
   });
 });
