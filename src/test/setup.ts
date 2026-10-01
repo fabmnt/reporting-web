@@ -14,3 +14,10 @@ if (typeof window !== "undefined" && typeof window.matchMedia !== "function") {
     dispatchEvent: () => false,
   })) as unknown as typeof window.matchMedia;
 }
+
+// jsdom has no object URLs, and the recovery-code download builds one. Tests
+// that inspect the file spy on these; the rest only need the calls to exist.
+if (typeof URL.createObjectURL !== "function") {
+  URL.createObjectURL = () => "blob:test";
+  URL.revokeObjectURL = () => undefined;
+}

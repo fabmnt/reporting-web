@@ -26,6 +26,9 @@ import { localizedError, localizedMessage, type LocalizedMessage } from "@/lib/i
 
 type Setup = FunctionReturnType<typeof api.twoFactor.beginSetup> & { password: string };
 
+// The name the recovery codes are saved under.
+const RECOVERY_CODES_FILE = "reporting-web-recovery-codes.txt";
+
 /**
  * The account security screen: turning the authenticator-app second factor on
  * and off. A freshly enabled factor answers with its recovery codes, which are
@@ -99,6 +102,20 @@ export function AccountSecurityPanel() {
     } catch {
       setCopyError(localizedMessage((messages) => messages.security.failures.copy));
     }
+  }
+
+  // Saves the same lines the copy button hands over, so a code can outlive the
+  // dialog without a clipboard that may be denied or emptied later.
+  function downloadRecoveryCodes() {
+    if (recoveryCodes === null) return;
+
+    const blob = new Blob([`${recoveryCodes.join("\n")}\n`], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = RECOVERY_CODES_FILE;
+    link.click();
+    URL.revokeObjectURL(url);
   }
 
   async function handleDisable(event: SyntheticEvent<HTMLFormElement>) {
@@ -224,6 +241,9 @@ export function AccountSecurityPanel() {
         <div className="flex flex-wrap gap-2">
           <Button type="button" variant="outline" onClick={() => void copyRecoveryCodes()}>
             {isCopied ? t.security.recovery.copied : t.security.recovery.copy}
+          </Button>
+          <Button type="button" variant="outline" onClick={downloadRecoveryCodes}>
+            {t.security.recovery.download}
           </Button>
           <Button
             type="button"

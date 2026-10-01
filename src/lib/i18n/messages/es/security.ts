@@ -26,6 +26,7 @@ export const security = {
       "Cada código inicia sesión una vez si pierdes tu teléfono. Solo se muestran esta vez.",
     copy: "Copiar códigos",
     copied: "Copiado",
+    download: "Descargar .txt",
     done: "Listo",
   },
   enabled: {

@@ -27,6 +27,7 @@ export const security = {
       "Each code signs you in once if you lose your phone. They are shown only this time.",
     copy: "Copy codes",
     copied: "Copied",
+    download: "Download .txt",
     done: "Done",
   },
   enabled: {
