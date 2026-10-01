@@ -26,6 +26,8 @@ export const errors = {
   TOTP_ALREADY_ENABLED: "Two-factor authentication is already on.",
   TOTP_NOT_PENDING: "Start the setup again to get a new key.",
   TOTP_NOT_ENABLED: "Two-factor authentication is already off.",
+  TOTP_SETUP_REQUIRED:
+    "Turn on two-factor authentication for your own account before resetting another account's.",
   CLIENT_NOT_FOUND: "Client was not found.",
   CLIENT_DISABLED: "This client is disabled.",
   CLIENT_NOT_ASSIGNED: "This client is not assigned to you.",

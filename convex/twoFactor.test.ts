@@ -235,6 +235,8 @@ describe("twoFactor admin reset", () => {
     const t = await setup();
     const admin = await createStaff(t, "root@example.com", "admin");
     const operator = await createStaff(t, "ada@example.com");
+    const adminSetup = await beginSetup(t, admin.identity);
+    await enableTwoFactor(t, admin.identity, adminSetup.secret);
     const { secret } = await beginSetup(t, operator.identity);
     const { recoveryCodes } = await enableTwoFactor(t, operator.identity, secret);
 
@@ -244,9 +246,13 @@ describe("twoFactor admin reset", () => {
       .catch((error: unknown) => appErrorPayloadOf(error));
     expect(refused).toEqual({ code: "ADMIN_REQUIRED" });
 
-    await t
-      .withIdentity(admin.identity)
-      .action(api.twoFactor.adminReset, { profileId: operator.profileId, password: PASSWORD });
+    // Enrollment already spent the current step's code, so the reset uses the
+    // next one, still inside the drift window.
+    await t.withIdentity(admin.identity).action(api.twoFactor.adminReset, {
+      profileId: operator.profileId,
+      password: PASSWORD,
+      code: await totpCodeAt(adminSetup.secret, timeStep(Date.now()) + 1),
+    });
 
     expect(
       await t.run((ctx) =>

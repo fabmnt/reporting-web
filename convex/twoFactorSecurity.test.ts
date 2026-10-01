@@ -245,6 +245,62 @@ describe("two-factor security regressions", () => {
     expect(await t.run((ctx) => ctx.db.get("twoFactorCredentials", targetCredentialId))).toBeNull();
   });
 
+  it("refuses a password-only reset from an administrator without their own factor", async () => {
+    const { t, identity } = await fixture("admin", false);
+    const targetUserId = await t.run((ctx) => ctx.db.insert("users", { email: "bea" }));
+    const profileId = await t.run((ctx) =>
+      ctx.db.insert("staffProfiles", {
+        userId: targetUserId,
+        displayName: "Bea",
+        role: "operator",
+        status: "active",
+      })
+    );
+    const targetCredentialId = await t.run((ctx) =>
+      ctx.db.insert("twoFactorCredentials", {
+        userId: targetUserId,
+        secret: SECRET,
+        enabledAt: NOW,
+        lastUsedStep: 0,
+        recoveryCodeHashes: [],
+      })
+    );
+    expect(
+      await t
+        .withIdentity(identity)
+        .action(api.twoFactor.adminReset, { profileId, password: PASSWORD })
+        .catch(appErrorPayloadOf)
+    ).toEqual({ code: "TOTP_SETUP_REQUIRED" });
+    expect(
+      await t.run((ctx) => ctx.db.get("twoFactorCredentials", targetCredentialId))
+    ).not.toBeNull();
+  });
+
+  it("does not spend the administrator's code when the target is gone", async () => {
+    const { t, userId, identity } = await fixture("admin");
+    const targetUserId = await t.run((ctx) => ctx.db.insert("users", { email: "bea" }));
+    const profileId = await t.run((ctx) =>
+      ctx.db.insert("staffProfiles", {
+        userId: targetUserId,
+        displayName: "Bea",
+        role: "operator",
+        status: "active",
+      })
+    );
+    await t.run((ctx) => ctx.db.delete("staffProfiles", profileId));
+    const code = await totpCodeAt(SECRET, timeStep(NOW));
+    expect(
+      await t
+        .withIdentity(identity)
+        .action(api.twoFactor.adminReset, { profileId, password: PASSWORD, code })
+        .catch(appErrorPayloadOf)
+    ).toEqual({ code: "PROFILE_NOT_FOUND" });
+    // The failed reset never consumed the code, so a sign-in still accepts it.
+    expect(await t.mutation(internal.twoFactor.consumeSignInCode, { userId, code, now: NOW })).toBe(
+      "ok"
+    );
+  });
+
   it("does not disclose an enrollment secret for the wrong password", async () => {
     const { t, identity, userId } = await fixture("operator", false);
     expect(

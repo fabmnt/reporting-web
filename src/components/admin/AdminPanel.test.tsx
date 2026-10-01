@@ -106,7 +106,7 @@ beforeEach(() => {
   useQueryMock.mockImplementation((reference: AnyFunctionReference) => {
     switch (nameOf(reference)) {
       case nameOf(api.twoFactor.status):
-        return { enabled: false, recoveryCodesRemaining: 0 };
+        return { enabled: true, recoveryCodesRemaining: 10 };
       case QUERY_NAMES.current:
         return ADMIN_ACCOUNT;
       case QUERY_NAMES.listManaged:
@@ -188,13 +188,40 @@ describe("AdminAccountsPanel", () => {
     expect(resetTwoFactor).not.toHaveBeenCalled();
 
     await user.type(within(dialog).getByLabelText("Password"), "admin-password");
+    await user.type(within(dialog).getByLabelText("Verification code"), "123456");
     await user.click(within(dialog).getByRole("button", { name: "Reset" }));
 
     await waitFor(() =>
       expect(resetTwoFactor).toHaveBeenCalledWith({
         profileId: "profile-2",
         password: "admin-password",
+        code: "123456",
       })
     );
+  });
+
+  it("keeps the reset closed while the administrator has no factor of their own", async () => {
+    const user = userEvent.setup();
+    useQueryMock.mockImplementation((reference: AnyFunctionReference) => {
+      switch (nameOf(reference)) {
+        case nameOf(api.twoFactor.status):
+          return { enabled: false, recoveryCodesRemaining: 0 };
+        case QUERY_NAMES.current:
+          return ADMIN_ACCOUNT;
+        case QUERY_NAMES.listManaged:
+          return { accounts: [ADMIN_ACCOUNT, OPERATOR_ACCOUNT], limit: 100 };
+        default:
+          return undefined;
+      }
+    });
+    renderPanel();
+
+    const row = screen.getByRole("row", { name: /Bea/ });
+    await user.click(within(row).getByRole("button", { name: "Reset" }));
+
+    const dialog = await screen.findByRole("alertdialog");
+    expect(within(dialog).getByText("Turn on your own two-factor first")).toBeVisible();
+    expect(within(dialog).getByRole("button", { name: "Reset" })).toBeDisabled();
+    expect(resetTwoFactor).not.toHaveBeenCalled();
   });
 });

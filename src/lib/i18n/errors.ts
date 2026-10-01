@@ -54,6 +54,8 @@ function renderAppError(payload: AppErrorPayload, t: Messages): string | null {
       return e.TOTP_NOT_PENDING;
     case "TOTP_NOT_ENABLED":
       return e.TOTP_NOT_ENABLED;
+    case "TOTP_SETUP_REQUIRED":
+      return e.TOTP_SETUP_REQUIRED;
     case "CLIENT_NOT_FOUND":
       return e.CLIENT_NOT_FOUND;
     case "CLIENT_DISABLED":

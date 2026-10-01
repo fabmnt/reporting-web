@@ -48,6 +48,9 @@ export const admin = {
         "La cuenta iniciará sesión solo con contraseña hasta que configure de nuevo una app de autenticación.",
       resetConfirm: "Restablecer",
       resetFailed: "No se pudo restablecer la autenticación en dos pasos.",
+      ownFactorTitle: "Activa primero tu autenticación en dos pasos",
+      ownFactorRequired:
+        "Un administrador solo puede restablecer la autenticación en dos pasos de otra cuenta después de confirmar la suya. Actívala en tu cuenta desde la página de seguridad y vuelve a intentarlo.",
     },
     assignments: {
       action: "Asignaciones",

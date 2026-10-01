@@ -28,6 +28,9 @@ export type AppErrorPayload =
   | { code: "TOTP_ALREADY_ENABLED" }
   | { code: "TOTP_NOT_PENDING" }
   | { code: "TOTP_NOT_ENABLED" }
+  // An administrator can only reset another account's factor after confirming
+  // their own, so an account without one has to set it up first.
+  | { code: "TOTP_SETUP_REQUIRED" }
   | { code: "CANNOT_RESET_OWN_TWO_FACTOR" }
   | { code: "CLIENT_NOT_FOUND" }
   | { code: "CLIENT_DISABLED" }

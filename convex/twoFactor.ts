@@ -251,29 +251,41 @@ export const adminReset = action({
     const { userId, profileId } = await ctx.runQuery(internal.staffAuth.currentAdmin, {});
     if (args.profileId === profileId) throw appError({ code: "CANNOT_RESET_OWN_TWO_FACTOR" });
     await verifyPassword(ctx, userId, args.password);
-    const result: Verdict = await ctx.runMutation(internal.twoFactor.consumeSignInCode, {
-      userId,
+    const result: Verdict = await ctx.runMutation(internal.twoFactor.resetOtherAccount, {
+      profileId: args.profileId,
       code: args.code ?? null,
       now: Date.now(),
     });
     requireValidCode(result);
-    await ctx.runMutation(internal.twoFactor.resetOtherAccount, { profileId: args.profileId });
     return null;
   },
 });
 
+/** One transaction: the target is checked, the caller's code is consumed, and
+ * its factor is removed. A failure after the code check rolls the consumption
+ * back, so a code is only spent on a reset that happened. */
 export const resetOtherAccount = internalMutation({
-  args: { profileId: v.id("staffProfiles") },
-  returns: v.null(),
+  args: {
+    profileId: v.id("staffProfiles"),
+    code: v.union(v.string(), v.null()),
+    now: v.number(),
+  },
+  returns: verdict,
   handler: async (ctx, args) => {
     const { userId } = await requireAdmin(ctx);
     const profile = await ctx.db.get("staffProfiles", args.profileId);
     if (profile === null) throw appError({ code: "PROFILE_NOT_FOUND" });
     if (profile.userId === userId) throw appError({ code: "CANNOT_RESET_OWN_TWO_FACTOR" });
-    const row = await credential(ctx, profile.userId);
-    if (row !== null) await ctx.db.delete("twoFactorCredentials", row._id);
+    const own = await credential(ctx, userId);
+    // A password alone cannot undo another account's factor: the caller proves
+    // a factor of their own, and an account without one has to set it up first.
+    if (own?.enabledAt === undefined) throw appError({ code: "TOTP_SETUP_REQUIRED" });
+    const result = await consumeCode(ctx, own, args.code, args.now);
+    if (result !== "ok") return result;
+    const target = await credential(ctx, profile.userId);
+    if (target !== null) await ctx.db.delete("twoFactorCredentials", target._id);
     await revokeOtherSessions(ctx, profile.userId);
-    return null;
+    return "ok" as const;
   },
 });
 

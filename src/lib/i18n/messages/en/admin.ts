@@ -48,6 +48,9 @@ export const admin = {
         "The account will sign in with only a password until it sets up an authenticator app again.",
       resetConfirm: "Reset",
       resetFailed: "Resetting the two-factor authentication failed.",
+      ownFactorTitle: "Turn on your own two-factor first",
+      ownFactorRequired:
+        "An administrator can only reset another account's two-factor setup after confirming their own. Turn on two-factor authentication for your account on the security page, then try again.",
     },
     assignments: {
       action: "Assignments",

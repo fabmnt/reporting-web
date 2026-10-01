@@ -33,10 +33,13 @@ export function TwoFactorResetDialog({
   const formId = useId();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<LocalizedMessage | null>(null);
+  // A password alone must not undo another account's factor, so the reset stays
+  // closed until the administrator has a factor of their own to confirm.
+  const canReset = ownFactor?.enabled === true;
 
   async function submit(event: SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (pending || ownFactor === undefined) return;
+    if (pending || !canReset) return;
     const data = new FormData(event.currentTarget);
     setPending(true);
     setError(null);
@@ -44,7 +47,7 @@ export function TwoFactorResetDialog({
       await reset({
         profileId: account.profileId,
         password: String(data.get("password") ?? ""),
-        ...(ownFactor.enabled ? { code: String(data.get("code") ?? "") } : {}),
+        code: String(data.get("code") ?? ""),
       });
       onClose();
     } catch (cause) {
@@ -78,11 +81,11 @@ export function TwoFactorResetDialog({
                 type="password"
                 autoComplete="current-password"
                 required
-                disabled={pending}
+                disabled={pending || !canReset}
               />
               <FieldDescription>{t.admin.accounts.twoFactor.passwordHint}</FieldDescription>
             </Field>
-            {ownFactor?.enabled ? (
+            {canReset ? (
               <Field>
                 <FieldLabel htmlFor={`${formId}-code`}>{t.app.auth.verificationCode}</FieldLabel>
                 <Input
@@ -97,6 +100,12 @@ export function TwoFactorResetDialog({
             ) : null}
           </FieldGroup>
         </form>
+        {ownFactor !== undefined && !ownFactor.enabled ? (
+          <Alert>
+            <AlertTitle>{t.admin.accounts.twoFactor.ownFactorTitle}</AlertTitle>
+            <AlertDescription>{t.admin.accounts.twoFactor.ownFactorRequired}</AlertDescription>
+          </Alert>
+        ) : null}
         {error ? (
           <Alert variant="destructive">
             <AlertTitle>{t.admin.accounts.twoFactor.resetTitle}</AlertTitle>
@@ -109,7 +118,7 @@ export function TwoFactorResetDialog({
             variant="destructive"
             type="submit"
             form={formId}
-            disabled={pending || ownFactor === undefined}
+            disabled={pending || !canReset}
           >
             {pending ? <Spinner data-icon="inline-start" /> : null}
             {t.admin.accounts.twoFactor.resetConfirm}
