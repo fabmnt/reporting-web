@@ -18,7 +18,12 @@ import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { I18nProvider, useDocumentTitle, useI18n } from "@/lib/i18n/context";
-import { localizedError, localizedMessage, type LocalizedMessage } from "@/lib/i18n/errors";
+import {
+  appErrorCode,
+  localizedError,
+  localizedMessage,
+  type LocalizedMessage,
+} from "@/lib/i18n/errors";
 
 import { ConvexAuthRoot } from "./ConvexAuthRoot";
 
@@ -76,6 +81,14 @@ function SetPasswordForm() {
       await signIn("password", { username, password, flow: "signIn" });
       window.location.replace("/");
     } catch (cause) {
+      // An account with a second factor cannot be signed in from here: the
+      // sign-in asks for an authenticator code, and that form is the one that
+      // carries it. The password is set either way, so the user only has to
+      // sign in again.
+      if (appErrorCode(cause) === "TOTP_REQUIRED") {
+        window.location.replace("/sign-in");
+        return;
+      }
       setError(localizedError(cause, (messages) => messages.app.auth.setPasswordFailed));
       setIsSubmitting(false);
     }

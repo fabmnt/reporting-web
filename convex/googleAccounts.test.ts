@@ -32,7 +32,13 @@ async function signInAdmin(t: Test) {
     })
   );
 
-  return { subject: userId };
+  const sessionId = await t.run((ctx) =>
+    ctx.db.insert("authSessions", {
+      userId,
+      expirationTime: Date.now() + 3_600_000,
+    })
+  );
+  return { subject: `${userId}|${sessionId}` };
 }
 
 function accountRow(email: string, clientCount?: number) {

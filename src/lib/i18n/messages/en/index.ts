@@ -5,6 +5,7 @@ import { common } from "./common";
 import { conditions } from "./conditions";
 import { errors } from "./errors";
 import { reports } from "./reports";
+import { security } from "./security";
 
 // English is the source of truth for the message shape: every other language
 // is checked against this type, so a missing entry fails the build.
@@ -16,6 +17,7 @@ export const en = {
   conditions,
   clinics,
   admin,
+  security,
 };
 
 export type Messages = typeof en;

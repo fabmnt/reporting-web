@@ -42,6 +42,18 @@ function renderAppError(payload: AppErrorPayload, t: Messages): string | null {
       return e.PASSWORD_TOO_SHORT;
     case "PASSWORD_SETUP_LINK_INVALID":
       return e.PASSWORD_SETUP_LINK_INVALID;
+    case "CANNOT_RESET_OWN_TWO_FACTOR":
+      return e.CANNOT_RESET_OWN_TWO_FACTOR;
+    case "TOTP_REQUIRED":
+      return e.TOTP_REQUIRED;
+    case "TOTP_INVALID":
+      return e.TOTP_INVALID;
+    case "TOTP_ALREADY_ENABLED":
+      return e.TOTP_ALREADY_ENABLED;
+    case "TOTP_NOT_PENDING":
+      return e.TOTP_NOT_PENDING;
+    case "TOTP_NOT_ENABLED":
+      return e.TOTP_NOT_ENABLED;
     case "CLIENT_NOT_FOUND":
       return e.CLIENT_NOT_FOUND;
     case "CLIENT_DISABLED":
@@ -139,6 +151,12 @@ export function errorText(error: unknown, t: Messages): string {
     return error.message;
   }
   return String(error);
+}
+
+// The code behind a caught error, for the few callers that have to branch on
+// it instead of rendering a sentence.
+export function appErrorCode(error: unknown): AppErrorPayload["code"] | null {
+  return appErrorPayloadOf(error)?.code ?? null;
 }
 
 // A sentence kept in state until it renders, so a language change also rewrites

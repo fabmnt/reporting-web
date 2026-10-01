@@ -12,6 +12,7 @@ export const admin = {
       password: "Contraseña",
       assignments: "Asignaciones",
       enabled: "Habilitada",
+      twoFactor: "2FA",
     },
     roleFor: (name: string) => `Rol de ${name}`,
     statusFor: (name: string) => `Estado de la cuenta de ${name}`,
@@ -33,6 +34,20 @@ export const admin = {
       copy: "Copiar enlace",
       copied: "Copiado",
       failedTitle: "No se pudo crear el enlace",
+    },
+    twoFactor: {
+      on: "Activada",
+      off: "Desactivada",
+      passwordHint: "Ingresa tu propia contraseña para autorizar el restablecimiento.",
+      codeHint: "Ingresa un código de tu propia app de autenticación o un código de recuperación.",
+      resetAction: "Restablecer",
+      resetTitle: "Restablecer la autenticación en dos pasos",
+      resetDescriptionFor: (name: string) =>
+        `${name} iniciará sesión solo con contraseña hasta que configure de nuevo una app de autenticación.`,
+      resetDescriptionGeneric:
+        "La cuenta iniciará sesión solo con contraseña hasta que configure de nuevo una app de autenticación.",
+      resetConfirm: "Restablecer",
+      resetFailed: "No se pudo restablecer la autenticación en dos pasos.",
     },
     assignments: {
       action: "Asignaciones",

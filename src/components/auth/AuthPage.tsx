@@ -12,11 +12,11 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { I18nProvider, useDocumentTitle, useI18n } from "@/lib/i18n/context";
-import { localizedError, type LocalizedMessage } from "@/lib/i18n/errors";
+import { appErrorCode, localizedError, type LocalizedMessage } from "@/lib/i18n/errors";
 
 import { ConvexAuthRoot } from "./ConvexAuthRoot";
 
@@ -28,6 +28,10 @@ function AuthForm({ mode }: { mode: AuthMode }) {
   const { t } = useI18n();
   const [error, setError] = useState<LocalizedMessage | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // The account has a second factor, so the form asks for its code. The
+  // username and password fields stay filled, and a second submit carries all
+  // three values.
+  const [needsVerificationCode, setNeedsVerificationCode] = useState(false);
   const isSignIn = mode === "signIn";
 
   useDocumentTitle(isSignIn ? t.app.titles.signIn : t.app.titles.signUp);
@@ -47,6 +51,13 @@ function AuthForm({ mode }: { mode: AuthMode }) {
     try {
       await signIn("password", formData);
     } catch (cause) {
+      // The backend answered that this account needs an authenticator code.
+      // That is not a failure to show, it is the next step of the form.
+      if (isSignIn && appErrorCode(cause) === "TOTP_REQUIRED") {
+        setNeedsVerificationCode(true);
+        setIsSubmitting(false);
+        return;
+      }
       setError(localizedError(cause, (t) => t.app.auth.failed));
       setIsSubmitting(false);
     }
@@ -100,8 +111,27 @@ function AuthForm({ mode }: { mode: AuthMode }) {
                 minLength={8}
                 required
               />
-              <FieldError>{error?.resolve(t)}</FieldError>
+              {needsVerificationCode ? null : <FieldError>{error?.resolve(t)}</FieldError>}
             </Field>
+            {isSignIn && needsVerificationCode ? (
+              <Field data-invalid={error !== null}>
+                <FieldLabel htmlFor="totpCode">{t.app.auth.verificationCode}</FieldLabel>
+                <Input
+                  id="totpCode"
+                  name="totpCode"
+                  type="text"
+                  autoComplete="one-time-code"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  aria-invalid={error !== null}
+                  autoFocus
+                  required
+                />
+                <FieldDescription>{t.app.auth.verificationCodeHint}</FieldDescription>
+                <FieldError>{error?.resolve(t)}</FieldError>
+              </Field>
+            ) : null}
           </FieldGroup>
         </form>
       </CardContent>

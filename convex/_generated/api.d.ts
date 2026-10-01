@@ -47,6 +47,7 @@ import type * as model_reportTypes from "../model/reportTypes.js";
 import type * as model_reporting from "../model/reporting.js";
 import type * as model_staff from "../model/staff.js";
 import type * as model_tokens from "../model/tokens.js";
+import type * as model_totp from "../model/totp.js";
 import type * as model_usernames from "../model/usernames.js";
 import type * as passwordSetup from "../passwordSetup.js";
 import type * as reportGroups from "../reportGroups.js";
@@ -56,6 +57,7 @@ import type * as reports from "../reports.js";
 import type * as sheets from "../sheets.js";
 import type * as staffAccounts from "../staffAccounts.js";
 import type * as staffAuth from "../staffAuth.js";
+import type * as twoFactor from "../twoFactor.js";
 
 import type {
   ApiFromModules,
@@ -103,6 +105,7 @@ declare const fullApi: ApiFromModules<{
   "model/reporting": typeof model_reporting;
   "model/staff": typeof model_staff;
   "model/tokens": typeof model_tokens;
+  "model/totp": typeof model_totp;
   "model/usernames": typeof model_usernames;
   passwordSetup: typeof passwordSetup;
   reportGroups: typeof reportGroups;
@@ -112,6 +115,7 @@ declare const fullApi: ApiFromModules<{
   sheets: typeof sheets;
   staffAccounts: typeof staffAccounts;
   staffAuth: typeof staffAuth;
+  twoFactor: typeof twoFactor;
 }>;
 
 /**

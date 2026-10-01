@@ -6,6 +6,7 @@ import { common } from "./common";
 import { conditions } from "./conditions";
 import { errors } from "./errors";
 import { reports } from "./reports";
+import { security } from "./security";
 
 export const es: Messages = {
   common,
@@ -15,4 +16,5 @@ export const es: Messages = {
   conditions,
   clinics,
   admin,
+  security,
 };
