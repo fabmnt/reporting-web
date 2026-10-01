@@ -98,6 +98,8 @@ export const reports = {
   results: {
     title: "Results",
     rows: (count: number) => (count === 1 ? "1 row" : `${count} rows`),
+    clinicsWithResults: (count: number) =>
+      count === 1 ? "1 clinic with results" : `${count} clinics with results`,
     carriers: "Carriers",
     noneProcessed: "No sheets were processed. Check your assigned clinics and the selected dates.",
     sheetError: "Sheet error",

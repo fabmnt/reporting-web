@@ -736,6 +736,9 @@ export function OverviewCard({ result }: { result: ReportResult }) {
           <Badge variant="secondary" className="tabular-nums">
             {t.reports.results.rows(countRows(result))}
           </Badge>
+          <Badge variant="secondary" className="tabular-nums">
+            {t.reports.results.clinicsWithResults(groups.length)}
+          </Badge>
           <CopyButton
             className="ml-auto"
             text={overviewText(groups)}

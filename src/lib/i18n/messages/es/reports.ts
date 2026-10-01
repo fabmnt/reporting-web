@@ -100,6 +100,8 @@ export const reports = {
   results: {
     title: "Resultados",
     rows: (count: number) => (count === 1 ? "1 fila" : `${count} filas`),
+    clinicsWithResults: (count: number) =>
+      count === 1 ? "1 clínica con resultados" : `${count} clínicas con resultados`,
     carriers: "Carriers",
     noneProcessed:
       "No se procesó ninguna hoja. Revisa tus clínicas asignadas y las fechas elegidas.",

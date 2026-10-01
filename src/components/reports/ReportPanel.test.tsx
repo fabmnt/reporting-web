@@ -179,6 +179,8 @@ describe("ReportRunner", () => {
 
     expect(await screen.findByText("'2', '3'")).toBeVisible();
     expect(screen.getAllByText("2 rows")).toHaveLength(2);
+    // The overview counts the clinic that came back with rows, not just its rows.
+    expect(screen.getByText("1 clinic with results")).toBeVisible();
     expect(runRows()).toHaveLength(1);
 
     // Switch the report type without running again.
