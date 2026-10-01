@@ -1,6 +1,15 @@
 import { useAuthActions } from "@convex-dev/auth/react";
 import { useMutation } from "convex/react";
-import { ChevronDown, CircleUser, Languages, LogOut, Monitor, Moon, Sun } from "lucide-react";
+import {
+  ChevronDown,
+  CircleUser,
+  Languages,
+  LogOut,
+  Monitor,
+  Moon,
+  ShieldCheck,
+  Sun,
+} from "lucide-react";
 
 import { api } from "../../../convex/_generated/api";
 import { LOCALES, LOCALE_NAMES, type Locale } from "@/lib/i18n/locales";
@@ -25,6 +34,7 @@ import {
 import { useTheme } from "@/components/theme/useTheme";
 
 import type { CurrentAccount } from "./AppHeader";
+import { useNavigation } from "./navigation";
 import { TruncatedText } from "./TruncatedText";
 
 const THEME_ICON: Record<Theme, typeof Sun> = {
@@ -34,6 +44,7 @@ const THEME_ICON: Record<Theme, typeof Sun> = {
 };
 
 const SIGN_IN_PATH = "/sign-in";
+const SECURITY_PATH = "/account/security";
 
 /**
  * The account controls: who is signed in, the language, the theme, and signing
@@ -49,6 +60,7 @@ export function AccountMenu({
 }) {
   const { signOut } = useAuthActions();
   const { locale, setLocale, t } = useI18n();
+  const navigate = useNavigation().navigate;
   const theme = useTheme();
   const setLanguage = useMutation(api.staffAccounts.setLanguage);
   const canAdmin = account.role === "admin" && account.status === "active";
@@ -156,6 +168,12 @@ export function AccountMenu({
             </DropdownMenuRadioGroup>
           </DropdownMenuSubContent>
         </DropdownMenuSub>
+        <DropdownMenuGroup>
+          <DropdownMenuItem className="py-1.5" onClick={() => navigate(SECURITY_PATH)}>
+            <ShieldCheck />
+            {t.app.account.security}
+          </DropdownMenuItem>
+        </DropdownMenuGroup>
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
           <DropdownMenuItem

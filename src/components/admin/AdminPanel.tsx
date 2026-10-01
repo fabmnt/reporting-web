@@ -5,6 +5,7 @@ import { useId, useState } from "react";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { AccountAssignmentsDialog } from "@/components/admin/AccountAssignmentsDialog";
+import { TwoFactorResetDialog } from "@/components/admin/TwoFactorResetDialog";
 import { AdminTabs } from "@/components/app/AdminTabs";
 import { DataCard, DataCardList, DataCardRow, DataTableFrame } from "@/components/app/DataCard";
 import { PageHeader } from "@/components/app/PageHeader";
@@ -147,6 +148,37 @@ function AccountStatus({
   );
 }
 
+/** The state of the second factor of one account, with its reset action. */
+function AccountTwoFactor({
+  account,
+  disabled,
+  onReset,
+}: {
+  account: ManagedAccountView;
+  disabled: boolean;
+  onReset: (profileId: Id<"staffProfiles">) => void;
+}) {
+  const { t } = useI18n();
+
+  return (
+    <div className="flex items-center gap-2">
+      <Badge variant={account.twoFactorEnabled ? "secondary" : "outline"}>
+        {account.twoFactorEnabled ? t.admin.accounts.twoFactor.on : t.admin.accounts.twoFactor.off}
+      </Badge>
+      {account.twoFactorEnabled && !account.isCurrentUser ? (
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={disabled}
+          onClick={() => onReset(account.profileId)}
+        >
+          {t.admin.accounts.twoFactor.resetAction}
+        </Button>
+      ) : null}
+    </div>
+  );
+}
+
 export function AdminAccountsPanel() {
   const { t } = useI18n();
   const setRole = useMutation(api.staffAccounts.setRole);
@@ -159,6 +191,7 @@ export function AdminAccountsPanel() {
   const [error, setError] = useState<LocalizedMessage | null>(null);
   const [linkProfileId, setLinkProfileId] = useState<Id<"staffProfiles"> | null>(null);
   const [assignProfileId, setAssignProfileId] = useState<Id<"staffProfiles"> | null>(null);
+  const [resetProfileId, setResetProfileId] = useState<Id<"staffProfiles"> | null>(null);
   const [generatedLink, setGeneratedLink] = useState<string | null>(null);
   const [linkError, setLinkError] = useState<LocalizedMessage | null>(null);
   const [isCreatingLink, setIsCreatingLink] = useState(false);
@@ -235,6 +268,11 @@ export function AdminAccountsPanel() {
     }
   }
 
+  function openTwoFactorReset(profileId: Id<"staffProfiles">) {
+    setError(null);
+    setResetProfileId(profileId);
+  }
+
   useDocumentTitle(t.app.titles.accounts);
 
   const header = <PageHeader title={t.admin.accounts.pageTitle} />;
@@ -261,6 +299,10 @@ export function AdminAccountsPanel() {
   const assignAccount =
     assignProfileId !== null
       ? (managed?.accounts.find((account) => account.profileId === assignProfileId) ?? null)
+      : null;
+  const resetAccount =
+    resetProfileId !== null
+      ? (managed?.accounts.find((account) => account.profileId === resetProfileId) ?? null)
       : null;
 
   return (
@@ -294,6 +336,7 @@ export function AdminAccountsPanel() {
                     <TableHead>{t.admin.accounts.table.account}</TableHead>
                     <TableHead>{t.admin.accounts.table.role}</TableHead>
                     <TableHead>{t.admin.accounts.table.password}</TableHead>
+                    <TableHead>{t.admin.accounts.table.twoFactor}</TableHead>
                     <TableHead>{t.admin.accounts.table.assignments}</TableHead>
                     <TableHead>{t.admin.accounts.table.enabled}</TableHead>
                   </TableRow>
@@ -324,6 +367,13 @@ export function AdminAccountsPanel() {
                             profileId={account.profileId}
                             disabled={isPending}
                             onOpen={openPasswordLink}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <AccountTwoFactor
+                            account={account}
+                            disabled={isPending}
+                            onReset={openTwoFactorReset}
                           />
                         </TableCell>
                         <TableCell>
@@ -372,6 +422,13 @@ export function AdminAccountsPanel() {
                         profileId={account.profileId}
                         disabled={isPending}
                         onOpen={openPasswordLink}
+                      />
+                    </DataCardRow>
+                    <DataCardRow label={t.admin.accounts.table.twoFactor}>
+                      <AccountTwoFactor
+                        account={account}
+                        disabled={isPending}
+                        onReset={openTwoFactorReset}
                       />
                     </DataCardRow>
                     <DataCardRow label={t.admin.accounts.table.assignments}>
@@ -455,6 +512,10 @@ export function AdminAccountsPanel() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {resetAccount === null ? null : (
+        <TwoFactorResetDialog account={resetAccount} onClose={() => setResetProfileId(null)} />
+      )}
 
       {assignAccount === null ? null : (
         // Keyed by account so every open starts from the assignment the row

@@ -24,6 +24,7 @@ export function ConfirmDeleteDialog({
   confirmLabel,
   pending,
   error,
+  errorTitle,
   onConfirm,
 }: {
   open: boolean;
@@ -33,6 +34,8 @@ export function ConfirmDeleteDialog({
   confirmLabel: string;
   pending: boolean;
   error: LocalizedMessage | null;
+  // Some callers reset rather than delete; the title names what failed.
+  errorTitle?: string;
   onConfirm: () => void;
 }) {
   const { t } = useI18n();
@@ -46,7 +49,7 @@ export function ConfirmDeleteDialog({
         </AlertDialogHeader>
         {error ? (
           <Alert variant="destructive">
-            <AlertTitle>{t.common.deleteFailedTitle}</AlertTitle>
+            <AlertTitle>{errorTitle ?? t.common.deleteFailedTitle}</AlertTitle>
             <AlertDescription>{error.resolve(t)}</AlertDescription>
           </Alert>
         ) : null}

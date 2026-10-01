@@ -1,16 +1,26 @@
-import { getAuthUserId } from "@convex-dev/auth/server";
+import { getAuthSessionId, getAuthUserId } from "@convex-dev/auth/server";
 
 import type { Id } from "../_generated/dataModel";
-import type { ActionCtx, MutationCtx, QueryCtx } from "../_generated/server";
+import type { MutationCtx, QueryCtx } from "../_generated/server";
 import { appError } from "./appErrors";
 
 type StaffCtx = QueryCtx | MutationCtx;
-type StaffAuthCtx = StaffCtx | ActionCtx;
 
-export async function requireCurrentUserId(ctx: StaffAuthCtx) {
+export async function requireCurrentUserId(ctx: StaffCtx) {
   const userId = await getAuthUserId(ctx);
 
-  if (userId === null) {
+  const rawSessionId = await getAuthSessionId(ctx);
+  const sessionId = rawSessionId ? ctx.db.normalizeId("authSessions", rawSessionId) : null;
+  const session = sessionId === null ? null : await ctx.db.get("authSessions", sessionId);
+
+  // Access tokens outlive deleted sessions. Every protected operation must
+  // check the backing session rather than trusting the token alone.
+  if (
+    userId === null ||
+    session === null ||
+    session.userId !== userId ||
+    session.expirationTime <= Date.now()
+  ) {
     throw appError({ code: "UNAUTHENTICATED" });
   }
 

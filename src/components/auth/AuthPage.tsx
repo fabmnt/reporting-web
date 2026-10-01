@@ -12,11 +12,11 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { I18nProvider, useDocumentTitle, useI18n } from "@/lib/i18n/context";
-import { localizedError, type LocalizedMessage } from "@/lib/i18n/errors";
+import { appErrorCode, localizedError, type LocalizedMessage } from "@/lib/i18n/errors";
 
 import { ConvexAuthRoot } from "./ConvexAuthRoot";
 
@@ -28,6 +28,10 @@ function AuthForm({ mode }: { mode: AuthMode }) {
   const { t } = useI18n();
   const [error, setError] = useState<LocalizedMessage | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // The account has a second factor, so the form asks for its code. The
+  // username and password fields stay filled, and a second submit carries all
+  // three values.
+  const [needsVerificationCode, setNeedsVerificationCode] = useState(false);
   const isSignIn = mode === "signIn";
 
   useDocumentTitle(isSignIn ? t.app.titles.signIn : t.app.titles.signUp);
@@ -47,9 +51,30 @@ function AuthForm({ mode }: { mode: AuthMode }) {
     try {
       await signIn("password", formData);
     } catch (cause) {
+      const code = appErrorCode(cause);
+      // The backend answered that this account needs an authenticator code.
+      // That is not a failure to show, it is the next step of the form. An
+      // existing account answers the same while signing up.
+      if (code === "TOTP_REQUIRED") {
+        setNeedsVerificationCode(true);
+        setIsSubmitting(false);
+        return;
+      }
+      // The password was turned down after the code step, so the code is not
+      // what is wrong: drop the step and show the error under the fields it
+      // belongs to.
+      if (code === "INVALID_CREDENTIALS") setNeedsVerificationCode(false);
       setError(localizedError(cause, (t) => t.app.auth.failed));
       setIsSubmitting(false);
     }
+  }
+
+  // Editing the credentials starts the form over: the code step belongs to the
+  // attempt whose password just checked out.
+  function handleCredentialChange() {
+    if (!needsVerificationCode) return;
+    setNeedsVerificationCode(false);
+    setError(null);
   }
 
   return (
@@ -85,6 +110,7 @@ function AuthForm({ mode }: { mode: AuthMode }) {
                 autoCorrect="off"
                 spellCheck={false}
                 aria-invalid={error !== null}
+                onChange={handleCredentialChange}
                 required
               />
             </Field>
@@ -98,10 +124,30 @@ function AuthForm({ mode }: { mode: AuthMode }) {
                 autoComplete={isSignIn ? "current-password" : "new-password"}
                 aria-invalid={error !== null}
                 minLength={8}
+                onChange={handleCredentialChange}
                 required
               />
-              <FieldError>{error?.resolve(t)}</FieldError>
+              {needsVerificationCode ? null : <FieldError>{error?.resolve(t)}</FieldError>}
             </Field>
+            {needsVerificationCode ? (
+              <Field data-invalid={error !== null}>
+                <FieldLabel htmlFor="totpCode">{t.app.auth.verificationCode}</FieldLabel>
+                <Input
+                  id="totpCode"
+                  name="totpCode"
+                  type="text"
+                  autoComplete="one-time-code"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  aria-invalid={error !== null}
+                  autoFocus
+                  required
+                />
+                <FieldDescription>{t.app.auth.verificationCodeHint}</FieldDescription>
+                <FieldError>{error?.resolve(t)}</FieldError>
+              </Field>
+            ) : null}
           </FieldGroup>
         </form>
       </CardContent>

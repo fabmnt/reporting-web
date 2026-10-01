@@ -3,6 +3,7 @@ import { type ConvexCredentialsUserConfig } from "@convex-dev/auth/providers/Con
 import { convexAuth, type ConvexCredentialsConfig } from "@convex-dev/auth/server";
 import type { Value } from "convex/values";
 
+import { internal } from "./_generated/api.js";
 import { appError } from "./model/appErrors";
 import { usernameFromInput } from "./model/usernames";
 
@@ -63,6 +64,44 @@ const passwordWithLocalizedErrors: PasswordProvider = {
   },
 };
 
+// The authenticator-app second factor gates every flow that returns a user. The check runs after the password verified
+// and before `authorize` resolves, which is the only moment the auth library
+// has not created the session yet; a throw here leaves the client signed out.
+// A code arrives as its own parameter, not as `code`, because the library uses
+// `code` for the email-verification flows.
+const passwordWithTwoFactor: PasswordProvider = {
+  ...passwordWithLocalizedErrors,
+  options: {
+    ...passwordWithLocalizedErrors.options,
+    authorize: async (credentials, ctx) => {
+      const result = await passwordWithLocalizedErrors.options
+        .authorize(credentials, ctx)
+        .catch((cause: unknown) => {
+          throw localizedCredentialError(cause);
+        });
+
+      // Sign-up can return an existing account when its password matches.
+      // A genuinely new account has no enabled credential, so it passes.
+      if (result === null) return result;
+
+      const verdict: "ok" | "required" | "invalid" | "rateLimited" = await ctx.runMutation(
+        internal.twoFactor.consumeSignInCode,
+        {
+          userId: result.userId,
+          code: typeof credentials.totpCode === "string" ? credentials.totpCode : null,
+          now: Date.now(),
+        }
+      );
+
+      if (verdict === "required") throw appError({ code: "TOTP_REQUIRED" });
+      if (verdict === "invalid") throw appError({ code: "TOTP_INVALID" });
+      if (verdict === "rateLimited") throw appError({ code: "TOO_MANY_FAILED_ATTEMPTS" });
+
+      return result;
+    },
+  },
+};
+
 export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
-  providers: [passwordWithLocalizedErrors],
+  providers: [passwordWithTwoFactor],
 });

@@ -27,6 +27,9 @@ const currentAccount = v.object({
 const managedAccount = currentAccount.extend({
   isCurrentUser: v.boolean(),
   assignedClinicIds: v.array(v.id("clinics")),
+  // Whether the account's sign-in asks for an authenticator code. The reset
+  // action is only offered while this is true.
+  twoFactorEnabled: v.boolean(),
 });
 
 // Matches the cap the rest of the app reads profiles under, so an account that
@@ -144,6 +147,10 @@ export const listManaged = query({
     const accounts = await Promise.all(
       visibleProfiles.map(async (profile) => {
         const user = await ctx.db.get("users", profile.userId);
+        const twoFactor = await ctx.db
+          .query("twoFactorCredentials")
+          .withIndex("by_userId", (query) => query.eq("userId", profile.userId))
+          .unique();
         return {
           profileId: profile._id,
           userId: profile.userId,
@@ -154,6 +161,7 @@ export const listManaged = query({
           language: profile.language ?? null,
           isCurrentUser: profile.userId === userId,
           assignedClinicIds: profile.assignedClinicIds ?? [],
+          twoFactorEnabled: twoFactor !== null && twoFactor.enabledAt !== undefined,
         };
       })
     );

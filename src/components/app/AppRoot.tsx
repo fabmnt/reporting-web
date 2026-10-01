@@ -1,3 +1,4 @@
+import { AccountSecurityPanel } from "@/components/account/AccountSecurityPanel";
 import { AdminAccountsPanel } from "@/components/admin/AdminPanel";
 import { AdminReportTypesPanel } from "@/components/admin/AdminReportTypesPanel";
 import { AdminClientsPanel } from "@/components/admin/ClientsPanel";
@@ -16,6 +17,7 @@ const ROUTES: Record<string, () => React.JSX.Element> = {
   "/": ReportRunner,
   "/clinics": AssignedClinicsPanel,
   "/configuration": ConditionsPanel,
+  "/account/security": AccountSecurityPanel,
   "/admin": AdminAccountsPanel,
   "/admin/clients": AdminClientsPanel,
   "/admin/clinics": AdminClinicsPanel,

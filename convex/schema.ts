@@ -32,6 +32,22 @@ export default defineSchema({
     language: v.optional(staffLanguage),
   }).index("by_userId", ["userId"]),
 
+  // The authenticator-app second factor of an account, if any. A row exists
+  // while the user is still proving the first code as well: `enabledAt` is what
+  // turns it on. The secret is the base32 value the authenticator holds and is
+  // never returned by a query. Recovery codes are stored as hashes and are
+  // removed one by one as they are used.
+  twoFactorCredentials: defineTable({
+    userId: v.id("users"),
+    secret: v.string(),
+    // Missing while the user is still proving the first code.
+    enabledAt: v.optional(v.number()),
+    // The newest time step a code of this secret was accepted for, so the same
+    // code does not sign in twice.
+    lastUsedStep: v.number(),
+    recoveryCodeHashes: v.array(v.string()),
+  }).index("by_userId", ["userId"]),
+
   // One-shot links an administrator hands out so a person can choose their own
   // password. Only the hash of the token is stored, and creating a new link
   // deletes the previous one for that user.

@@ -31,6 +31,7 @@ export const app = {
     menu: "Menú de la cuenta",
     language: "Idioma",
     theme: "Tema",
+    security: "Seguridad",
     themes: {
       light: "Claro",
       dark: "Oscuro",
@@ -58,6 +59,9 @@ export const app = {
   auth: {
     username: "Nombre de usuario",
     password: "Contraseña",
+    verificationCode: "Código de verificación",
+    verificationCodeHint:
+      "Ingresa el código de 6 dígitos de tu app de autenticación, o un código de recuperación.",
     signInTitle: "Iniciar sesión",
     signUpTitle: "Crea tu cuenta",
     signInDescription: "Usa tu cuenta de Reporting Web.",
@@ -88,5 +92,6 @@ export const app = {
     signIn: "Iniciar sesión | Reporting Web",
     signUp: "Crear cuenta | Reporting Web",
     setPassword: "Definir contraseña | Reporting Web",
+    security: "Seguridad | Reporting Web",
   },
 };

@@ -19,6 +19,15 @@ export const errors = {
   PASSWORD_TOO_SHORT: "The password must be at least 8 characters long.",
   PASSWORD_SETUP_LINK_INVALID:
     "This link is not valid any more. Ask an administrator for a new one.",
+  CANNOT_RESET_OWN_TWO_FACTOR:
+    "Use the security page to turn off your own two-factor authentication.",
+  TOTP_REQUIRED: "Enter the code from your authenticator app.",
+  TOTP_INVALID: "That code is not valid. Try again.",
+  TOTP_ALREADY_ENABLED: "Two-factor authentication is already on.",
+  TOTP_NOT_PENDING: "Start the setup again to get a new key.",
+  TOTP_NOT_ENABLED: "Two-factor authentication is already off.",
+  TOTP_SETUP_REQUIRED:
+    "Turn on two-factor authentication for your own account before resetting another account's.",
   CLIENT_NOT_FOUND: "Client was not found.",
   CLIENT_DISABLED: "This client is disabled.",
   CLIENT_NOT_ASSIGNED: "This client is not assigned to you.",

@@ -12,6 +12,7 @@ export const admin = {
       password: "Password",
       assignments: "Assignments",
       enabled: "Enabled",
+      twoFactor: "2FA",
     },
     roleFor: (name: string) => `Role for ${name}`,
     statusFor: (name: string) => `Account status for ${name}`,
@@ -33,6 +34,23 @@ export const admin = {
       copy: "Copy link",
       copied: "Copied",
       failedTitle: "Could not create the link",
+    },
+    twoFactor: {
+      on: "On",
+      off: "Off",
+      passwordHint: "Enter your own password to authorize this reset.",
+      codeHint: "Enter a code from your own authenticator app, or a recovery code.",
+      resetAction: "Reset",
+      resetTitle: "Reset two-factor authentication",
+      resetDescriptionFor: (name: string) =>
+        `${name} will sign in with only a password until they set up an authenticator app again.`,
+      resetDescriptionGeneric:
+        "The account will sign in with only a password until it sets up an authenticator app again.",
+      resetConfirm: "Reset",
+      resetFailed: "Resetting the two-factor authentication failed.",
+      ownFactorTitle: "Turn on your own two-factor first",
+      ownFactorRequired:
+        "An administrator can only reset another account's two-factor setup after confirming their own. Turn on two-factor authentication for your account on the security page, then try again.",
     },
     assignments: {
       action: "Assignments",

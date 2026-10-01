@@ -18,6 +18,15 @@ export const errors = {
     "Solo un administrador puede cambiar las clínicas asignadas a tu cuenta.",
   PASSWORD_TOO_SHORT: "La contraseña debe tener al menos 8 caracteres.",
   PASSWORD_SETUP_LINK_INVALID: "Este enlace ya no es válido. Pídele a un administrador uno nuevo.",
+  CANNOT_RESET_OWN_TWO_FACTOR:
+    "Usa la página de seguridad para desactivar tu propia autenticación en dos pasos.",
+  TOTP_REQUIRED: "Ingresa el código de tu app de autenticación.",
+  TOTP_INVALID: "Ese código no es válido. Inténtalo de nuevo.",
+  TOTP_ALREADY_ENABLED: "La autenticación en dos pasos ya está activada.",
+  TOTP_NOT_PENDING: "Inicia la configuración de nuevo para obtener una clave nueva.",
+  TOTP_NOT_ENABLED: "La autenticación en dos pasos ya está desactivada.",
+  TOTP_SETUP_REQUIRED:
+    "Activa la autenticación en dos pasos en tu propia cuenta antes de restablecer la de otra cuenta.",
   CLIENT_NOT_FOUND: "No se encontró el cliente.",
   CLIENT_DISABLED: "Este cliente está deshabilitado.",
   CLIENT_NOT_ASSIGNED: "Este cliente no está asignado a tu cuenta.",

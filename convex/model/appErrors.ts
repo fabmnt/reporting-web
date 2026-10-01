@@ -20,6 +20,18 @@ export type AppErrorPayload =
   | { code: "CANNOT_ASSIGN_OWN_CLINICS" }
   | { code: "PASSWORD_TOO_SHORT" }
   | { code: "PASSWORD_SETUP_LINK_INVALID" }
+  // The second factor of the account: the password checked out but the
+  // authenticator code is missing or wrong, or the state of the factor does not
+  // match the action.
+  | { code: "TOTP_REQUIRED" }
+  | { code: "TOTP_INVALID" }
+  | { code: "TOTP_ALREADY_ENABLED" }
+  | { code: "TOTP_NOT_PENDING" }
+  | { code: "TOTP_NOT_ENABLED" }
+  // An administrator can only reset another account's factor after confirming
+  // their own, so an account without one has to set it up first.
+  | { code: "TOTP_SETUP_REQUIRED" }
+  | { code: "CANNOT_RESET_OWN_TWO_FACTOR" }
   | { code: "CLIENT_NOT_FOUND" }
   | { code: "CLIENT_DISABLED" }
   | { code: "CLIENT_NOT_ASSIGNED" }

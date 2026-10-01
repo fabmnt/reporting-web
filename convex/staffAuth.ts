@@ -20,9 +20,9 @@ export const currentOperator = internalQuery({
 // testing a stored service account key.
 export const currentAdmin = internalQuery({
   args: {},
-  returns: v.object({ userId: v.id("users"), role: staffRole }),
+  returns: v.object({ userId: v.id("users"), profileId: v.id("staffProfiles"), role: staffRole }),
   handler: async (ctx) => {
     const { userId, profile } = await requireAdmin(ctx);
-    return { userId, role: profile.role };
+    return { userId, profileId: profile._id, role: profile.role };
   },
 });

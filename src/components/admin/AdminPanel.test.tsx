@@ -1,7 +1,7 @@
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { getFunctionName } from "convex/server";
-import { useMutation, useQuery } from "convex/react";
+import { useAction, useMutation, useQuery } from "convex/react";
 import { ConvexError } from "convex/values";
 import { beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 
@@ -14,9 +14,11 @@ import { AdminAccountsPanel } from "./AdminPanel";
 vi.mock("convex/react", () => ({
   useQuery: vi.fn(),
   useMutation: vi.fn(),
+  useAction: vi.fn(),
 }));
 
 const useQueryMock = useQuery as unknown as Mock;
+const useActionMock = useAction as unknown as Mock;
 const useMutationMock = useMutation as unknown as Mock;
 
 // `api` is a proxy, so every property access returns a new object. Compare by
@@ -34,6 +36,7 @@ const ADMIN_ACCOUNT = {
   status: "active",
   assignedClinicIds: [],
   isCurrentUser: true,
+  twoFactorEnabled: false,
 };
 
 const OPERATOR_ACCOUNT = {
@@ -44,9 +47,11 @@ const OPERATOR_ACCOUNT = {
   status: "active",
   assignedClinicIds: [],
   isCurrentUser: false,
+  twoFactorEnabled: true,
 };
 
 const setStatus = vi.fn();
+const resetTwoFactor = vi.fn();
 
 const QUERY_NAMES = {
   current: nameOf(api.staffAccounts.current),
@@ -56,6 +61,7 @@ const QUERY_NAMES = {
 const MUTATION_NAMES = {
   setRole: nameOf(api.staffAccounts.setRole),
   setStatus: nameOf(api.staffAccounts.setStatus),
+  adminReset: nameOf(api.twoFactor.adminReset),
 };
 
 // Stands in for the header toggle, so a test can switch language while a panel
@@ -99,6 +105,8 @@ beforeEach(() => {
 
   useQueryMock.mockImplementation((reference: AnyFunctionReference) => {
     switch (nameOf(reference)) {
+      case nameOf(api.twoFactor.status):
+        return { enabled: true, recoveryCodesRemaining: 10 };
       case QUERY_NAMES.current:
         return ADMIN_ACCOUNT;
       case QUERY_NAMES.listManaged:
@@ -108,10 +116,13 @@ beforeEach(() => {
     }
   });
 
+  useActionMock.mockReturnValue(resetTwoFactor);
   useMutationMock.mockImplementation((reference: AnyFunctionReference) => {
     switch (nameOf(reference)) {
       case MUTATION_NAMES.setStatus:
         return setStatus;
+      case MUTATION_NAMES.adminReset:
+        return resetTwoFactor;
       default:
         return vi.fn();
     }
@@ -163,5 +174,54 @@ describe("AdminAccountsPanel", () => {
     await user.click(screen.getByRole("button", { name: "Español" }));
 
     expect(await screen.findByText("No se encontró el perfil del usuario.")).toBeVisible();
+  });
+
+  it("resets the second factor of an account only after the confirmation", async () => {
+    const user = userEvent.setup();
+    resetTwoFactor.mockResolvedValue(null);
+    renderPanel();
+
+    const row = screen.getByRole("row", { name: /Bea/ });
+    await user.click(within(row).getByRole("button", { name: "Reset" }));
+
+    const dialog = await screen.findByRole("alertdialog");
+    expect(resetTwoFactor).not.toHaveBeenCalled();
+
+    await user.type(within(dialog).getByLabelText("Password"), "admin-password");
+    await user.type(within(dialog).getByLabelText("Verification code"), "123456");
+    await user.click(within(dialog).getByRole("button", { name: "Reset" }));
+
+    await waitFor(() =>
+      expect(resetTwoFactor).toHaveBeenCalledWith({
+        profileId: "profile-2",
+        password: "admin-password",
+        code: "123456",
+      })
+    );
+  });
+
+  it("keeps the reset closed while the administrator has no factor of their own", async () => {
+    const user = userEvent.setup();
+    useQueryMock.mockImplementation((reference: AnyFunctionReference) => {
+      switch (nameOf(reference)) {
+        case nameOf(api.twoFactor.status):
+          return { enabled: false, recoveryCodesRemaining: 0 };
+        case QUERY_NAMES.current:
+          return ADMIN_ACCOUNT;
+        case QUERY_NAMES.listManaged:
+          return { accounts: [ADMIN_ACCOUNT, OPERATOR_ACCOUNT], limit: 100 };
+        default:
+          return undefined;
+      }
+    });
+    renderPanel();
+
+    const row = screen.getByRole("row", { name: /Bea/ });
+    await user.click(within(row).getByRole("button", { name: "Reset" }));
+
+    const dialog = await screen.findByRole("alertdialog");
+    expect(within(dialog).getByText("Turn on your own two-factor first")).toBeVisible();
+    expect(within(dialog).getByRole("button", { name: "Reset" })).toBeDisabled();
+    expect(resetTwoFactor).not.toHaveBeenCalled();
   });
 });

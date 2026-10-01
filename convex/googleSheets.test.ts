@@ -50,7 +50,13 @@ async function signInOperator(t: Test, heldClientId: Id<"clients">) {
     });
   });
 
-  return { subject: userId };
+  const sessionId = await t.run((ctx) =>
+    ctx.db.insert("authSessions", {
+      userId,
+      expirationTime: Date.now() + 3_600_000,
+    })
+  );
+  return { subject: `${userId}|${sessionId}` };
 }
 
 describe("googleSheets.clientIsInScope", () => {
