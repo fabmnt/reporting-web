@@ -22,6 +22,10 @@ function renderSignIn() {
   return render(<AuthPage mode="signIn" convexUrl="http://example.invalid" />);
 }
 
+function renderSignUp() {
+  return render(<AuthPage mode="signUp" convexUrl="http://example.invalid" />);
+}
+
 async function submitCredentials(username: string, password: string) {
   const user = userEvent.setup();
   await user.type(screen.getByLabelText("Username"), username);
@@ -71,5 +75,52 @@ describe("AuthPage", () => {
 
     expect(await screen.findByText("That code is not valid. Try again.")).toBeVisible();
     expect(screen.getByLabelText("Verification code")).toBeVisible();
+  });
+
+  it("asks for the code while signing up with an account that has a factor", async () => {
+    signIn.mockRejectedValueOnce(new ConvexError({ code: "TOTP_REQUIRED" }));
+    renderSignUp();
+
+    const user = userEvent.setup();
+    await user.type(screen.getByLabelText("Username"), "ada");
+    await user.type(screen.getByLabelText("Password"), "correct horse");
+    await user.click(screen.getByRole("button", { name: "Create account" }));
+
+    const code = await screen.findByLabelText("Verification code");
+    signIn.mockResolvedValueOnce(undefined);
+    await user.type(code, "123456");
+    await user.click(screen.getByRole("button", { name: "Create account" }));
+
+    await waitFor(() => expect(signIn).toHaveBeenCalledTimes(2));
+    const formData = signIn.mock.calls[1]?.[1] as FormData;
+    expect(formData.get("flow")).toBe("signUp");
+    expect(formData.get("totpCode")).toBe("123456");
+  });
+
+  it("drops the code step when the credentials change", async () => {
+    signIn.mockRejectedValueOnce(new ConvexError({ code: "TOTP_REQUIRED" }));
+    renderSignIn();
+    const user = await submitCredentials("ada", "correct horse");
+    expect(await screen.findByLabelText("Verification code")).toBeVisible();
+
+    await user.type(screen.getByLabelText("Password"), "!");
+
+    expect(screen.queryByLabelText("Verification code")).not.toBeInTheDocument();
+  });
+
+  it("shows a credential error under the password, not under the code", async () => {
+    signIn.mockRejectedValueOnce(new ConvexError({ code: "TOTP_REQUIRED" }));
+    renderSignIn();
+    const user = await submitCredentials("ada", "correct horse");
+    const code = await screen.findByLabelText("Verification code");
+
+    // The password stopped checking out, so the error belongs to it rather than
+    // to the code the user was about to send.
+    signIn.mockRejectedValueOnce(new ConvexError({ code: "INVALID_CREDENTIALS" }));
+    await user.type(code, "123456");
+    await user.click(screen.getByRole("button", { name: "Sign in" }));
+
+    expect(await screen.findByText("Invalid username or password.")).toBeVisible();
+    expect(screen.queryByLabelText("Verification code")).not.toBeInTheDocument();
   });
 });
