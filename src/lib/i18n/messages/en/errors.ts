@@ -20,7 +20,7 @@ export const errors = {
   PASSWORD_SETUP_LINK_INVALID:
     "This link is not valid any more. Ask an administrator for a new one.",
   CANNOT_RESET_OWN_TWO_FACTOR:
-    "Use the security page to turn off your own two-factor authentication.",
+    "Ask another administrator to revoke your two-factor authentication. You can replace your authenticator on the security page.",
   TOTP_REQUIRED: "Enter the code from your authenticator app.",
   TOTP_INVALID: "That code is not valid. Try again.",
   TOTP_ALREADY_ENABLED: "Two-factor authentication is already on.",

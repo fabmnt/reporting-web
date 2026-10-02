@@ -40,6 +40,8 @@ export default defineSchema({
   twoFactorCredentials: defineTable({
     userId: v.id("users"),
     secret: v.string(),
+    pendingSecret: v.optional(v.string()),
+    pendingExpiresAt: v.optional(v.number()),
     // Missing while the user is still proving the first code.
     enabledAt: v.optional(v.number()),
     // The newest time step a code of this secret was accepted for, so the same

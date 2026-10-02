@@ -31,7 +31,7 @@ const RECOVERY_CODES_FILE = "reporting-web-recovery-codes.txt";
 
 /**
  * The account security screen: turning the authenticator-app second factor on
- * and off. A freshly enabled factor answers with its recovery codes, which are
+ * and replacing it. A freshly enabled factor answers with its recovery codes, which are
  * shown here once and never again.
  */
 export function AccountSecurityPanel() {
@@ -39,9 +39,10 @@ export function AccountSecurityPanel() {
   const status = useQuery(api.twoFactor.status, {});
   const beginSetup = useAction(api.twoFactor.beginSetup);
   const confirmSetup = useAction(api.twoFactor.confirmSetup);
-  const disable = useAction(api.twoFactor.disable);
+  const replace = useAction(api.twoFactor.beginReplacement);
   const regenerate = useAction(api.twoFactor.regenerateRecoveryCodes);
   const [setup, setSetup] = useState<Setup | null>(null);
+  const [replacementReady, setReplacementReady] = useState(false);
   const [recoveryCodes, setRecoveryCodes] = useState<string[] | null>(null);
   const [setupError, setSetupError] = useState<LocalizedMessage | null>(null);
   const [confirmError, setConfirmError] = useState<LocalizedMessage | null>(null);
@@ -51,7 +52,7 @@ export function AccountSecurityPanel() {
   const [isConfirming, setIsConfirming] = useState(false);
   const [isDisabling, setIsDisabling] = useState(false);
   const [isCopied, setIsCopied] = useState(false);
-  const [credentialAction, setCredentialAction] = useState<"disable" | "regenerate" | null>(null);
+  const [credentialAction, setCredentialAction] = useState<"replace" | "regenerate" | null>(null);
   const isRegenerating = credentialAction === "regenerate";
 
   useDocumentTitle(t.app.titles.security);
@@ -62,6 +63,7 @@ export function AccountSecurityPanel() {
     setIsBeginning(true);
     try {
       setSetup({ ...(await beginSetup({ password })), password });
+      setReplacementReady(false);
     } catch (cause) {
       setSetupError(localizedError(cause, (messages) => messages.security.failures.setup));
     } finally {
@@ -136,7 +138,8 @@ export function AccountSecurityPanel() {
         setCopyError(null);
         setSetup(null);
       } else {
-        await disable(credentials);
+        setSetup({ ...(await replace(credentials)), password: credentials.password });
+        setReplacementReady(true);
       }
       setCredentialAction(null);
     } catch (cause) {
@@ -201,13 +204,18 @@ export function AccountSecurityPanel() {
           <div className="flex flex-wrap gap-2">
             <Button type="submit" disabled={isConfirming || isBeginning}>
               {isConfirming ? <Spinner data-icon="inline-start" /> : null}
-              {t.security.setup.confirm}
+              {status?.enabled ? t.security.disable.confirm : t.security.setup.confirm}
             </Button>
             <Button
               type="button"
               variant="outline"
               disabled={isConfirming || isBeginning}
-              onClick={() => void startSetup(setupForm.password)}
+              onClick={() => {
+                if (status?.enabled) {
+                  setSetup(null);
+                  setCredentialAction("replace");
+                } else void startSetup(setupForm.password);
+              }}
             >
               {isBeginning ? <Spinner data-icon="inline-start" /> : null}
               {t.security.setup.restart}
@@ -320,7 +328,7 @@ export function AccountSecurityPanel() {
             variant="outline"
             onClick={() => {
               setDisableError(null);
-              setCredentialAction("disable");
+              setCredentialAction("replace");
             }}
           >
             {t.security.enabled.disable}
@@ -350,7 +358,7 @@ export function AccountSecurityPanel() {
           <CardContent>
             {recoveryCodes !== null
               ? renderRecoveryCodes(recoveryCodes)
-              : setup !== null && !status.enabled
+              : setup !== null && (!status.enabled || replacementReady)
                 ? renderSetup(setup)
                 : renderStatus(status.enabled, status.recoveryCodesRemaining)}
           </CardContent>

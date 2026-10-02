@@ -23,7 +23,7 @@ vi.mock("convex/react", () => ({
         return mocks.confirm;
       case "twoFactor:regenerateRecoveryCodes":
         return mocks.regenerate;
-      case "twoFactor:disable":
+      case "twoFactor:beginReplacement":
         return mocks.disable;
       default:
         throw new Error("Unexpected action");

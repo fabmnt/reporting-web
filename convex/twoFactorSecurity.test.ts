@@ -87,13 +87,13 @@ describe("two-factor security regressions", () => {
     expect(failure).toEqual({ code: "TOTP_REQUIRED" });
   });
 
-  it("counts failed removal attempts even when the action rejects", async () => {
+  it("counts failed replacement attempts even when the action rejects", async () => {
     const { t, identity } = await fixture();
     const signedIn = t.withIdentity(identity);
     for (let attempt = 0; attempt < 10; attempt += 1) {
       expect(
         await signedIn
-          .action(api.twoFactor.disable, {
+          .action(api.twoFactor.beginReplacement, {
             password: PASSWORD,
             code: "invalid-code",
           })
@@ -102,7 +102,7 @@ describe("two-factor security regressions", () => {
     }
     expect(
       await signedIn
-        .action(api.twoFactor.disable, {
+        .action(api.twoFactor.beginReplacement, {
           password: PASSWORD,
           code: await totpCodeAt(SECRET, timeStep(NOW)),
         })
@@ -183,27 +183,22 @@ describe("two-factor security regressions", () => {
     expect(result.tokens?.token).toBeTruthy();
   });
 
-  it("removes the factor and revokes other sessions while preserving the caller", async () => {
-    const { t, userId, identity } = await fixture();
-    const otherSessionId = await t.run((ctx) =>
-      ctx.db.insert("authSessions", {
-        userId,
-        expirationTime: NOW + 3_600_000,
-      })
-    );
-    const other = t.withIdentity({ subject: `${userId}|${otherSessionId}` });
-    await t.withIdentity(identity).action(api.twoFactor.disable, {
-      password: PASSWORD,
-      code: await totpCodeAt(SECRET, timeStep(NOW)),
-    });
-    expect(await t.withIdentity(identity).query(api.twoFactor.status, {})).toEqual({
-      enabled: false,
-      recoveryCodesRemaining: 0,
-    });
-    expect(await other.query(api.staffAccounts.current, {}).catch(appErrorPayloadOf)).toEqual({
-      code: "UNAUTHENTICATED",
-    });
-  });
+  it.each(["operator", "admin"] as const)(
+    "prevents %s from disabling their own factor",
+    async (role) => {
+      const { t, identity } = await fixture(role);
+      expect(
+        await t
+          .withIdentity(identity)
+          .action(api.twoFactor.disable, {
+            password: PASSWORD,
+            code: await totpCodeAt(SECRET, timeStep(NOW)),
+          })
+          .catch(appErrorPayloadOf)
+      ).toEqual({ code: "CANNOT_RESET_OWN_TWO_FACTOR" });
+      expect((await t.withIdentity(identity).query(api.twoFactor.status, {})).enabled).toBe(true);
+    }
+  );
 
   it("requires the administrator's own factor before resetting another account", async () => {
     const { t, identity } = await fixture("admin");

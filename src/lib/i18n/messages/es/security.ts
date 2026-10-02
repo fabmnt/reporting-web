@@ -36,14 +36,15 @@ export const security = {
         : count === 1
           ? "Queda 1 código de recuperación."
           : `Quedan ${count} códigos de recuperación.`,
-    disable: "Desactivar",
+    disable: "Cambiar app de autenticación",
   },
   disable: {
-    title: "Desactivar la autenticación en dos pasos",
-    description: "Ingresa tu contraseña y un código actual de tu app de autenticación.",
+    title: "Cambiar app de autenticación",
+    description:
+      "Ingresa tu contraseña y un código de autenticación o recuperación. La app actual sigue activa hasta confirmar la nueva. Solo un administrador puede desactivar la autenticación en dos pasos.",
     password: "Contraseña",
     code: "Código o código de recuperación",
-    confirm: "Desactivar",
+    confirm: "Cambiar app",
   },
   regenerate: {
     title: "Generar nuevos códigos de recuperación",
@@ -55,7 +56,7 @@ export const security = {
     regenerate: "No se pudieron generar nuevos códigos de recuperación.",
     setup: "No se pudo iniciar la configuración.",
     confirm: "No se pudo activar la autenticación en dos pasos.",
-    disable: "No se pudo desactivar la autenticación en dos pasos.",
+    disable: "No se pudo cambiar la app de autenticación.",
     copy: "No se pudo copiar. Selecciona los códigos y cópialos a mano.",
   },
 };

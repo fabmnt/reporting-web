@@ -23,6 +23,7 @@ import {
 } from "./model/totp";
 import { sha256Hex } from "./model/tokens";
 
+const REPLACEMENT_LIFETIME = 10 * MINUTE;
 const ISSUER = "Reporting Web";
 const CODE_ATTEMPTS = 10;
 const CODE_ATTEMPT_PERIOD = 5 * MINUTE;
@@ -183,13 +184,21 @@ export const confirmSetupCode = internalMutation({
     const { userId } = await requireActiveStaff(ctx);
     const row = await credential(ctx, userId);
     if (row === null) throw appError({ code: "TOTP_NOT_PENDING" });
-    if (row.enabledAt !== undefined) throw appError({ code: "TOTP_ALREADY_ENABLED" });
     const now = Date.now();
-    const result = await consumeCode(ctx, row, args.code, now);
+    const replacing = row.enabledAt !== undefined;
+    if (replacing && (!row.pendingSecret || (row.pendingExpiresAt ?? 0) <= now))
+      throw appError({ code: "TOTP_NOT_PENDING" });
+    const verificationRow = replacing
+      ? { ...row, secret: row.pendingSecret!, lastUsedStep: 0, recoveryCodeHashes: [] }
+      : row;
+    const result = await consumeCode(ctx, verificationRow, args.code, now);
     if (result !== "ok") return result;
     const recoveryCodes = generateRecoveryCodes();
     await ctx.db.patch("twoFactorCredentials", row._id, {
-      enabledAt: now,
+      enabledAt: row.enabledAt ?? now,
+      secret: verificationRow.secret,
+      pendingSecret: undefined,
+      pendingExpiresAt: undefined,
       recoveryCodeHashes: await Promise.all(
         recoveryCodes.map((code) => sha256Hex(normalizeRecoveryCode(code)))
       ),
@@ -205,9 +214,7 @@ export const disable = action({
   handler: async (ctx, args) => {
     const { userId } = await ctx.runQuery(internal.staffAuth.currentOperator, {});
     await verifyPassword(ctx, userId, args.password);
-    const result: Verdict = await ctx.runMutation(internal.twoFactor.turnOff, { code: args.code });
-    requireValidCode(result);
-    return null;
+    throw appError({ code: "CANNOT_RESET_OWN_TWO_FACTOR" });
   },
 });
 
@@ -215,21 +222,6 @@ export const usernameOf = internalQuery({
   args: { userId: v.id("users") },
   returns: v.union(v.string(), v.null()),
   handler: async (ctx, args) => (await ctx.db.get("users", args.userId))?.email ?? null,
-});
-
-export const turnOff = internalMutation({
-  args: { code: v.string() },
-  returns: verdict,
-  handler: async (ctx, args) => {
-    const { userId } = await requireActiveStaff(ctx);
-    const row = await credential(ctx, userId);
-    if (row?.enabledAt === undefined) throw appError({ code: "TOTP_NOT_ENABLED" });
-    const result = await consumeCode(ctx, row, args.code, Date.now());
-    if (result !== "ok") return result;
-    await ctx.db.delete("twoFactorCredentials", row._id);
-    await revokeOtherSessions(ctx, userId);
-    return "ok" as const;
-  },
 });
 
 /** Called before a session exists; the password provider supplies the verified user. */
@@ -324,5 +316,47 @@ export const replaceRecoveryCodes = internalMutation({
       ),
     });
     return { recoveryCodes };
+  },
+});
+
+/** Keeps the active factor until a code from the replacement is confirmed. */
+export const beginReplacement = action({
+  args: { password: v.string(), code: v.string() },
+  returns: setupResult,
+  handler: async (ctx, args): Promise<Infer<typeof setupResult>> => {
+    const { userId } = await ctx.runQuery(internal.staffAuth.currentOperator, {});
+    await verifyPassword(ctx, userId, args.password);
+    const result: Infer<typeof setupResult> | Verdict = await ctx.runMutation(
+      internal.twoFactor.prepareReplacement,
+      { code: args.code }
+    );
+    if (typeof result === "string") {
+      requireValidCode(result);
+      throw new Error("Missing replacement setup");
+    }
+    return result;
+  },
+});
+
+export const prepareReplacement = internalMutation({
+  args: { code: v.string() },
+  returns: v.union(setupResult, verdict),
+  handler: async (ctx, args) => {
+    const { userId, profile } = await requireActiveStaff(ctx);
+    const row = await credential(ctx, userId);
+    if (row?.enabledAt === undefined) throw appError({ code: "TOTP_NOT_ENABLED" });
+    const now = Date.now();
+    const result = await consumeCode(ctx, row, args.code, now);
+    if (result !== "ok") return result;
+    const secret = generateTotpSecret();
+    await ctx.db.patch("twoFactorCredentials", row._id, {
+      pendingSecret: secret,
+      pendingExpiresAt: now + REPLACEMENT_LIFETIME,
+    });
+    const user = await ctx.db.get("users", userId);
+    return {
+      secret,
+      uri: totpUri({ issuer: ISSUER, account: user?.email ?? profile.displayName, secret }),
+    };
   },
 });
