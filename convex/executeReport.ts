@@ -3,7 +3,13 @@ import type { Id } from "./_generated/dataModel";
 import type { ActionCtx } from "./_generated/server";
 import { fetchClinicBots, signInCarrierApi, type CarrierFailure } from "./carrierApi";
 import { appError, sheetErrorFrom, type ReportSheetError } from "./model/appErrors";
-import { carrierMatchers, inactiveCarrierBots, type CarrierMatcher } from "./model/carrierBots";
+import {
+  carrierMatchers,
+  carrierMatchesAny,
+  disabledCarrierMatchers,
+  inactiveCarrierBots,
+  type CarrierMatcher,
+} from "./model/carrierBots";
 import type { ResolvedClinicSheetColumns } from "./model/clinicSheetColumns";
 import {
   CARRIER_COLUMN_INDEX,
@@ -209,8 +215,10 @@ export async function runExecuteReport(
 
     // The bots of the clinic, which only a report whose rows have to match one
     // of them reads. Every other report leaves the list empty and reads the
-    // rows its rules pick.
+    // rows its rules pick. Disabled bots stay out of `matchers` but keep their
+    // own list so their rows are not treated as unknown carriers.
     let matchers: CarrierMatcher[] = [];
+    let disabledMatchers: CarrierMatcher[] = [];
     if (carrierToken !== null) {
       // A clinic stored before the directory import ran has no Control Central
       // id yet, which is the one state the carrier match cannot read. It goes
@@ -235,6 +243,7 @@ export async function runExecuteReport(
 
       const parsed = carrierMatchers(botsResult.value);
       matchers = parsed.matchers;
+      disabledMatchers = disabledCarrierMatchers(botsResult.value);
       // The card carries every bot of the clinic the report cannot use: the
       // ones the API reports as not active, and the ones whose pattern this app
       // will not run, whose rows would otherwise go missing without a word.
@@ -397,11 +406,14 @@ export async function runExecuteReport(
         // A row the conditions picked but no bot can take goes on the unmatched
         // card instead of a bucket, which is what keeps it out of the results.
         // The carrier cell travels with it, because that is the name the bots
-        // did not match.
+        // did not match. A row that only a disabled bot would take stays off
+        // this list: the inactive-carriers card already explains it.
         if (config.matchesCarrierBots && carriers.length === 0) {
+          const carrier = (row[CARRIER_COLUMN_INDEX] ?? "").trim();
+          if (carrierMatchesAny(carrier, disabledMatchers)) return;
           unmatchedRows.push({
             rowNumber,
-            carrier: (row[CARRIER_COLUMN_INDEX] ?? "").trim(),
+            carrier,
           });
           return;
         }

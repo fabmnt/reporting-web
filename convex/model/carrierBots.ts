@@ -114,6 +114,31 @@ export function carrierMatchers(bots: CarrierBot[]): {
   return { matchers, unsupported };
 }
 
+// Matchers for bots the clinic has but cannot run (disabled and the like).
+// The unmatched-rows card uses these so a row that only those bots would take
+// is not listed as an unknown carrier; the inactive-carriers card already
+// explains why those rows are missing.
+export function disabledCarrierMatchers(bots: CarrierBot[]): CarrierMatcher[] {
+  const matchers: CarrierMatcher[] = [];
+  for (const bot of bots) {
+    if (isUsableCarrierBot(bot)) continue;
+    const matcher = carrierMatcher(bot);
+    if (matcher === null) continue;
+    matchers.push(matcher);
+  }
+  return matchers;
+}
+
+/**
+ * Whether a carrier cell matches any of the given bots. An empty cell never
+ * matches, which is the same rule the report uses when it assigns rows.
+ */
+export function carrierMatchesAny(carrierCell: string, matchers: CarrierMatcher[]): boolean {
+  const trimmed = carrierCell.trim();
+  if (trimmed === "") return false;
+  return matchers.some((matcher) => matcher.matches(trimmed));
+}
+
 // Every bot the clinic cannot run right now, which is what tells an operator
 // why rows are missing from the results.
 export function inactiveCarrierBots(bots: CarrierBot[]): Array<{ name: string; status: string }> {
