@@ -82,6 +82,7 @@ export type AppErrorPayload =
   | { code: "SHEET_FILTER_NAME_TAKEN"; name: string }
   | { code: "SHEET_FILTER_LIMIT"; limit: number }
   | { code: "SHEET_FILTER_CLINICS_REQUIRED" }
+  | { code: "SHEET_FILTER_IN_PROGRESS" }
   | { code: "SHEET_RATE_LIMITED" }
   | { code: "CARRIER_SIGN_IN_REJECTED" }
   | { code: "CARRIER_API_UNAVAILABLE" };
@@ -121,6 +122,8 @@ export const reportSheetError = v.union(
   // of that client until an administrator replaces the key.
   v.object({ code: v.literal("SHEET_SERVICE_ACCOUNT_KEY_REFUSED"), email: v.string() }),
   v.object({ code: v.literal("SHEET_FAILED"), message: v.string() }),
+  // Another apply is already writing this filter name on the clinic's sheet.
+  v.object({ code: v.literal("SHEET_FILTER_IN_PROGRESS") }),
   // A clinic the carrier engine could not work: it has no Control Central id
   // yet, the API turned the app away, or the clinic has no bot left to run a
   // row. The first case covers a clinic stored before the directory import,
@@ -164,6 +167,9 @@ export function sheetErrorFrom(error: unknown): ReportSheetError {
   }
   if (payload !== null && payload.code === "SERVICE_ACCOUNT_KEY_REFUSED") {
     return { code: "SHEET_SERVICE_ACCOUNT_KEY_REFUSED", email: payload.email };
+  }
+  if (payload !== null && payload.code === "SHEET_FILTER_IN_PROGRESS") {
+    return { code: "SHEET_FILTER_IN_PROGRESS" };
   }
   return {
     code: "SHEET_FAILED",

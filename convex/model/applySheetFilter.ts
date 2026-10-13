@@ -18,10 +18,15 @@ import {
 // values:batchGet has no documented cap that this app hits first. Ranges travel
 // in the query string, so a long date range is read in chunks, same as a report.
 const RANGES_PER_REQUEST = 25;
-const READ_RANGE = "A1:ZZZ20000";
+// The last row this read asks for. A tab that fills the window may have rows
+// after it, and a view built from a short read would leave those rows visible.
+const MAX_READ_ROWS = 20_000;
+const READ_RANGE = `A1:ZZZ${MAX_READ_ROWS}`;
 
 export type SheetFilterTabError =
-  ReportSheetError | { code: "SHEET_FILTER_TOO_LONG"; rowCount: number };
+  | ReportSheetError
+  | { code: "SHEET_FILTER_TOO_LONG"; rowCount: number }
+  | { code: "SHEET_FILTER_TOO_MANY_ROWS"; rowCount: number };
 
 export type SheetFilterTabResult = {
   tabTitle: string;
@@ -135,6 +140,15 @@ export async function applyFilterToClinic(
     }
     if (!isSheetGrid(grid)) {
       tabs.push(failedTab(title, grid));
+      continue;
+    }
+
+    if (grid.length >= MAX_READ_ROWS) {
+      tabs.push({
+        tabTitle: title,
+        matchedRowCount: 0,
+        error: { code: "SHEET_FILTER_TOO_MANY_ROWS", rowCount: grid.length },
+      });
       continue;
     }
 

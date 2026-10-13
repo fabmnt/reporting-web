@@ -78,6 +78,8 @@ export const errors = {
   SHEET_FILTER_NAME_TAKEN: (name: string) => `Ya existe un filtro de hoja llamado "${name}".`,
   SHEET_FILTER_LIMIT: (limit: number) => `Puedes guardar hasta ${limit} filtros de hoja.`,
   SHEET_FILTER_CLINICS_REQUIRED: "Elige al menos una clínica.",
+  SHEET_FILTER_IN_PROGRESS:
+    "Este filtro ya se está aplicando en esa clínica. Espera a que termine e inténtalo de nuevo.",
   SHEET_NO_TABS: (startDate: string, endDate: string) =>
     `No se encontraron pestañas entre ${startDate} y ${endDate}.`,
   SHEET_INVALID_COLUMN: (column: string) =>

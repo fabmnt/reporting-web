@@ -65,4 +65,6 @@ export const sheetFilters = {
   },
   formulaTooLong: (rowCount: number) =>
     `El filtro coincide con ${rowCount} filas, demasiadas para guardarlas en una fórmula de Google Sheets.`,
+  tooManyRows: (rowCount: number) =>
+    `Esta pestaña tiene al menos ${rowCount} filas. Las filas que vienen después quedarían visibles, así que la pestaña no se modificó.`,
 };

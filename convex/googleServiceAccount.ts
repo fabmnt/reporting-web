@@ -13,8 +13,11 @@ import { appError } from "./model/appErrors";
 import { serviceAccountBucket } from "./model/googleCredentials";
 import { toSheetGrid, type SheetGrid } from "./model/googleGrid";
 import {
+  addedFilterViewIds,
+  filterViewsLanded,
   sheetTabsFromSpreadsheet,
   SHEET_STRUCTURE_FIELDS,
+  type FilterViewBatch,
   type SheetTabStructure,
 } from "./model/sheetFilterViews";
 import {
@@ -23,6 +26,7 @@ import {
   requestTimeoutMs,
   sendGoogleCall,
   type GoogleFailure,
+  type WriteRetryDecision,
 } from "./model/googlePolicy";
 
 /**
@@ -166,7 +170,8 @@ async function loadKey(
 async function callSheets<T>(
   ctx: ActionCtx,
   account: { serviceAccountId: Id<"googleServiceAccounts">; key: ServiceAccountKey },
-  call: (timeoutMs: number) => Promise<T>
+  call: (timeoutMs: number) => Promise<T>,
+  beforeRetry?: (failure: GoogleFailure) => Promise<WriteRetryDecision>
 ): Promise<T> {
   const deadlineMs = actionDeadline();
   return await sendGoogleCall({
@@ -179,6 +184,7 @@ async function callSheets<T>(
     },
     beforeAttempt: () =>
       awaitSheetsSlot(ctx, deadlineMs, serviceAccountBucket(account.serviceAccountId)),
+    beforeRetry,
     deadlineMs,
     failure: (failure) => {
       if (failure.quotaRejection) return appError({ code: "SHEET_RATE_LIMITED" });
@@ -347,14 +353,32 @@ export const replaceFilterViews = internalAction({
 
     const key = await loadKey(ctx, args.serviceAccountId);
     const sheets = sheetsClientFor(args.serviceAccountId, key);
-    await callSheets(ctx, { serviceAccountId: args.serviceAccountId, key }, (timeoutMs) =>
-      sheets.spreadsheets.batchUpdate(
-        {
-          spreadsheetId: args.spreadsheetId,
-          requestBody: { requests },
-        },
-        { signal: AbortSignal.timeout(timeoutMs) }
-      )
+    const addedIds = addedFilterViewIds({ requests } as FilterViewBatch);
+    const account = { serviceAccountId: args.serviceAccountId, key };
+    await callSheets(
+      ctx,
+      account,
+      (timeoutMs) =>
+        sheets.spreadsheets.batchUpdate(
+          {
+            spreadsheetId: args.spreadsheetId,
+            requestBody: { requests },
+          },
+          { signal: AbortSignal.timeout(timeoutMs) }
+        ),
+      async () => {
+        try {
+          const response = await sheets.spreadsheets.get(
+            { spreadsheetId: args.spreadsheetId, fields: SHEET_STRUCTURE_FIELDS },
+            { signal: AbortSignal.timeout(requestTimeoutMs(actionDeadline())) }
+          );
+          return filterViewsLanded(sheetTabsFromSpreadsheet(response.data), addedIds)
+            ? "succeeded"
+            : "retry";
+        } catch {
+          return "abort";
+        }
+      }
     );
     return null;
   },

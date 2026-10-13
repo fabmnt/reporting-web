@@ -2,7 +2,7 @@ import { v } from "convex/values";
 
 import { internal } from "./_generated/api.js";
 import type { Id } from "./_generated/dataModel";
-import { action, internalQuery, mutation, query } from "./_generated/server";
+import { action, internalMutation, internalQuery, mutation, query } from "./_generated/server";
 import { applyFilterToClinic, type SheetFilterClinicResult } from "./model/applySheetFilter";
 import { appError, reportSheetError, sheetErrorFrom } from "./model/appErrors";
 import { MAX_ASSIGNED_CLINICS } from "./model/assignments";
@@ -27,8 +27,14 @@ const sheetFilterView = v.object({
 
 const sheetFilterTabError = v.union(
   reportSheetError,
-  v.object({ code: v.literal("SHEET_FILTER_TOO_LONG"), rowCount: v.number() })
+  v.object({ code: v.literal("SHEET_FILTER_TOO_LONG"), rowCount: v.number() }),
+  v.object({ code: v.literal("SHEET_FILTER_TOO_MANY_ROWS"), rowCount: v.number() })
 );
+
+// Longer than one apply, so a run that is still writing is not treated as
+// finished. A run that dies keeps the row until this time, then the next apply
+// can take it.
+const APPLY_LOCK_MS = 3 * 60 * 1000;
 
 const clinicResult = v.object({
   clinicId: v.id("clinics"),
@@ -182,6 +188,50 @@ export const loadApplyConfig = internalQuery({
   },
 });
 
+// Holds the spreadsheet and filter name until the write finishes. A second
+// apply of the same name sees this row and stops, instead of adding another
+// view with that name.
+export const acquireApplyLock = internalMutation({
+  args: { googleSheetId: v.string(), filterName: v.string() },
+  returns: v.object({ lockId: v.id("sheetFilterApplies"), token: v.string() }),
+  handler: async (ctx, args) => {
+    const now = Date.now();
+    const existing = await ctx.db
+      .query("sheetFilterApplies")
+      .withIndex("by_sheet_and_filter", (q) =>
+        q.eq("googleSheetId", args.googleSheetId).eq("filterName", args.filterName)
+      )
+      .unique();
+    const token = crypto.randomUUID();
+    const expiresAt = now + APPLY_LOCK_MS;
+    if (existing !== null && existing.expiresAt > now) {
+      throw appError({ code: "SHEET_FILTER_IN_PROGRESS" });
+    }
+    if (existing !== null) {
+      await ctx.db.patch(existing._id, { token, expiresAt });
+      return { lockId: existing._id, token };
+    }
+    const lockId = await ctx.db.insert("sheetFilterApplies", {
+      googleSheetId: args.googleSheetId,
+      filterName: args.filterName,
+      token,
+      expiresAt,
+    });
+    return { lockId, token };
+  },
+});
+
+export const releaseApplyLock = internalMutation({
+  args: { lockId: v.id("sheetFilterApplies"), token: v.string() },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const row = await ctx.db.get("sheetFilterApplies", args.lockId);
+    if (row !== null && row.token === args.token)
+      await ctx.db.delete("sheetFilterApplies", row._id);
+    return null;
+  },
+});
+
 export const apply = action({
   args: {
     sheetFilterId: v.id("sheetFilters"),
@@ -196,7 +246,12 @@ export const apply = action({
     const clinics: SheetFilterClinicResult[] = [];
 
     for (const clinic of config.clinics) {
+      let lock: { lockId: Id<"sheetFilterApplies">; token: string } | null = null;
       try {
+        lock = await ctx.runMutation(internal.sheetFilters.acquireApplyLock, {
+          googleSheetId: clinic.googleSheetId,
+          filterName: config.name,
+        });
         const session = await sessions.forClient(clinic.clientId);
         clinics.push(
           await applyFilterToClinic(session, {
@@ -214,6 +269,14 @@ export const apply = action({
           error: sheetErrorFrom(error),
           tabs: [],
         });
+      } finally {
+        if (lock !== null) {
+          try {
+            await ctx.runMutation(internal.sheetFilters.releaseApplyLock, lock);
+          } catch (error) {
+            console.error("Could not release the sheet filter apply lock.", error);
+          }
+        }
       }
     }
 

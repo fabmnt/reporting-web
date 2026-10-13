@@ -12,6 +12,8 @@ import {
 import { toSheetGrid, type SheetGrid } from "./model/googleGrid";
 import { actionDeadline } from "./model/googlePolicy";
 import {
+  addedFilterViewIds,
+  filterViewsLanded,
   sheetTabsFromSpreadsheet,
   SHEET_STRUCTURE_FIELDS,
   type FilterViewBatch,
@@ -117,7 +119,33 @@ async function oauthSession(ctx: ActionCtx, credential: GoogleCredential): Promi
     },
     async replaceFilterViews(spreadsheetId, batch) {
       if (batch.requests.length === 0) return;
-      await fetchSheetsJson(ctx, `${spreadsheetId}:batchUpdate`, token, deadlineMs, bucket, batch);
+      const addedIds = addedFilterViewIds(batch);
+      await fetchSheetsJson(
+        ctx,
+        `${spreadsheetId}:batchUpdate`,
+        token,
+        deadlineMs,
+        bucket,
+        batch,
+        async () => {
+          try {
+            const data = await fetchSheetsJson(
+              ctx,
+              `${spreadsheetId}?fields=${encodeURIComponent(SHEET_STRUCTURE_FIELDS)}`,
+              token,
+              deadlineMs,
+              bucket
+            );
+            return filterViewsLanded(sheetTabsFromSpreadsheet(data), addedIds)
+              ? "succeeded"
+              : "retry";
+          } catch {
+            // The sheet could not be read back, so a second write might add a
+            // copy of a view that already landed.
+            return "abort";
+          }
+        }
+      );
     },
   };
 }
@@ -190,9 +218,9 @@ async function openSession(ctx: ActionCtx, credential: GoogleCredential): Promis
  * client, and a key that Google stopped accepting would keep failing until an
  * administrator noticed.
  *
- * The account that was left is kept for the life of the session, so every call
+ * The account that was left is kept for the life of the session, so every read
  * after the first one goes straight to the app's account, and it travels with
- * the session so the result can name it.
+ * the session so the result can name it. Writes do not follow that switch.
  */
 function fallingBackSession(input: {
   linked: Extract<GoogleCredential, { kind: "serviceAccount" }>;
@@ -242,8 +270,13 @@ function fallingBackSession(input: {
       read((session) => session.readRanges(spreadsheetId, ranges)),
     listSheetStructure: (spreadsheetId) =>
       read((session) => session.listSheetStructure(spreadsheetId)),
-    replaceFilterViews: (spreadsheetId, batch) =>
-      read((session) => session.replaceFilterViews(spreadsheetId, batch)),
+    // A write stays on the linked account. The read fallback must not add or
+    // delete filter views with the app account when that account was only
+    // meant to stand in for a read.
+    replaceFilterViews: async (spreadsheetId, batch) => {
+      const linked = await input.linkedSession;
+      await linked.replaceFilterViews(spreadsheetId, batch);
+    },
   };
 }
 

@@ -30,7 +30,10 @@ import { localizedError, sheetErrorText, type LocalizedMessage } from "@/lib/i18
 import type { Messages } from "@/lib/i18n/messages";
 import { byClient } from "@/lib/reportGroups";
 
-type TabError = ReportSheetError | { code: "SHEET_FILTER_TOO_LONG"; rowCount: number };
+type TabError =
+  | ReportSheetError
+  | { code: "SHEET_FILTER_TOO_LONG"; rowCount: number }
+  | { code: "SHEET_FILTER_TOO_MANY_ROWS"; rowCount: number };
 
 type ApplyResult = {
   clinics: Array<{
@@ -47,6 +50,8 @@ type ApplyResult = {
 
 function tabErrorText(error: TabError, t: Messages): string {
   if (error.code === "SHEET_FILTER_TOO_LONG") return t.sheetFilters.formulaTooLong(error.rowCount);
+  if (error.code === "SHEET_FILTER_TOO_MANY_ROWS")
+    return t.sheetFilters.tooManyRows(error.rowCount);
   return sheetErrorText(error, t);
 }
 

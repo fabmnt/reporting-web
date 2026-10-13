@@ -2,14 +2,16 @@ import type { ResolvedClinicSheetColumns } from "./clinicSheetColumns";
 import {
   conditionColumnResolver,
   evaluateConditionSet,
+  filterColumnsForBucket,
   type ConditionExpression,
 } from "./reportConditions";
 
-// Clinic sheets were written with Spanish function names. FILA() is the row
-// number, so the formula stays true for those rows even after Google adjusts
-// it for the row it is checked on. A view built this way is a snapshot: rows
-// that start matching later stay hidden until the filter is applied again.
-const EMPTY_FILTER_FORMULA = "=FILA()=0";
+// The Sheets API stores formulas in English and shows the spreadsheet's own
+// names in the browser. ROW() is the row number, so the formula stays true for
+// those rows even after Google adjusts it for the row it is checked on. A view
+// built this way is a snapshot: rows that start matching later stay hidden
+// until the filter is applied again.
+const EMPTY_FILTER_FORMULA = "=ROW()=0";
 
 // Google rejects a formula past the cell limit. A tab that matches more rows
 // than fit is reported instead of sending a formula Google will refuse.
@@ -125,6 +127,11 @@ export function sheetTabsFromSpreadsheet(data: unknown): SheetTabStructure[] {
  * the same split a report uses when it treats the first read row as the header.
  * Throws when a column the expression reads is not a sheet column.
  */
+function paddedRow(row: string[], length: number): string[] {
+  if (row.length >= length) return row;
+  return [...row, ...Array.from({ length: length - row.length }, () => "")];
+}
+
 export function prepareRowMatcher(
   columns: ResolvedClinicSheetColumns,
   expression: ConditionExpression
@@ -132,10 +139,16 @@ export function prepareRowMatcher(
   const buckets = [{ bucketKey: "match", catchAll: false, expression }];
   const indexes = conditionColumnResolver(columns, buckets);
   const conditions = { buckets };
+  // Google omits trailing empty cells. A short row has to reach the last
+  // column a condition reads, or an empty check on that column drops the row.
+  const columnIndexes = filterColumnsForBucket(buckets, buckets[0], [], indexes);
+  const width = Math.max(0, ...columnIndexes) + 1;
   return (values) => {
     const rows: number[] = [];
     values.forEach((row, index) => {
-      if (evaluateConditionSet(row, indexes, conditions) !== null) rows.push(index + 2);
+      if (evaluateConditionSet(paddedRow(row, width), indexes, conditions) !== null) {
+        rows.push(index + 2);
+      }
     });
     return rows;
   };
@@ -145,7 +158,7 @@ export function prepareRowMatcher(
 // returns a formula, so the view shows the header and no data rows.
 export function filterViewFormula(rowNumbers: readonly number[]): string | null {
   if (rowNumbers.length === 0) return EMPTY_FILTER_FORMULA;
-  const formula = `=O(${rowNumbers.map((row) => `FILA()=${row}`).join(", ")})`;
+  const formula = `=OR(${rowNumbers.map((row) => `ROW()=${row}`).join(",")})`;
   return formula.length > MAX_FILTER_FORMULA_LENGTH ? null : formula;
 }
 
@@ -210,4 +223,23 @@ export function buildFilterViewBatch(
   }
 
   return { requests };
+}
+
+// The ids this batch adds. A lost response is compared with the sheet: when
+// every id is already there, the write landed and must not be sent again.
+export function addedFilterViewIds(batch: FilterViewBatch): number[] {
+  const ids: number[] = [];
+  for (const request of batch.requests) {
+    if ("addFilterView" in request) ids.push(request.addFilterView.filter.filterViewId);
+  }
+  return ids;
+}
+
+export function filterViewsLanded(
+  tabs: readonly SheetTabStructure[],
+  filterViewIds: readonly number[]
+): boolean {
+  if (filterViewIds.length === 0) return false;
+  const present = new Set(tabs.flatMap((tab) => tab.filterViews.map((view) => view.filterViewId)));
+  return filterViewIds.every((id) => present.has(id));
 }

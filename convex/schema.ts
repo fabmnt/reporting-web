@@ -152,6 +152,17 @@ export default defineSchema({
     updatedAt: v.number(),
   }).index("by_name", ["name"]),
 
+  // One row while an apply is writing that filter name onto that spreadsheet.
+  // Two applies that both read the old views and then both add one would leave
+  // two views with the same name, so the second waits until this row is gone
+  // or its time has passed.
+  sheetFilterApplies: defineTable({
+    googleSheetId: v.string(),
+    filterName: v.string(),
+    token: v.string(),
+    expiresAt: v.number(),
+  }).index("by_sheet_and_filter", ["googleSheetId", "filterName"]),
+
   // Saved selections of clients and clinics an operator runs reports over. A
   // group belongs to the account that made it: only its owner reads and edits
   // it. It never widens what a run reads, because the clinics of a run are

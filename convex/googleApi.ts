@@ -12,6 +12,7 @@ import {
   sleep,
   type GoogleAttempt,
   type GoogleFailure,
+  type WriteRetryDecision,
 } from "./model/googlePolicy";
 
 const GOOGLE_TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token";
@@ -196,7 +197,8 @@ export async function fetchSheetsJson(
   token: string,
   deadlineMs: number,
   credentialKey: string,
-  body?: unknown
+  body?: unknown,
+  beforeRetry?: (failure: GoogleFailure) => Promise<WriteRetryDecision>
 ): Promise<unknown> {
   return await sendGoogleCall({
     attempt: () =>
@@ -211,6 +213,7 @@ export async function fetchSheetsJson(
         timeoutMs: requestTimeoutMs(deadlineMs),
       }),
     beforeAttempt: () => awaitSheetsSlot(ctx, deadlineMs, credentialKey),
+    beforeRetry,
     deadlineMs,
     failure: (failure) =>
       failure.quotaRejection

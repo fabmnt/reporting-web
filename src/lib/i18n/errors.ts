@@ -142,6 +142,8 @@ function renderAppError(payload: AppErrorPayload, t: Messages): string | null {
       return e.SHEET_FILTER_LIMIT(payload.limit);
     case "SHEET_FILTER_CLINICS_REQUIRED":
       return e.SHEET_FILTER_CLINICS_REQUIRED;
+    case "SHEET_FILTER_IN_PROGRESS":
+      return e.SHEET_FILTER_IN_PROGRESS;
     case "SHEET_RATE_LIMITED":
       return e.SHEET_RATE_LIMITED;
     case "CARRIER_SIGN_IN_REJECTED":
@@ -216,5 +218,7 @@ export function sheetErrorText(error: ReportSheetError, t: Messages): string {
       return t.errors.SHEET_NO_CARRIER_BOTS;
     case "SHEET_FAILED":
       return error.message;
+    case "SHEET_FILTER_IN_PROGRESS":
+      return t.errors.SHEET_FILTER_IN_PROGRESS;
   }
 }

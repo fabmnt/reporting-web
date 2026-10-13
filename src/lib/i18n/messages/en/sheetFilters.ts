@@ -62,4 +62,6 @@ export const sheetFilters = {
   },
   formulaTooLong: (rowCount: number) =>
     `The filter matches ${rowCount} rows, which is too many to store in one Google Sheets formula.`,
+  tooManyRows: (rowCount: number) =>
+    `This tab has at least ${rowCount} rows. Rows after that would stay visible, so the tab was left unchanged.`,
 };

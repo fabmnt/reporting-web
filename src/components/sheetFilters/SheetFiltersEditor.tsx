@@ -345,6 +345,7 @@ export function SheetFiltersEditor() {
                     </Field>
                   </div>
                   <FilterExpressionEditor
+                    key={selected.sheetFilterId}
                     expression={draft.expression}
                     disabled={saving}
                     onChange={(expression) =>
