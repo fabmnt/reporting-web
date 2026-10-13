@@ -17,6 +17,7 @@ export const app = {
     clients: "Clientes",
     serviceAccounts: "Cuentas de servicio",
     reportTypes: "Tipos de reporte",
+    sheetFilters: "Filtros de hoja",
   },
   theme: {
     light: "claro",
@@ -89,6 +90,8 @@ export const app = {
     adminClients: "Clientes | Reporting Web",
     adminServiceAccounts: "Cuentas de servicio | Reporting Web",
     adminReportTypes: "Tipos de reporte | Reporting Web",
+    adminSheetFilters: "Filtros de hoja | Reporting Web",
+    sheetFilters: "Aplicar filtro de hoja | Reporting Web",
     signIn: "Iniciar sesión | Reporting Web",
     signUp: "Crear cuenta | Reporting Web",
     setPassword: "Definir contraseña | Reporting Web",

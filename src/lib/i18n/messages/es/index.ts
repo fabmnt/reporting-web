@@ -7,6 +7,7 @@ import { conditions } from "./conditions";
 import { errors } from "./errors";
 import { reports } from "./reports";
 import { security } from "./security";
+import { sheetFilters } from "./sheetFilters";
 
 export const es: Messages = {
   common,
@@ -17,4 +18,5 @@ export const es: Messages = {
   clinics,
   admin,
   security,
+  sheetFilters,
 };

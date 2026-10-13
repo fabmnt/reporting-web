@@ -3,7 +3,7 @@ import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 
 import { clinicSheetColumns } from "./model/clinicSheetColumns";
-import { reportConditionSet } from "./model/reportConditions";
+import { conditionExpression, reportConditionSet } from "./model/reportConditions";
 import { reportEngine, reportTypeBucket } from "./model/reportTypes";
 
 // A workflow account works like an operator, except that an administrator
@@ -139,6 +139,29 @@ export default defineSchema({
     createdAt: v.number(),
     updatedAt: v.number(),
   }).index("by_ownerUserId", ["ownerUserId"]),
+
+  // Filters an administrator defines and an operator writes onto a clinic sheet
+  // as a Google Sheets filter view. The name is the view title. Applying the
+  // filter again replaces the view of the same name and leaves every other view
+  // on that sheet alone.
+  sheetFilters: defineTable({
+    name: v.string(),
+    description: v.string(),
+    expression: conditionExpression,
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  }).index("by_name", ["name"]),
+
+  // One row while an apply is writing that filter name onto that spreadsheet.
+  // Two applies that both read the old views and then both add one would leave
+  // two views with the same name, so the second waits until this row is gone
+  // or its time has passed.
+  sheetFilterApplies: defineTable({
+    googleSheetId: v.string(),
+    filterName: v.string(),
+    token: v.string(),
+    expiresAt: v.number(),
+  }).index("by_sheet_and_filter", ["googleSheetId", "filterName"]),
 
   // Saved selections of clients and clinics an operator runs reports over. A
   // group belongs to the account that made it: only its owner reads and edits

@@ -51,7 +51,7 @@ function ReportRunnerSkeleton() {
 
   return (
     <div className="flex flex-col gap-6" aria-busy="true" aria-label={t.reports.loading.page}>
-      <PageHeader title={t.reports.pageTitle} actions={<ConfigureLink />} />
+      <PageHeader title={t.reports.pageTitle} actions={<ReportHeaderLinks />} />
       <div className="grid gap-6 lg:grid-cols-[360px_minmax(0,1fr)] lg:items-start">
         <Card className="lg:sticky lg:top-20" aria-label={t.reports.loading.settings}>
           <CardHeader className="gap-3">
@@ -127,19 +127,25 @@ function ResultsPlaceholder({ running, clinicCount }: { running: boolean; clinic
 // The configuration screen has no entry in the header of its own, so the
 // reports page links to it and only shows the link to accounts that may open it.
 const CONFIGURATION_PATH = "/configuration";
+const SHEET_FILTERS_PATH = "/sheet-filters";
 
-function ConfigureLink() {
+function ReportHeaderLinks() {
   const { t } = useI18n();
   const current = useQuery(api.staffAccounts.current, {});
-  // Every role runs reports and configures its own report types.
-  const canConfigure = current?.status === "active";
+  // Every role runs reports, applies sheet filters, and configures its own types.
+  const canOpen = current?.status === "active";
 
-  if (!canConfigure) return null;
+  if (!canOpen) return null;
 
   return (
-    <AppLink href={CONFIGURATION_PATH} className={cn(buttonVariants({ variant: "outline" }))}>
-      {t.reports.configure}
-    </AppLink>
+    <>
+      <AppLink href={SHEET_FILTERS_PATH} className={cn(buttonVariants({ variant: "outline" }))}>
+        {t.sheetFilters.open}
+      </AppLink>
+      <AppLink href={CONFIGURATION_PATH} className={cn(buttonVariants({ variant: "outline" }))}>
+        {t.reports.configure}
+      </AppLink>
+    </>
   );
 }
 
@@ -324,7 +330,7 @@ export function ReportRunner() {
 
   return (
     <div className="flex flex-col gap-6">
-      <PageHeader title={t.reports.pageTitle} actions={<ConfigureLink />} />
+      <PageHeader title={t.reports.pageTitle} actions={<ReportHeaderLinks />} />
 
       {error ? (
         <Alert variant="destructive">

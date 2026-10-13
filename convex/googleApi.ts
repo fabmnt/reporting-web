@@ -12,6 +12,7 @@ import {
   sleep,
   type GoogleAttempt,
   type GoogleFailure,
+  type WriteRetryDecision,
 } from "./model/googlePolicy";
 
 const GOOGLE_TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token";
@@ -185,25 +186,34 @@ export async function refreshAccessToken(): Promise<string> {
   return data.access_token;
 }
 
-// Reads one path of the Sheets API with the app's own account, paced against the
-// budget of that credential and retried on Google's transient failures. The
-// caller refreshes the token once per action instead of once per request, and
-// passes the deadline it computed for that action.
+// Reads or writes one path of the Sheets API with the app's own account, paced
+// against the budget of that credential and retried on Google's transient
+// failures. A body is sent as JSON with POST, which is how a filter view is
+// written. The caller refreshes the token once per action instead of once per
+// request, and passes the deadline it computed for that action.
 export async function fetchSheetsJson(
   ctx: ActionCtx,
   path: string,
   token: string,
   deadlineMs: number,
-  credentialKey: string
+  credentialKey: string,
+  body?: unknown,
+  beforeRetry?: (failure: GoogleFailure) => Promise<WriteRetryDecision>
 ): Promise<unknown> {
   return await sendGoogleCall({
     attempt: () =>
       attemptGoogleRequest({
         url: `${GOOGLE_SHEETS_BASE}/${path}`,
-        headers: { authorization: `Bearer ${token}` },
+        method: body === undefined ? undefined : "POST",
+        headers: {
+          authorization: `Bearer ${token}`,
+          ...(body === undefined ? {} : { "content-type": "application/json" }),
+        },
+        body: body === undefined ? undefined : JSON.stringify(body),
         timeoutMs: requestTimeoutMs(deadlineMs),
       }),
     beforeAttempt: () => awaitSheetsSlot(ctx, deadlineMs, credentialKey),
+    beforeRetry,
     deadlineMs,
     failure: (failure) =>
       failure.quotaRejection

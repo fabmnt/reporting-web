@@ -55,7 +55,7 @@ const conditionGroup = v.object({
   clauses: v.array(conditionClause),
 });
 
-const conditionExpression = v.object({
+export const conditionExpression = v.object({
   // Every filter must match. An empty list matches everything.
   filters: v.array(conditionClause),
   // At least one group must match. An empty list matches everything, an empty
