@@ -25,7 +25,7 @@ import { spawn } from "node:child_process";
 
 const AUTH_ENDPOINT = "https://accounts.google.com/o/oauth2/v2/auth";
 const TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token";
-const SHEETS_READONLY_SCOPE = "https://www.googleapis.com/auth/spreadsheets.readonly";
+const SHEETS_SCOPE = "https://www.googleapis.com/auth/spreadsheets";
 const REDIRECT_PORT = 3117;
 const REDIRECT_URI = `http://127.0.0.1:${REDIRECT_PORT}`;
 const CONSENT_TIMEOUT_MS = 5 * 60 * 1000;
@@ -54,7 +54,7 @@ function buildAuthUrl(clientId: string, state: string, loginHint?: string): stri
   url.searchParams.set("client_id", clientId);
   url.searchParams.set("redirect_uri", REDIRECT_URI);
   url.searchParams.set("response_type", "code");
-  url.searchParams.set("scope", SHEETS_READONLY_SCOPE);
+  url.searchParams.set("scope", SHEETS_SCOPE);
   url.searchParams.set("access_type", "offline");
   url.searchParams.set("prompt", "consent");
   url.searchParams.set("state", state);
@@ -144,7 +144,9 @@ Refresh token obtained. Store the credentials in the Convex deployment:
   npx convex env set GOOGLE_OAUTH_CLIENT_ID ${clientId}
   npx convex env set GOOGLE_OAUTH_CLIENT_SECRET ${clientSecret}
 
-The token gives read-only access to every spreadsheet your account can open.
+The token can read and edit every spreadsheet your account can open.
+Filter views need edit access. A token created before this change is still
+read-only until you run this script again and store the new refresh token.
 Revoke it any time at https://myaccount.google.com/permissions.
 
 Reminder: if the OAuth consent screen is in "Testing" status, this token

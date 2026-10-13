@@ -13,6 +13,11 @@ import { appError } from "./model/appErrors";
 import { serviceAccountBucket } from "./model/googleCredentials";
 import { toSheetGrid, type SheetGrid } from "./model/googleGrid";
 import {
+  sheetTabsFromSpreadsheet,
+  SHEET_STRUCTURE_FIELDS,
+  type SheetTabStructure,
+} from "./model/sheetFilterViews";
+import {
   actionDeadline,
   failureOf,
   requestTimeoutMs,
@@ -21,16 +26,19 @@ import {
 } from "./model/googlePolicy";
 
 /**
- * The Sheets API as a service account reads it: this is the only place the two
- * Google libraries run, and the only place a stored private key is read.
+ * The Sheets API as a service account reads and writes it: this is the only
+ * place the two Google libraries run, and the only place a stored private key
+ * is read.
  *
  * The libraries are Node packages, so the file declares the Node runtime. Only
  * actions may run there, which is why every caller reaches this module through
  * an action (internal.googleServiceAccount.*) instead of importing it.
  */
 
-// The app only reads sheets, whichever account it reads them with.
-const SHEETS_READONLY_SCOPE = "https://www.googleapis.com/auth/spreadsheets.readonly";
+// Reading a sheet and writing a filter view use the same account. The scope is
+// the full Sheets scope, so a service account shared as a viewer can still be
+// turned away on a write until the sheet is shared with it as an editor.
+const SHEETS_SCOPE = "https://www.googleapis.com/auth/spreadsheets";
 
 type ServiceAccountKey = {
   email: string;
@@ -70,7 +78,7 @@ function sheetsClientFor(
     auth: new JWT({
       email: key.email,
       key: key.privateKey,
-      scopes: [SHEETS_READONLY_SCOPE],
+      scopes: [SHEETS_SCOPE],
     }),
   });
   clientsByAccount.set(serviceAccountId, { key, client });
@@ -200,7 +208,7 @@ export const checkCredential = internalAction({
       const auth = new JWT({
         email: key.email,
         key: key.privateKey,
-        scopes: [SHEETS_READONLY_SCOPE],
+        scopes: [SHEETS_SCOPE],
       });
       const token = await auth.getAccessToken();
       if (token.token === null || token.token === undefined || token.token === "") {
@@ -276,5 +284,78 @@ export const readTabValues = internalAction({
     }
 
     return valueRanges.map((range) => toSheetGrid(range.values));
+  },
+});
+
+const sheetTabStructure = v.object({
+  title: v.string(),
+  sheetId: v.number(),
+  columnCount: v.number(),
+  filterViews: v.array(
+    v.object({
+      filterViewId: v.number(),
+      title: v.string(),
+    })
+  ),
+});
+
+// Tab ids and the filter views already on them. The write uses this instead of
+// the title list, because a filter view is added to a sheet id.
+export const readSheetStructure = internalAction({
+  args: {
+    serviceAccountId: v.id("googleServiceAccounts"),
+    spreadsheetId: v.string(),
+  },
+  returns: v.array(sheetTabStructure),
+  handler: async (ctx, args): Promise<SheetTabStructure[]> => {
+    const key = await loadKey(ctx, args.serviceAccountId);
+    const sheets = sheetsClientFor(args.serviceAccountId, key);
+    const response = await callSheets(
+      ctx,
+      { serviceAccountId: args.serviceAccountId, key },
+      (timeoutMs) =>
+        sheets.spreadsheets.get(
+          {
+            spreadsheetId: args.spreadsheetId,
+            fields: SHEET_STRUCTURE_FIELDS,
+          },
+          { signal: AbortSignal.timeout(timeoutMs) }
+        )
+    );
+
+    return sheetTabsFromSpreadsheet(response.data);
+  },
+});
+
+// One batch update, which is how every tab of a clinic gets its filter view
+// without a request per tab. The body is built by the caller and checked here
+// only for being the object Google expects.
+export const replaceFilterViews = internalAction({
+  args: {
+    serviceAccountId: v.id("googleServiceAccounts"),
+    spreadsheetId: v.string(),
+    batch: v.string(),
+  },
+  returns: v.null(),
+  handler: async (ctx, args): Promise<null> => {
+    const parsed: unknown = JSON.parse(args.batch);
+    if (typeof parsed !== "object" || parsed === null || !("requests" in parsed)) {
+      throw new Error("Sheet filter update is missing its requests.");
+    }
+    const requests = (parsed as { requests?: unknown }).requests;
+    if (!Array.isArray(requests) || requests.length === 0) return null;
+
+    const key = await loadKey(ctx, args.serviceAccountId);
+    const sheets = sheetsClientFor(args.serviceAccountId, key);
+    await callSheets(ctx, { serviceAccountId: args.serviceAccountId, key }, (timeoutMs) =>
+      sheets.spreadsheets.batchUpdate(
+        {
+          spreadsheetId: args.spreadsheetId,
+          requestBody: { requests },
+        },
+        { signal: AbortSignal.timeout(timeoutMs) }
+      )
+    );
+    return null;
   },
 });

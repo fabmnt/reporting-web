@@ -77,6 +77,11 @@ export type AppErrorPayload =
   | { code: "REPORT_GROUP_LIMIT"; limit: number }
   | { code: "REPORT_RUN_NOT_FOUND" }
   | { code: "REPORT_RUN_ALREADY_STARTED" }
+  | { code: "SHEET_FILTER_NOT_FOUND" }
+  | { code: "SHEET_FILTER_NAME_REQUIRED" }
+  | { code: "SHEET_FILTER_NAME_TAKEN"; name: string }
+  | { code: "SHEET_FILTER_LIMIT"; limit: number }
+  | { code: "SHEET_FILTER_CLINICS_REQUIRED" }
   | { code: "SHEET_RATE_LIMITED" }
   | { code: "CARRIER_SIGN_IN_REJECTED" }
   | { code: "CARRIER_API_UNAVAILABLE" };

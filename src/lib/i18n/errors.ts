@@ -132,6 +132,16 @@ function renderAppError(payload: AppErrorPayload, t: Messages): string | null {
       return e.REPORT_RUN_NOT_FOUND;
     case "REPORT_RUN_ALREADY_STARTED":
       return e.REPORT_RUN_ALREADY_STARTED;
+    case "SHEET_FILTER_NOT_FOUND":
+      return e.SHEET_FILTER_NOT_FOUND;
+    case "SHEET_FILTER_NAME_REQUIRED":
+      return e.SHEET_FILTER_NAME_REQUIRED;
+    case "SHEET_FILTER_NAME_TAKEN":
+      return e.SHEET_FILTER_NAME_TAKEN(payload.name);
+    case "SHEET_FILTER_LIMIT":
+      return e.SHEET_FILTER_LIMIT(payload.limit);
+    case "SHEET_FILTER_CLINICS_REQUIRED":
+      return e.SHEET_FILTER_CLINICS_REQUIRED;
     case "SHEET_RATE_LIMITED":
       return e.SHEET_RATE_LIMITED;
     case "CARRIER_SIGN_IN_REJECTED":

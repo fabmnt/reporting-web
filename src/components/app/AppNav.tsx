@@ -15,6 +15,7 @@ const REPORT_PATH = "/";
 const CLINICS_PATH = "/clinics";
 const ADMIN_PATH = "/admin";
 const CONFIGURATION_PATH = "/configuration";
+const SHEET_FILTERS_PATH = "/sheet-filters";
 
 // A nav item can cover more than one route. The configuration screen is only
 // reachable from the reports page, so its route keeps the Reports item current.
@@ -26,7 +27,12 @@ type NavItem = {
 };
 
 const NAV_ITEMS: NavItem[] = [
-  { href: REPORT_PATH, labelKey: "reports", Icon: FileText, sectionPaths: [CONFIGURATION_PATH] },
+  {
+    href: REPORT_PATH,
+    labelKey: "reports",
+    Icon: FileText,
+    sectionPaths: [CONFIGURATION_PATH, SHEET_FILTERS_PATH],
+  },
   { href: CLINICS_PATH, labelKey: "clinics", Icon: Building2 },
   { href: ADMIN_PATH, labelKey: "admin", Icon: ShieldCheck },
 ];

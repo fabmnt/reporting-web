@@ -6,6 +6,7 @@ import { conditions } from "./conditions";
 import { errors } from "./errors";
 import { reports } from "./reports";
 import { security } from "./security";
+import { sheetFilters } from "./sheetFilters";
 
 // English is the source of truth for the message shape: every other language
 // is checked against this type, so a missing entry fails the build.
@@ -18,6 +19,7 @@ export const en = {
   clinics,
   admin,
   security,
+  sheetFilters,
 };
 
 export type Messages = typeof en;

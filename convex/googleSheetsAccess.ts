@@ -11,6 +11,12 @@ import {
 } from "./model/googleCredentials";
 import { toSheetGrid, type SheetGrid } from "./model/googleGrid";
 import { actionDeadline } from "./model/googlePolicy";
+import {
+  sheetTabsFromSpreadsheet,
+  SHEET_STRUCTURE_FIELDS,
+  type FilterViewBatch,
+  type SheetTabStructure,
+} from "./model/sheetFilterViews";
 
 // spreadsheets.get has no batch variant, so listing the tabs of a spreadsheet
 // costs one request each. Values are batched with values:batchGet instead: one
@@ -43,6 +49,11 @@ export type SheetsSession = {
   // The cells of each requested range, in the same order. A range Google has
   // nothing for comes back empty.
   readRanges(spreadsheetId: string, ranges: string[]): Promise<SheetGrid[]>;
+  // Tab ids, widths, and the filter views already on them. Writing a view needs
+  // the id, and replacing one needs the id of the view it replaces.
+  listSheetStructure(spreadsheetId: string): Promise<SheetTabStructure[]>;
+  // Deletes and adds filter views in one update. An empty batch does nothing.
+  replaceFilterViews(spreadsheetId: string, batch: FilterViewBatch): Promise<void>;
 };
 
 function tabTitlesOf(data: SheetsTabListResponse): string[] {
@@ -94,6 +105,20 @@ async function oauthSession(ctx: ActionCtx, credential: GoogleCredential): Promi
       )) as SheetsBatchValuesResponse;
       return gridsOf(data, ranges.length);
     },
+    async listSheetStructure(spreadsheetId) {
+      const data = await fetchSheetsJson(
+        ctx,
+        `${spreadsheetId}?fields=${encodeURIComponent(SHEET_STRUCTURE_FIELDS)}`,
+        token,
+        deadlineMs,
+        bucket
+      );
+      return sheetTabsFromSpreadsheet(data);
+    },
+    async replaceFilterViews(spreadsheetId, batch) {
+      if (batch.requests.length === 0) return;
+      await fetchSheetsJson(ctx, `${spreadsheetId}:batchUpdate`, token, deadlineMs, bucket, batch);
+    },
   };
 }
 
@@ -120,6 +145,20 @@ function serviceAccountSession(
         serviceAccountId,
         spreadsheetId,
         ranges,
+      });
+    },
+    async listSheetStructure(spreadsheetId) {
+      return await ctx.runAction(internal.googleServiceAccount.readSheetStructure, {
+        serviceAccountId,
+        spreadsheetId,
+      });
+    },
+    async replaceFilterViews(spreadsheetId, batch) {
+      if (batch.requests.length === 0) return;
+      await ctx.runAction(internal.googleServiceAccount.replaceFilterViews, {
+        serviceAccountId,
+        spreadsheetId,
+        batch: JSON.stringify(batch),
       });
     },
   };
@@ -201,6 +240,10 @@ function fallingBackSession(input: {
     listTabTitles: (spreadsheetId) => read((session) => session.listTabTitles(spreadsheetId)),
     readRanges: (spreadsheetId, ranges) =>
       read((session) => session.readRanges(spreadsheetId, ranges)),
+    listSheetStructure: (spreadsheetId) =>
+      read((session) => session.listSheetStructure(spreadsheetId)),
+    replaceFilterViews: (spreadsheetId, batch) =>
+      read((session) => session.replaceFilterViews(spreadsheetId, batch)),
   };
 }
 
