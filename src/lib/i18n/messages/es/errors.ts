@@ -73,6 +73,13 @@ export const errors = {
   REPORT_GROUP_LIMIT: (limit: number) => `Puedes guardar hasta ${limit} grupos de reportes.`,
   REPORT_RUN_NOT_FOUND: "Esta ejecución de reporte ya no está disponible.",
   REPORT_RUN_ALREADY_STARTED: "Esta ejecución de reporte ya se había iniciado.",
+  SHEET_FILTER_NOT_FOUND: "Este filtro de hoja no existe.",
+  SHEET_FILTER_NAME_REQUIRED: "El filtro de hoja necesita un nombre.",
+  SHEET_FILTER_NAME_TAKEN: (name: string) => `Ya existe un filtro de hoja llamado "${name}".`,
+  SHEET_FILTER_LIMIT: (limit: number) => `Puedes guardar hasta ${limit} filtros de hoja.`,
+  SHEET_FILTER_CLINICS_REQUIRED: "Elige al menos una clínica.",
+  SHEET_FILTER_IN_PROGRESS:
+    "Este filtro ya se está aplicando en esa clínica. Espera a que termine e inténtalo de nuevo.",
   SHEET_NO_TABS: (startDate: string, endDate: string) =>
     `No se encontraron pestañas entre ${startDate} y ${endDate}.`,
   SHEET_INVALID_COLUMN: (column: string) =>

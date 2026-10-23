@@ -72,6 +72,13 @@ export const errors = {
   REPORT_GROUP_LIMIT: (limit: number) => `You can keep up to ${limit} report groups.`,
   REPORT_RUN_NOT_FOUND: "This report run is not available any more.",
   REPORT_RUN_ALREADY_STARTED: "This report run was already started.",
+  SHEET_FILTER_NOT_FOUND: "This sheet filter does not exist.",
+  SHEET_FILTER_NAME_REQUIRED: "The sheet filter needs a name.",
+  SHEET_FILTER_NAME_TAKEN: (name: string) => `A sheet filter named "${name}" already exists.`,
+  SHEET_FILTER_LIMIT: (limit: number) => `You can keep up to ${limit} sheet filters.`,
+  SHEET_FILTER_CLINICS_REQUIRED: "Choose at least one clinic.",
+  SHEET_FILTER_IN_PROGRESS:
+    "This filter is already being applied to that clinic. Wait for it to finish, then try again.",
   SHEET_NO_TABS: (startDate: string, endDate: string) =>
     `No tabs found between ${startDate} and ${endDate}.`,
   SHEET_INVALID_COLUMN: (column: string) =>

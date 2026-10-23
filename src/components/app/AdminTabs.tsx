@@ -10,6 +10,7 @@ const ADMIN_TABS = [
   { href: "/admin/clinics", labelKey: "clinics" },
   { href: "/admin/service-accounts", labelKey: "serviceAccounts" },
   { href: "/admin/report-types", labelKey: "reportTypes" },
+  { href: "/admin/sheet-filters", labelKey: "sheetFilters" },
 ] as const;
 
 export function AdminTabs() {

@@ -37,6 +37,17 @@ export type GoogleFailure = {
 export type GoogleAttempt<T> =
   { kind: "success"; value: T } | { kind: "failure"; failure: GoogleFailure };
 
+// A write whose answer never arrived may already be stored. The caller reads
+// the sheet and says whether to treat it as done, try again, or stop.
+export type WriteRetryDecision = "succeeded" | "retry" | "abort";
+
+// Status 0 is a dropped connection and 5xx is an answer Google may have
+// committed before failing the response. A quota rejection is refused before
+// the write, so it can be repeated as it is.
+export function writeMayHaveLanded(failure: GoogleFailure): boolean {
+  return failure.status === 0 || failure.status >= 500;
+}
+
 export function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -122,6 +133,9 @@ export function requestTimeoutMs(deadlineMs: number): number {
 export async function sendGoogleCall<T>(options: {
   attempt: () => Promise<GoogleAttempt<T>>;
   beforeAttempt?: () => Promise<void>;
+  // Set on a write. A lost response is checked against the sheet before the
+  // same batch is sent again, because a second copy fails once the first landed.
+  beforeRetry?: (failure: GoogleFailure) => Promise<WriteRetryDecision>;
   failure: (failure: GoogleFailure) => Error;
   deadlineMs: number;
 }): Promise<T> {
@@ -129,6 +143,11 @@ export async function sendGoogleCall<T>(options: {
     await options.beforeAttempt?.();
     const result = await options.attempt();
     if (result.kind === "success") return result.value;
+    if (options.beforeRetry !== undefined && writeMayHaveLanded(result.failure)) {
+      const decision = await options.beforeRetry(result.failure);
+      if (decision === "succeeded") return undefined as T;
+      if (decision === "abort") throw options.failure(result.failure);
+    }
     if (!result.failure.retryable || attempt >= MAX_ATTEMPTS) throw options.failure(result.failure);
     const waitMs = backoffMs(attempt, result.failure.retryAfterMs);
     if (Date.now() + waitMs > options.deadlineMs) throw options.failure(result.failure);
