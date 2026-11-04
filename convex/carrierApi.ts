@@ -165,3 +165,32 @@ export async function fetchClinicBots(
 
   return { ok: true, value: bots };
 }
+
+/**
+ * One of the Control Central directory lists (clients, clinics or drive rows),
+ * answered as the raw rows: the caller narrows their shape. Costs one request,
+ * retried like every other carrier call.
+ */
+export async function fetchCarrierList(
+  path: string,
+  token: string,
+  deadlineMs: number
+): Promise<CarrierResult<unknown[]>> {
+  const response = await sendCarrierRequest(
+    path,
+    { headers: { "x-access-token": token } },
+    deadlineMs
+  );
+
+  if (response.status !== 200) return { ok: false, failure: failureOfStatus(response.status) };
+
+  const body = parseJson(response.text);
+  if (!Array.isArray(body)) {
+    console.log(
+      `Carrier API answered ${path} without a list: ${response.text.slice(0, DETAIL_LIMIT)}`
+    );
+    return { ok: false, failure: "unavailable" };
+  }
+
+  return { ok: true, value: body };
+}

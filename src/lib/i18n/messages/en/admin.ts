@@ -252,4 +252,47 @@ export const admin = {
       linkFailed: "Linking the client failed.",
     },
   },
+  directorySync: {
+    pageTitle: "Control Central",
+    accessDeniedBody: "Your account cannot add clients or clinics.",
+    intro:
+      "Clients and clinics in Control Central that are not stored here. Untick what you do not want, then add the rest.",
+    refresh: "Refresh",
+    loadFailedTitle: "Could not read Control Central",
+    loadFailed: "Reading Control Central failed.",
+    addFailedTitle: "Could not add",
+    addFailed: "Adding failed.",
+    nothingMissing: "Every Control Central client and clinic is stored here.",
+    search: "Search clients or clinics",
+    noMatches: "No clients or clinics match this search.",
+    selectAll: "Select all",
+    addSelected: "Add selected",
+    summary: (clients: number, clinics: number) =>
+      `${clients} ${clients === 1 ? "client" : "clients"} and ${clinics} ${clinics === 1 ? "clinic" : "clinics"}`,
+    newClient: "New client",
+    noClientGroup: "No client in Control Central",
+    missingClinics: (count: number) =>
+      count === 1 ? "1 missing clinic" : `${count} missing clinics`,
+    noMissingClinics: "This client has no missing clinics.",
+    selectClient: (name: string) => `Select ${name} and its clinics`,
+    externalId: "Control Central ID",
+    sheet: "Spreadsheet",
+    confirm: {
+      title: "Add to the app?",
+      description: (summary: string) =>
+        `This adds ${summary}. Everything is created active, and new clinics have no sheet column mapping yet.`,
+      clientOnly: "Only the client",
+      add: "Add",
+    },
+    added: (summary: string) => `Added ${summary}.`,
+    skipped: (count: number) =>
+      `${count} ${count === 1 ? "clinic was" : "clinics were"} skipped because they clash with a stored clinic.`,
+    problems: {
+      noName: "No name in Control Central",
+      noSpreadsheet: "No spreadsheet in Control Central",
+      noClient: "No client in Control Central",
+      sheetTaken: "Spreadsheet used by another clinic",
+      nameTaken: "Its client already has a clinic with this name",
+    },
+  },
 };

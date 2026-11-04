@@ -17,6 +17,7 @@ export const app = {
     clients: "Clientes",
     serviceAccounts: "Cuentas de servicio",
     reportTypes: "Tipos de reporte",
+    directorySync: "Control Central",
   },
   theme: {
     light: "claro",
@@ -89,6 +90,7 @@ export const app = {
     adminClients: "Clientes | Reporting Web",
     adminServiceAccounts: "Cuentas de servicio | Reporting Web",
     adminReportTypes: "Tipos de reporte | Reporting Web",
+    adminDirectorySync: "Control Central | Reporting Web",
     signIn: "Iniciar sesión | Reporting Web",
     signUp: "Crear cuenta | Reporting Web",
     setPassword: "Definir contraseña | Reporting Web",

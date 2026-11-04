@@ -251,4 +251,47 @@ export const admin = {
       linkFailed: "Falló la vinculación del cliente.",
     },
   },
+  directorySync: {
+    pageTitle: "Control Central",
+    accessDeniedBody: "Tu cuenta no puede agregar clientes ni clínicas.",
+    intro:
+      "Clientes y clínicas de Control Central que no están guardados aquí. Desmarca lo que no quieras y agrega el resto.",
+    refresh: "Actualizar",
+    loadFailedTitle: "No se pudo leer Control Central",
+    loadFailed: "Falló la lectura de Control Central.",
+    addFailedTitle: "No se pudo agregar",
+    addFailed: "Falló la operación de agregar.",
+    nothingMissing: "Todos los clientes y clínicas de Control Central están guardados aquí.",
+    search: "Buscar clientes o clínicas",
+    noMatches: "Ningún cliente o clínica coincide con esta búsqueda.",
+    selectAll: "Seleccionar todo",
+    addSelected: "Agregar seleccionados",
+    summary: (clients: number, clinics: number) =>
+      `${clients} ${clients === 1 ? "cliente" : "clientes"} y ${clinics} ${clinics === 1 ? "clínica" : "clínicas"}`,
+    newClient: "Cliente nuevo",
+    noClientGroup: "Sin cliente en Control Central",
+    missingClinics: (count: number) =>
+      count === 1 ? "1 clínica faltante" : `${count} clínicas faltantes`,
+    noMissingClinics: "A este cliente no le faltan clínicas.",
+    selectClient: (name: string) => `Seleccionar ${name} y sus clínicas`,
+    externalId: "ID de Control Central",
+    sheet: "Hoja de cálculo",
+    confirm: {
+      title: "¿Agregar a la aplicación?",
+      description: (summary: string) =>
+        `Se agregarán ${summary}. Todo se crea activo y las clínicas nuevas aún no tienen columnas de hoja asignadas.`,
+      clientOnly: "Solo el cliente",
+      add: "Agregar",
+    },
+    added: (summary: string) => `Se agregaron ${summary}.`,
+    skipped: (count: number) =>
+      `Se omitieron ${count} ${count === 1 ? "clínica" : "clínicas"} porque chocan con una clínica guardada.`,
+    problems: {
+      noName: "Sin nombre en Control Central",
+      noSpreadsheet: "Sin hoja de cálculo en Control Central",
+      noClient: "Sin cliente en Control Central",
+      sheetTaken: "Hoja de cálculo usada por otra clínica",
+      nameTaken: "Su cliente ya tiene una clínica con este nombre",
+    },
+  },
 };

@@ -11,6 +11,7 @@
 import type * as auth from "../auth.js";
 import type * as carrierApi from "../carrierApi.js";
 import type * as clinics from "../clinics.js";
+import type * as directorySync from "../directorySync.js";
 import type * as executeReport from "../executeReport.js";
 import type * as googleAccounts from "../googleAccounts.js";
 import type * as googleApi from "../googleApi.js";
@@ -31,6 +32,7 @@ import type * as migrations_reportTypesSeed from "../migrations/reportTypesSeed.
 import type * as model_appErrors from "../model/appErrors.js";
 import type * as model_assignments from "../model/assignments.js";
 import type * as model_carrierBots from "../model/carrierBots.js";
+import type * as model_cccDirectory from "../model/cccDirectory.js";
 import type * as model_clientKey from "../model/clientKey.js";
 import type * as model_clients from "../model/clients.js";
 import type * as model_clinicSheetColumns from "../model/clinicSheetColumns.js";
@@ -69,6 +71,7 @@ declare const fullApi: ApiFromModules<{
   auth: typeof auth;
   carrierApi: typeof carrierApi;
   clinics: typeof clinics;
+  directorySync: typeof directorySync;
   executeReport: typeof executeReport;
   googleAccounts: typeof googleAccounts;
   googleApi: typeof googleApi;
@@ -89,6 +92,7 @@ declare const fullApi: ApiFromModules<{
   "model/appErrors": typeof model_appErrors;
   "model/assignments": typeof model_assignments;
   "model/carrierBots": typeof model_carrierBots;
+  "model/cccDirectory": typeof model_cccDirectory;
   "model/clientKey": typeof model_clientKey;
   "model/clients": typeof model_clients;
   "model/clinicSheetColumns": typeof model_clinicSheetColumns;

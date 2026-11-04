@@ -3,6 +3,7 @@ import { AdminAccountsPanel } from "@/components/admin/AdminPanel";
 import { AdminReportTypesPanel } from "@/components/admin/AdminReportTypesPanel";
 import { AdminClientsPanel } from "@/components/admin/ClientsPanel";
 import { AdminClinicsPanel } from "@/components/admin/ClinicsPanel";
+import { AdminDirectorySyncPanel } from "@/components/admin/DirectorySyncPanel";
 import { AdminServiceAccountsPanel } from "@/components/admin/ServiceAccountsPanel";
 import { AssignedClinicsPanel } from "@/components/clinics/AssignedClinicsPanel";
 import { ConditionsPanel } from "@/components/conditions/ConditionsPanel";
@@ -23,6 +24,7 @@ const ROUTES: Record<string, () => React.JSX.Element> = {
   "/admin/clinics": AdminClinicsPanel,
   "/admin/service-accounts": AdminServiceAccountsPanel,
   "/admin/report-types": AdminReportTypesPanel,
+  "/admin/directory-sync": AdminDirectorySyncPanel,
 };
 
 function NotFound() {
