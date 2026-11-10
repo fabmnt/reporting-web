@@ -38,6 +38,8 @@ export const put = internalMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    const clinic = await ctx.db.get("clinics", args.clinicId);
+    if (clinic === null || clinic.googleSheetId !== args.spreadsheetId) return null;
     const row = await ctx.db
       .query("sheetTabCache")
       .withIndex("by_clinicId", (q) => q.eq("clinicId", args.clinicId))

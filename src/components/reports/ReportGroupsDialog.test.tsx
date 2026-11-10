@@ -33,18 +33,21 @@ const CLINICS: ReportClinic[] = [
     clientId: "client-1" as Id<"clients">,
     name: "Downtown",
     clientName: "Smilist",
+    cacheVersion: "1",
   },
   {
     clinicId: "clinic-2" as Id<"clinics">,
     clientId: "client-1" as Id<"clients">,
     name: "Uptown",
     clientName: "Smilist",
+    cacheVersion: "1",
   },
   {
     clinicId: "clinic-3" as Id<"clinics">,
     clientId: "client-2" as Id<"clients">,
     name: "Northside",
     clientName: "Mortenson",
+    cacheVersion: "1",
   },
 ];
 

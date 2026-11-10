@@ -102,26 +102,36 @@ export const listAssignedReportClinics = query({
         clientId: v.id("clients"),
         name: v.string(),
         clientName: v.string(),
+        cacheVersion: v.optional(v.string()),
       })
     ),
   }),
   handler: async (ctx) => {
     const { profile } = await requireOperator(ctx);
     const assigned = await listProfileClinics(ctx, profile);
-    const clientNameById = new Map<string, string>();
+    const clientsById = new Map<string, { name: string; serviceAccountId: string | null }>();
     const clinics = [];
     for (const clinic of assigned) {
-      let clientName = clientNameById.get(clinic.clientId);
-      if (clientName === undefined) {
+      let clientInfo = clientsById.get(clinic.clientId);
+      if (clientInfo === undefined) {
         const client = await ctx.db.get("clients", clinic.clientId);
-        clientName = client?.name ?? "Unknown client";
-        clientNameById.set(clinic.clientId, clientName);
+        clientInfo = {
+          name: client?.name ?? "Unknown client",
+          serviceAccountId: client?.serviceAccountId ?? null,
+        };
+        clientsById.set(clinic.clientId, clientInfo);
       }
       clinics.push({
         clinicId: clinic._id,
         clientId: clinic.clientId,
         name: clinic.name,
-        clientName,
+        clientName: clientInfo.name,
+        cacheVersion: JSON.stringify({
+          googleSheetId: clinic.googleSheetId,
+          sheetColumns: clinic.sheetColumns,
+          externalClinicId: clinic.externalClinicId,
+          serviceAccountId: clientInfo.serviceAccountId,
+        }),
       });
     }
     return { clinics };

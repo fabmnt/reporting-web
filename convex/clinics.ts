@@ -11,6 +11,7 @@ import { adjustClientClinicCount } from "./model/clients";
 import { clinicSheetColumns } from "./model/clinicSheetColumns";
 import { adjustServiceAccountClientCount } from "./model/googleCredentials";
 import { listProfileClinics, type StaffProfileForReporting } from "./model/reporting";
+import { removeClinicTabCache } from "./model/sheetTabCache";
 import { requireAdmin, requireOperator, requireSelfAssignment } from "./model/staff";
 
 // The pickers still read one capped page, because a select cannot page: the
@@ -1206,6 +1207,7 @@ export const remove = mutation({
     }
 
     await removeClinicFromStaffProfiles(ctx, args.clinicId);
+    await removeClinicTabCache(ctx, args.clinicId);
     await ctx.db.delete("clinics", args.clinicId);
     await adjustClientClinicCount(ctx, clinic.clientId, -1);
 
