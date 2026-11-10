@@ -6,9 +6,9 @@
  */
 
 // Google's advice for time-based quota errors: retry with a truncated
-// exponential backoff plus jitter, and stop after a few attempts. Four attempts
-// means waits of a second, two, then four.
-export const MAX_ATTEMPTS = 4;
+// exponential backoff plus jitter. Seven attempts allow roughly 63 seconds of
+// waiting for a quota window to recover before giving up.
+export const MAX_ATTEMPTS = 7;
 const INITIAL_BACKOFF_MS = 1_000;
 const JITTER_MS = 1_000;
 const MAX_RETRY_AFTER_MS = 60_000;

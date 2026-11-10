@@ -127,6 +127,7 @@ function ResultsPlaceholder({ running, clinicCount }: { running: boolean; clinic
 // The configuration screen has no entry in the header of its own, so the
 // reports page links to it and only shows the link to accounts that may open it.
 const CONFIGURATION_PATH = "/configuration";
+const REPORT_CACHE_MS = 60_000;
 
 function ConfigureLink() {
   const { t } = useI18n();
@@ -144,7 +145,7 @@ function ConfigureLink() {
 }
 
 export function ReportRunner() {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const assignment = useQuery(api.googleSheets.listAssignedReportClinics, {});
   const groupData = useQuery(api.reportGroups.list, {});
   const typeData = useQuery(api.reportTypes.listRunnable, {});
@@ -164,6 +165,13 @@ export function ReportRunner() {
   const [runId, setRunId] = useState<Id<"reportRuns"> | null>(null);
   const [error, setError] = useState<LocalizedMessage | null>(null);
   const [result, setResult] = useState<ReportResult | null>(null);
+  const [cachedReport, setCachedReport] = useState<{
+    key: string;
+    readAt: number;
+    completedAt: number;
+    result: ReportResult;
+  } | null>(null);
+  const [resultReadAt, setResultReadAt] = useState<number | null>(null);
   // The dialog that creates, edits and deletes the report groups, which the
   // section around the run form opens.
   const [groupManagerOpen, setGroupManagerOpen] = useState(false);
@@ -229,7 +237,7 @@ export function ReportRunner() {
     updateFilters({ ...filters, groupIds: [...selected] });
   }
 
-  async function handleRun() {
+  async function handleRun(fresh = false) {
     const assignedClinics = assignment?.clinics ?? [];
     if (assignedClinics.length === 0) {
       setError(localizedMessage((t) => t.reports.outcomes.noAssignedClinics));
@@ -257,10 +265,24 @@ export function ReportRunner() {
       setError(localizedMessage((t) => t.reports.outcomes.invalidRange));
       return;
     }
+    const cacheKey = JSON.stringify({ filters, clinics: runClinics, type: selectedType, groups });
+    if (
+      !fresh &&
+      cachedReport?.key === cacheKey &&
+      Date.now() - cachedReport.completedAt < REPORT_CACHE_MS
+    ) {
+      setError(null);
+      setResult(cachedReport.result);
+      setResultReadAt(cachedReport.readAt);
+      return;
+    }
+    const readAt = Date.now();
+    setCachedReport(null);
     setRunning(true);
     setCancelling(false);
     setError(null);
     setResult(null);
+    setResultReadAt(null);
     let openedRunId: Id<"reportRuns"> | null = null;
     try {
       // The run is opened before it starts, so the cancel button has something
@@ -276,8 +298,15 @@ export function ReportRunner() {
         runId: reportRunId,
         verificationFilter: filters.verification,
         clinicIds: runClinics.map((clinic) => clinic.clinicId),
+        fresh,
       });
       setResult(data);
+      setResultReadAt(readAt);
+      if (!data.cancelled && data.sheets.every((sheet) => sheet.error === null)) {
+        setCachedReport({ key: cacheKey, readAt, completedAt: Date.now(), result: data });
+      } else {
+        setCachedReport(null);
+      }
     } catch (cause) {
       // A call that never reached the server leaves the record waiting to
       // start, and this form is the only thing that could still close it. The
@@ -460,6 +489,17 @@ export function ReportRunner() {
                 t.reports.run
               )}
             </Button>
+            {!running && result !== null ? (
+              <Button
+                variant="outline"
+                size="lg"
+                className="w-full"
+                onClick={() => void handleRun(true)}
+                disabled={runClinics.length === 0 || selectedType === undefined}
+              >
+                {t.reports.refresh}
+              </Button>
+            ) : null}
             {running ? (
               <Button
                 variant="outline"
@@ -498,6 +538,11 @@ export function ReportRunner() {
               ) : null}
               {showsResults ? (
                 <>
+                  {resultReadAt !== null ? (
+                    <p className="text-sm text-muted-foreground">
+                      {t.reports.readAt(new Date(resultReadAt).toLocaleString(locale))}
+                    </p>
+                  ) : null}
                   <OverviewCard result={result} />
                   <ResultsCard result={result} />
                   <UnmatchedCarrierRowsCard rows={result.unmatchedCarrierRows ?? []} />

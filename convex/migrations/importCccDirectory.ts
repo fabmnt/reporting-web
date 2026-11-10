@@ -5,6 +5,7 @@ import { internalMutation, internalQuery } from "../_generated/server";
 import { clientKeyFromName } from "../model/clientKey";
 import { adjustClientClinicCount } from "../model/clients";
 import { clinicSheetColumns } from "../model/clinicSheetColumns";
+import { removeClinicTabCache } from "../model/sheetTabCache";
 
 // One call reads, clears or deletes at most this many rows, so a table never
 // has to fit in a single transaction. The script calls again while a call
@@ -87,6 +88,7 @@ export const wipeDirectory = internalMutation({
     let deletedClinics = 0;
     const clinics = await ctx.db.query("clinics").withIndex("by_clientId_and_name").take(BATCH);
     for (const clinic of clinics) {
+      await removeClinicTabCache(ctx, clinic._id);
       await ctx.db.delete("clinics", clinic._id);
       deletedClinics += 1;
     }

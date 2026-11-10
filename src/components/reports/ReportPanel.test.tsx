@@ -41,6 +41,9 @@ const ASSIGNMENT = {
     { clinicId: "clinic-2", clientId: "client-2", name: "Uptown", clientName: "Mortenson" },
   ],
 };
+let assignment: {
+  clinics: Array<(typeof ASSIGNMENT.clinics)[number] & { cacheVersion?: string }>;
+} = ASSIGNMENT;
 
 type GroupsPayload = FunctionReturnType<typeof api.reportGroups.list>;
 
@@ -144,9 +147,10 @@ function renderRunner() {
 beforeEach(() => {
   vi.resetAllMocks();
   groups = NO_GROUPS;
+  assignment = ASSIGNMENT;
   useQueryMock.mockImplementation((reference: AnyFunctionReference) => {
     const name = nameOf(reference);
-    if (name === ASSIGNMENT_QUERY) return ASSIGNMENT;
+    if (name === ASSIGNMENT_QUERY) return assignment;
     if (name === GROUPS_QUERY) return groups;
     if (name === TYPES_QUERY) return REPORT_TYPES;
     return undefined;
@@ -165,6 +169,64 @@ beforeEach(() => {
 });
 
 describe("ReportRunner", () => {
+  it("runs again when a clinic's report configuration changes", async () => {
+    const user = userEvent.setup();
+    runReport.mockResolvedValue(PENDING_AUDIT_RUN);
+    assignment = {
+      clinics: ASSIGNMENT.clinics.map((clinic) => ({ ...clinic, cacheVersion: "old" })),
+    };
+    const view = renderRunner();
+    await user.click(screen.getByRole("button", { name: "Run report" }));
+    await screen.findByText("'2', '3'");
+    assignment = {
+      clinics: ASSIGNMENT.clinics.map((clinic) => ({ ...clinic, cacheVersion: "new" })),
+    };
+    view.rerender(
+      <I18nProvider>
+        <ReportRunner />
+      </I18nProvider>
+    );
+    await user.click(screen.getByRole("button", { name: "Run report" }));
+    await waitFor(() => expect(runReport).toHaveBeenCalledTimes(2));
+  });
+  it("reuses a complete report, expires it, and allows a fresh read", async () => {
+    const user = userEvent.setup();
+    const now = vi.spyOn(Date, "now");
+    const initial = Date.now();
+    now.mockReturnValue(initial);
+    runReport.mockResolvedValue(PENDING_AUDIT_RUN);
+    renderRunner();
+
+    await user.click(screen.getByRole("button", { name: "Run report" }));
+    await screen.findByText("'2', '3'");
+    await user.click(screen.getByRole("button", { name: "Run report" }));
+    expect(runReport).toHaveBeenCalledTimes(1);
+    await user.click(screen.getByRole("button", { name: "Read fresh data" }));
+    await waitFor(() => expect(runReport).toHaveBeenCalledTimes(2));
+    expect(runReport).toHaveBeenLastCalledWith(expect.objectContaining({ fresh: true }));
+    await screen.findByText("'2', '3'");
+    now.mockReturnValue(initial + 60_001);
+    await user.click(screen.getByRole("button", { name: "Run report" }));
+    await waitFor(() => expect(runReport).toHaveBeenCalledTimes(3));
+    now.mockRestore();
+  });
+
+  it.each([
+    { ...PENDING_AUDIT_RUN, cancelled: true },
+    {
+      ...PENDING_AUDIT_RUN,
+      sheets: [{ ...PENDING_AUDIT_RUN.sheets[0], error: { code: "SHEET_RATE_LIMITED" } }],
+    },
+  ])("does not reuse cancelled or failed report results", async (result) => {
+    const user = userEvent.setup();
+    runReport.mockResolvedValue(result);
+    renderRunner();
+    await user.click(screen.getByRole("button", { name: "Run report" }));
+    await waitFor(() => expect(runReport).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Run report" })).toBeEnabled());
+    await user.click(screen.getByRole("button", { name: "Run report" }));
+    await waitFor(() => expect(runReport).toHaveBeenCalledTimes(2));
+  });
   it("keeps a finished run's own parameters when the controls change afterward", async () => {
     const user = userEvent.setup();
     runReport.mockResolvedValue(PENDING_AUDIT_RUN);

@@ -2,11 +2,71 @@
 import { convexTest } from "convex-test";
 import { describe, expect, it } from "vitest";
 
-import { api } from "./_generated/api";
+import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import schema from "./schema";
 
 const modules = import.meta.glob("./**/*.ts");
+
+it("invalidates report configuration and removes cached tabs when a clinic is deleted", async () => {
+  const t = convexTest(schema, modules);
+  const identity = await signInAdmin(t);
+  const clinicId = await t.run(async (ctx) => {
+    const clientId = await ctx.db.insert("clients", {
+      key: "cache",
+      name: "Cache",
+      isActive: true,
+    });
+    return await ctx.db.insert("clinics", {
+      clientId,
+      name: "Cache",
+      googleSheetId: "old",
+      isActive: true,
+    });
+  });
+  const signedIn = t.withIdentity(identity);
+  await t.run(async (ctx) => {
+    const profile = await ctx.db.query("staffProfiles").first();
+    if (profile === null) throw new Error("Missing profile");
+    await ctx.db.patch(profile._id, { assignedClinicIds: [clinicId] });
+  });
+  const before = await signedIn.query(api.googleSheets.listAssignedReportClinics, {});
+  await t.run(async (ctx) => {
+    await ctx.db.patch(clinicId, { googleSheetId: "new" });
+    await ctx.db.insert("sheetTabCache", {
+      clinicId,
+      spreadsheetId: "old",
+      credentialKey: "oauth",
+      titles: ["2026-01-01"],
+      fetchedAt: 1,
+    });
+  });
+  const after = await signedIn.query(api.googleSheets.listAssignedReportClinics, {});
+  expect(after.clinics).not.toEqual(before.clinics);
+  await signedIn.mutation(api.clinics.remove, { clinicId });
+  const remaining = await t.run((ctx) =>
+    ctx.db
+      .query("sheetTabCache")
+      .withIndex("by_clinicId", (q) => q.eq("clinicId", clinicId))
+      .unique()
+  );
+  expect(remaining).toBeNull();
+  await t.mutation(internal.sheetTabCache.put, {
+    clinicId,
+    spreadsheetId: "new",
+    credentialKey: "oauth",
+    titles: ["2026-01-01"],
+    fetchedAt: 2,
+  });
+  expect(
+    await t.run((ctx) =>
+      ctx.db
+        .query("sheetTabCache")
+        .withIndex("by_clinicId", (q) => q.eq("clinicId", clinicId))
+        .unique()
+    )
+  ).toBeNull();
+});
 
 type Test = ReturnType<typeof convexTest>;
 

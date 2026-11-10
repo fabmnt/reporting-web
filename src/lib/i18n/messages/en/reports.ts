@@ -50,6 +50,9 @@ export const reports = {
   noReportTypes:
     "No report types yet. Create one in Configuration, or ask an administrator to share a built-in.",
   run: "Run report",
+  refresh: "Read fresh data",
+  readAt: (time: string) =>
+    `Data requested at ${time}. Tab lists may be one minute old. Results may be reused for one minute after the report finishes.`,
   running: "Running report",
   cancel: "Cancel run",
   cancelling: "Cancelling report",
