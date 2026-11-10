@@ -1,10 +1,12 @@
 import { v } from "convex/values";
 
 import { internalAction } from "./_generated/server";
+import { internal } from "./_generated/api";
 import { sheetsSessions, type SheetsSession } from "./googleSheetsAccess";
 import { reportSheetError, sheetErrorFrom, type ReportSheetError } from "./model/appErrors";
 import {
   credentialFallback,
+  credentialKey,
   googleCredential,
   type CredentialFallback,
   type GoogleCredential,
@@ -37,6 +39,7 @@ type SheetsReadAccount = {
 // covers many tabs of the same spreadsheet. Ranges travel in the query string,
 // so long date ranges are sent in chunks.
 const MAX_RANGES_PER_BATCH_REQUEST = 25;
+const TAB_CACHE_MS = 60_000;
 
 // A tab is read up to the last column a sheet can hold and far more rows than
 // one does, because the report compares whole rows and does not know which
@@ -60,6 +63,7 @@ export const planSheetTabs = internalAction({
     ),
     startDate: v.string(),
     endDate: v.string(),
+    fresh: v.optional(v.boolean()),
   },
   returns: v.object({
     tabsForClinic: v.record(v.string(), v.array(v.string())),
@@ -102,7 +106,30 @@ export const planSheetTabs = internalAction({
       let session: SheetsSession | null = null;
       try {
         session = await sessions.forClient(clinic.clientId);
-        const titles = await session.listTabTitles(clinic.googleSheetId);
+        const key = credentialKey(session.credential);
+        const cached = args.fresh
+          ? null
+          : await ctx.runQuery(internal.sheetTabCache.get, { clinicId: clinic.clinicId });
+        let titles: string[];
+        if (
+          cached &&
+          cached.spreadsheetId === clinic.googleSheetId &&
+          cached.credentialKey === key &&
+          Date.now() - cached.fetchedAt < TAB_CACHE_MS
+        ) {
+          titles = cached.titles;
+        } else {
+          const fetchedAt = Date.now();
+          titles = await session.listTabTitles(clinic.googleSheetId);
+          if (session.fallback === null)
+            await ctx.runMutation(internal.sheetTabCache.put, {
+              clinicId: clinic.clinicId,
+              spreadsheetId: clinic.googleSheetId,
+              credentialKey: key,
+              titles,
+              fetchedAt,
+            });
+        }
         tabsForClinic[clinic.clinicId] = tabsInDateRange(titles, args.startDate, args.endDate);
       } catch (error) {
         // A credential that cannot be used, a deleted spreadsheet and an

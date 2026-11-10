@@ -56,6 +56,7 @@ import type * as reportGroups from "../reportGroups.js";
 import type * as reportRuns from "../reportRuns.js";
 import type * as reportTypes from "../reportTypes.js";
 import type * as reports from "../reports.js";
+import type * as sheetTabCache from "../sheetTabCache.js";
 import type * as sheets from "../sheets.js";
 import type * as staffAccounts from "../staffAccounts.js";
 import type * as staffAuth from "../staffAuth.js";
@@ -116,6 +117,7 @@ declare const fullApi: ApiFromModules<{
   reportRuns: typeof reportRuns;
   reportTypes: typeof reportTypes;
   reports: typeof reports;
+  sheetTabCache: typeof sheetTabCache;
   sheets: typeof sheets;
   staffAccounts: typeof staffAccounts;
   staffAuth: typeof staffAuth;

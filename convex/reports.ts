@@ -130,6 +130,7 @@ export const runSheetReport = action({
     // The assigned clinics to read. Left out, the run covers every assigned
     // clinic.
     clinicIds: v.optional(v.array(v.id("clinics"))),
+    fresh: v.optional(v.boolean()),
   },
   returns: reportRunResult,
   handler: async (ctx, args): Promise<ReportRunResult> => {
@@ -149,7 +150,8 @@ export const runSheetReport = action({
         claim.params,
         // Without a choice the run reads the rows the old tool listed.
         args.verificationFilter ?? "both",
-        args.clinicIds
+        args.clinicIds,
+        args.fresh
       );
     } catch (error) {
       // The record closes even when the run stops on its way, because a row
@@ -213,7 +215,8 @@ async function runReportSheets(
   runId: Id<"reportRuns">,
   params: RunParams,
   verificationFilter: ExecuteVerificationFilter,
-  clinicIds: Id<"clinics">[] | undefined
+  clinicIds: Id<"clinics">[] | undefined,
+  fresh: boolean | undefined
 ): Promise<ReportRunResult> {
   const config: ReportRunConfig = await ctx.runQuery(internal.reports.runSheetReportConfig, {
     userId: params.userId,
@@ -251,6 +254,7 @@ async function runReportSheets(
       // Only the execute engine asks the Control Central API which bots a
       // clinic has, so the rows of any other type are read without it.
       matchesCarrierBots: config.engine === "execute",
+      fresh,
     });
   }
 
@@ -283,6 +287,7 @@ async function runReportSheets(
     })),
     startDate: params.startDate,
     endDate: params.endDate,
+    fresh,
   });
 
   const sheets: ReportSheetResult[] = [];

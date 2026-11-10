@@ -52,6 +52,9 @@ export const reports = {
   noReportTypes:
     "Aún no hay tipos de reporte. Crea uno en Configuración o pide a un administrador que comparta uno integrado.",
   run: "Ejecutar reporte",
+  refresh: "Leer datos actualizados",
+  readAt: (time: string) =>
+    `Datos solicitados a las ${time}. La lista de pestañas puede tener hasta un minuto de antigüedad. Los resultados pueden reutilizarse durante un minuto después de finalizar el reporte.`,
   running: "Ejecutando reporte",
   cancel: "Cancelar ejecución",
   cancelling: "Cancelando la ejecución",

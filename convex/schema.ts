@@ -23,6 +23,14 @@ const reportRunStatus = v.union(
 export default defineSchema({
   ...authTables,
 
+  sheetTabCache: defineTable({
+    clinicId: v.id("clinics"),
+    spreadsheetId: v.string(),
+    credentialKey: v.string(),
+    titles: v.array(v.string()),
+    fetchedAt: v.number(),
+  }).index("by_clinicId", ["clinicId"]),
+
   staffProfiles: defineTable({
     userId: v.id("users"),
     displayName: v.string(),

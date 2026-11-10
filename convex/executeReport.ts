@@ -61,6 +61,7 @@ export type ExecuteRunConfig = {
   // report that reads every row its rules pick runs with this off, so it never
   // asks the Control Central API which bots the clinic has.
   matchesCarrierBots: boolean;
+  fresh?: boolean;
 };
 
 type ClinicEntry = {
@@ -185,6 +186,7 @@ export async function runExecuteReport(
     })),
     startDate: config.startDate,
     endDate: config.endDate,
+    fresh: config.fresh,
   });
 
   const sheets: ReportSheetResult[] = [];
