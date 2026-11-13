@@ -70,6 +70,112 @@ it("invalidates report configuration and removes cached tabs when a clinic is de
 
 type Test = ReturnType<typeof convexTest>;
 
+describe("clinics.updateAssigned", () => {
+  async function setup(role: "admin" | "operator" | "workflow" = "operator", count = 2) {
+    const t = convexTest(schema, modules);
+    const identity = await signInAdmin(t);
+    const ids = await t.run(async (ctx) => {
+      const clientId = await ctx.db.insert("clients", {
+        key: "selected",
+        name: "Selected",
+        isActive: true,
+      });
+      const otherClientId = await ctx.db.insert("clients", {
+        key: "other",
+        name: "Other",
+        isActive: true,
+      });
+      const clinicIds = [];
+      for (let i = 0; i < count + 1; i++) {
+        clinicIds.push(
+          await ctx.db.insert("clinics", {
+            clientId: i === count ? otherClientId : clientId,
+            name: `Clinic ${i}`,
+            googleSheetId: `sheet-${i}`,
+            isActive: i !== 1,
+            sheetColumns: { updateStatus: "A" },
+          })
+        );
+      }
+      const profile = await ctx.db.query("staffProfiles").first();
+      if (!profile) throw new Error("Missing profile");
+      await ctx.db.patch(profile._id, { role, assignedClinicIds: [clinicIds[0]] });
+      return clinicIds;
+    });
+    return { t, signedIn: t.withIdentity(identity), ids };
+  }
+
+  it.each(["admin", "operator"] as const)(
+    "updates only the client's columns for %s",
+    async (role) => {
+      const { t, signedIn, ids } = await setup(role);
+      await signedIn.mutation(api.clinics.updateAssigned, {
+        clinicId: ids[0],
+        googleSheetId: "sheet-0",
+        sheetColumns: { updateStatus: "Z" },
+        applyColumnsToClient: true,
+      });
+      const rows = await t.run(async (ctx) => Promise.all(ids.map((id) => ctx.db.get(id))));
+      expect(rows.map((row) => row?.sheetColumns)).toEqual([
+        { updateStatus: "Z" },
+        { updateStatus: "Z" },
+        { updateStatus: "A" },
+      ]);
+      expect(rows.map((row) => row?.googleSheetId)).toEqual(["sheet-0", "sheet-1", "sheet-2"]);
+    }
+  );
+
+  it.each([false, undefined])(
+    "keeps updates individual when bulk is %s",
+    async (applyColumnsToClient) => {
+      const { t, signedIn, ids } = await setup();
+      await signedIn.mutation(api.clinics.updateAssigned, {
+        clinicId: ids[0],
+        googleSheetId: "replacement",
+        sheetColumns: { updateStatus: "Z" },
+        applyColumnsToClient,
+      });
+      const rows = await t.run(async (ctx) => Promise.all(ids.map((id) => ctx.db.get(id))));
+      expect(rows.map((row) => row?.sheetColumns)).toEqual([
+        { updateStatus: "Z" },
+        { updateStatus: "A" },
+        { updateStatus: "A" },
+      ]);
+      expect(rows.map((row) => row?.googleSheetId)).toEqual(["replacement", "sheet-1", "sheet-2"]);
+    }
+  );
+
+  it("rejects workflow bulk updates without writing", async () => {
+    const { t, signedIn, ids } = await setup("workflow");
+    const before = await t.run(async (ctx) => Promise.all(ids.map((id) => ctx.db.get(id))));
+    await expect(
+      signedIn.mutation(api.clinics.updateAssigned, {
+        clinicId: ids[0],
+        googleSheetId: "replacement",
+        sheetColumns: {},
+        applyColumnsToClient: true,
+      })
+    ).rejects.toThrow("CANNOT_ASSIGN_OWN_CLINICS");
+    expect(await t.run(async (ctx) => Promise.all(ids.map((id) => ctx.db.get(id))))).toEqual(
+      before
+    );
+  });
+
+  it("returns a coded limit error without partial writes", async () => {
+    const { t, signedIn, ids } = await setup("operator", 2001);
+    const before = await t.run((ctx) => ctx.db.get(ids[0]));
+    await expect(
+      signedIn.mutation(api.clinics.updateAssigned, {
+        clinicId: ids[0],
+        googleSheetId: "replacement",
+        sheetColumns: {},
+        applyColumnsToClient: true,
+      })
+    ).rejects.toThrow('"code":"CLIENT_CLINIC_UPDATE_LIMIT","limit":2000');
+    expect(await t.run((ctx) => ctx.db.get(ids[0]))).toEqual(before);
+  });
+});
+
 /**
  * An administrator the queries accept as signed in. `getAuthUserId` reads the
  * user id out of the identity subject, so the profile it looks up has to

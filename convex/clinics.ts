@@ -1109,7 +1109,7 @@ export const updateAssigned = mutation({
         .withIndex("by_clientId_and_name", (q) => q.eq("clientId", clinic.clientId))
         .take(MAX_CLINICS + 1);
       if (clinics.length > MAX_CLINICS) {
-        throw new Error(`Cannot update more than ${MAX_CLINICS} clinics at once.`);
+        throw appError({ code: "CLIENT_CLINIC_UPDATE_LIMIT", limit: MAX_CLINICS });
       }
       for (const clientClinic of clinics) {
         await ctx.db.patch(clientClinic._id, { sheetColumns });
