@@ -1,6 +1,8 @@
 // One entry per backend error code. Entries that take data receive the values
 // the backend sent with the code, already resolved by src/lib/i18n/errors.ts.
 export const errors = {
+  CLIENT_CLINIC_UPDATE_LIMIT: (limit: number) =>
+    `Cannot update more than ${limit} clinics at once. Update each clinic individually.`,
   UNAUTHENTICATED: "Sign in to continue.",
   INVALID_CREDENTIALS: "Invalid username or password.",
   INVALID_USERNAME:

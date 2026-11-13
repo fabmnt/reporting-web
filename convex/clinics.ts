@@ -1091,6 +1091,7 @@ export const updateAssigned = mutation({
     clinicId: v.id("clinics"),
     googleSheetId: v.string(),
     sheetColumns: v.optional(clinicSheetColumns),
+    applyColumnsToClient: v.optional(v.boolean()),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
@@ -1099,11 +1100,23 @@ export const updateAssigned = mutation({
 
     const googleSheetId = cleanRequiredText(args.googleSheetId, { code: "GOOGLE_SHEET_REQUIRED" });
     await assertGoogleSheetIdAvailable(ctx, googleSheetId, args.clinicId);
+    const sheetColumns = args.sheetColumns ?? clinic.sheetColumns ?? {};
 
-    await ctx.db.patch(args.clinicId, {
-      googleSheetId,
-      sheetColumns: args.sheetColumns ?? clinic.sheetColumns ?? {},
-    });
+    if (args.applyColumnsToClient) {
+      await requireSelfAssignment(ctx);
+      const clinics = await ctx.db
+        .query("clinics")
+        .withIndex("by_clientId_and_name", (q) => q.eq("clientId", clinic.clientId))
+        .take(MAX_CLINICS + 1);
+      if (clinics.length > MAX_CLINICS) {
+        throw appError({ code: "CLIENT_CLINIC_UPDATE_LIMIT", limit: MAX_CLINICS });
+      }
+      for (const clientClinic of clinics) {
+        await ctx.db.patch(clientClinic._id, { sheetColumns });
+      }
+    }
+
+    await ctx.db.patch(args.clinicId, { googleSheetId, sheetColumns });
 
     return null;
   },

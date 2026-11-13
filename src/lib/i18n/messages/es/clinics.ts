@@ -33,6 +33,8 @@ export const clinics = {
     configureTitle: (name: string) => `Configurar ${name}`,
     configureDescription:
       "Actualiza el enlace de la hoja de Google y las letras de columna de esta clínica.",
+    applyColumnsToClient: (name: string) =>
+      `Aplicar estas columnas a todas las clínicas de ${name}, incluidas las que no tienes asignadas. Se reemplazará su configuración actual de columnas.`,
     sheetLabel: "URL o ID de la hoja de Google",
     saveFailedTitle: "No se pudo guardar la clínica",
     saveFailed: "No se pudo guardar la clínica.",

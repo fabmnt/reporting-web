@@ -48,6 +48,7 @@ type AvailableClinicView = AvailableClinicList["clinics"][number];
 type ClinicConfigFormValues = {
   sheetInput: string;
   sheetColumns: SheetColumnFormValues;
+  applyColumnsToClient: boolean;
 };
 
 function ClinicConfigForm({
@@ -56,6 +57,7 @@ function ClinicConfigForm({
   clinic,
   pending,
   error,
+  canApplyToClient,
   onSubmit,
   onCancel,
 }: {
@@ -64,6 +66,7 @@ function ClinicConfigForm({
   clinic: AssignedClinicView;
   pending: boolean;
   error: LocalizedMessage | null;
+  canApplyToClient: boolean;
   onSubmit: (values: ClinicConfigFormValues) => Promise<void>;
   onCancel: () => void;
 }) {
@@ -71,6 +74,7 @@ function ClinicConfigForm({
   const [values, setValues] = useState<ClinicConfigFormValues>(() => ({
     sheetInput: clinic.googleSheetId,
     sheetColumns: sheetColumnsToFormValues(clinic.sheetColumns),
+    applyColumnsToClient: false,
   }));
   const [validationError, setValidationError] = useState<LocalizedMessage | null>(null);
 
@@ -123,6 +127,23 @@ function ClinicConfigForm({
             onChange={(sheetColumns) => setValues((current) => ({ ...current, sheetColumns }))}
             disabled={pending}
           />
+          {canApplyToClient ? (
+            <label className="flex items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={values.applyColumnsToClient}
+                onChange={(event) =>
+                  setValues((current) => ({
+                    ...current,
+                    applyColumnsToClient: event.target.checked,
+                  }))
+                }
+                disabled={pending}
+                className="mt-1 size-4 shrink-0 accent-primary"
+              />
+              <span>{t.clinics.dialog.applyColumnsToClient(clinic.clientName)}</span>
+            </label>
+          ) : null}
           {error ? (
             <Alert variant="destructive">
               <AlertTitle>{t.clinics.dialog.saveFailedTitle}</AlertTitle>
@@ -308,6 +329,7 @@ export function AssignedClinicsPanel() {
         clinicId: editingClinic.clinicId,
         googleSheetId: values.sheetInput,
         sheetColumns: buildSheetColumnsInput(values.sheetColumns) ?? {},
+        applyColumnsToClient: values.applyColumnsToClient,
       });
       closeForm();
     } catch (cause) {
@@ -500,6 +522,7 @@ export function AssignedClinicsPanel() {
             if (!open) closeForm();
           }}
           clinic={editingClinic}
+          canApplyToClient={canAssignClinics}
           pending={isSaving}
           error={formError}
           onSubmit={submitClinic}

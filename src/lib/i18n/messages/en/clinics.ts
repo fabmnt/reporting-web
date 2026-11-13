@@ -31,6 +31,8 @@ export const clinics = {
   dialog: {
     configureTitle: (name: string) => `Configure ${name}`,
     configureDescription: "Update the Google Sheet link and column letters for this clinic.",
+    applyColumnsToClient: (name: string) =>
+      `Apply these columns to every clinic of ${name}, including clinics not assigned to you. Existing column settings will be replaced.`,
     sheetLabel: "Google Sheet URL or ID",
     saveFailedTitle: "Could not save clinic",
     saveFailed: "Saving the clinic failed.",
