@@ -118,6 +118,11 @@ export const reports = {
       `Google rechazó la clave de la cuenta de servicio ${email}, así que la hoja se leyó con la cuenta de Google de la aplicación. Pide a un administrador que reemplace su clave.`,
     fallbackMissing:
       "La cuenta de servicio vinculada a este cliente ya no existe, así que la hoja se leyó con la cuenta de Google de la aplicación. Pide a un administrador que vincule otra.",
+    emptySheets: {
+      title: "Hojas sin filas",
+      description: "Estas hojas se leyeron y no tenían filas que coincidan con el reporte.",
+      trigger: (count: number) => (count === 1 ? "1 hoja sin filas" : `${count} hojas sin filas`),
+    },
     noMatchingRows: "No hay filas coincidentes.",
     noTabsFound: (startDate: string, endDate: string) =>
       `No se encontraron pestañas entre ${startDate} y ${endDate}.`,

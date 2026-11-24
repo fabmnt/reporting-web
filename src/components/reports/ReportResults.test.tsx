@@ -162,7 +162,8 @@ describe("ResultsCard", () => {
     expect(screen.queryByText("Read with the app's Google account")).not.toBeInTheDocument();
   });
 
-  it("keeps the tab of a clinic that fell back even when it read no row", () => {
+  it("lists a clinic that fell back and read no row in the dialog of empty sheets", async () => {
+    const user = userEvent.setup();
     renderResults(
       run([
         {
@@ -173,12 +174,44 @@ describe("ResultsCard", () => {
       ])
     );
 
-    // The clinic has no row to show, but which account read it is what tells the
-    // operator that a link Google turned down is behind the empty result. The
-    // alert says which account read the sheets instead, so no line repeats it.
-    expect(screen.getByRole("tab", { name: /Abilene/ })).toBeVisible();
+    // The clinic has no row to show, so it has no tab, but which account read
+    // it is what tells the operator that a link Google turned down is behind the
+    // empty result, so the dialog of empty sheets carries it.
+    expect(screen.queryByRole("tab", { name: /Abilene/ })).not.toBeInTheDocument();
+    expect(screen.queryByText(/could not read this sheet/)).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "1 sheet without rows" }));
+
+    expect(await screen.findByText("Abilene")).toBeVisible();
     expect(screen.getByText(/could not read this sheet/)).toBeVisible();
-    expect(screen.queryByText("Read with the app's Google account")).not.toBeInTheDocument();
+  });
+
+  it("counts the sheets without rows on a button and lists them in a dialog", async () => {
+    const user = userEvent.setup();
+    renderResults(
+      run([
+        sheet("clinic-1", "Abilene", "2026-09-29", [sheetRow(3, "Ana", "Austin")]),
+        sheet("clinic-1", "Abilene", "2026-09-28", []),
+        sheet("clinic-2", "Uptown", "2026-09-11", []),
+        failedSheet("clinic-3", "Midtown", "2026-09-10", { code: "SHEET_NO_CARRIER_BOTS" }),
+      ])
+    );
+
+    // A failed sheet keeps its place in the results, so only the two sheets
+    // that read nothing are counted.
+    await user.click(screen.getByRole("button", { name: "2 sheets without rows" }));
+
+    expect(await screen.findByText("2026-09-28")).toBeVisible();
+    expect(screen.getByText("Uptown")).toBeVisible();
+    expect(screen.queryByText("2026-09-10")).not.toBeInTheDocument();
+  });
+
+  it("shows no button when every sheet read rows", () => {
+    renderResults(
+      run([sheet("clinic-1", "Abilene", "2026-09-29", [sheetRow(3, "Ana", "Austin")])])
+    );
+
+    expect(screen.queryByRole("button", { name: /without rows/ })).not.toBeInTheDocument();
   });
 
   it("names the reader of each sheet of a clinic that two accounts read", () => {

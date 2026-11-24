@@ -3,7 +3,7 @@ import { CalendarIcon } from "lucide-react";
 import { useState } from "react";
 import type { DateRange } from "react-day-picker";
 
-import { parseIsoDate, toIsoDate } from "@/lib/dates";
+import { parseIsoDate, todayIso, toIsoDate } from "@/lib/dates";
 import { useI18n } from "@/lib/i18n/context";
 import { DATE_LOCALES } from "@/lib/i18n/dateLocales";
 import type { Locale } from "@/lib/i18n/locales";
@@ -90,13 +90,18 @@ export function DateRangePicker({
             defaultMonth={selectedRange.from ?? selectedRange.to}
             selected={selectedRange}
             // Picking a date only widens the range: the popup waits for the
-            // confirm button so a half-picked range never closes it.
-            onSelect={(range) =>
+            // confirm button so a half-picked range never closes it. Clearing
+            // the range leaves no date picked, and then today is the date.
+            onSelect={(range) => {
+              if (!range?.from) {
+                onChange({ startDate: todayIso(), endDate: todayIso() });
+                return;
+              }
               onChange({
-                startDate: range?.from ? toIsoDate(range.from) : "",
-                endDate: range?.to ? toIsoDate(range.to) : "",
-              })
-            }
+                startDate: toIsoDate(range.from),
+                endDate: range.to ? toIsoDate(range.to) : "",
+              });
+            }}
             numberOfMonths={2}
           />
         </div>

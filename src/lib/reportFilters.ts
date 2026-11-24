@@ -42,8 +42,8 @@ function isVerificationFilter(value: string | null): value is VerificationFilter
 function readDate(params: URLSearchParams, name: string, fallback: string): string {
   const value = params.get(name);
   if (value === null) return fallback;
-  // An empty date is a range that is still being picked, and the picker has to
-  // show it as such instead of falling back to today.
+  // An empty end date is a range that is still being picked, and the picker has
+  // to show it as such instead of falling back to today.
   if (value === "") return value;
   return ISO_DATE.test(value) ? value : fallback;
 }
@@ -63,9 +63,14 @@ export function readReportFilters(search: string): ReportFilters {
   const today = todayIso();
   const verification = params.get(VERIFICATION_PARAM);
 
+  const startDate = readDate(params, START_DATE_PARAM, today);
+  const endDate = readDate(params, END_DATE_PARAM, today);
+  // With no date picked at all, the range is today.
+  const nothingPicked = startDate === "" && endDate === "";
+
   return {
-    startDate: readDate(params, START_DATE_PARAM, today),
-    endDate: readDate(params, END_DATE_PARAM, today),
+    startDate: nothingPicked ? today : startDate,
+    endDate: nothingPicked ? today : endDate,
     // A missing report type means "the first one offered", which is also the
     // fallback of the picker.
     reportTypeId: params.get(REPORT_TYPE_PARAM) || null,

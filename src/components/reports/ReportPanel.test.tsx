@@ -305,14 +305,20 @@ describe("ReportRunner", () => {
     runReport.mockResolvedValue(PENDING_AUDIT_RUN);
     renderRunner();
 
+    // The groups and the clinics sit in tabs of their own.
+    expect(screen.queryByRole("checkbox", { name: /^Downtown/ })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("tab", { name: "Clinics" }));
+
     // Every assigned clinic is covered while no group is ticked.
     expect(screen.getByRole("checkbox", { name: /^Downtown/ })).toBeVisible();
     expect(screen.getByRole("checkbox", { name: /^Uptown/ })).toBeVisible();
 
+    await user.click(screen.getByRole("tab", { name: "Report groups" }));
     await user.click(screen.getByRole("checkbox", { name: /Mortenson batch/ }));
 
     // The group stands for the one client, so the clinic of the other client
     // leaves the list and the run is asked for the group's clinic alone.
+    await user.click(screen.getByRole("tab", { name: "Clinics" }));
     expect(screen.queryByRole("checkbox", { name: /^Downtown/ })).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Run report" }));
 

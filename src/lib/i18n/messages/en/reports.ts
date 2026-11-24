@@ -115,6 +115,12 @@ export const reports = {
       `Google turned the key of the service account ${email} down, so the sheet was read with the app's own Google account. Ask an administrator to replace its key.`,
     fallbackMissing:
       "The service account this client is linked to is gone, so the sheet was read with the app's own Google account. Ask an administrator to link one again.",
+    emptySheets: {
+      title: "Sheets without rows",
+      description: "These sheets were read and held no rows that match the report.",
+      trigger: (count: number) =>
+        count === 1 ? "1 sheet without rows" : `${count} sheets without rows`,
+    },
     noMatchingRows: "No matching rows.",
     noTabsFound: (startDate: string, endDate: string) =>
       `No tabs found between ${startDate} and ${endDate}.`,

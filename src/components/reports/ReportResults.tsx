@@ -27,6 +27,8 @@ import { sheetErrorText } from "@/lib/i18n/errors";
 import type { Messages } from "@/lib/i18n/messages";
 import { cn } from "@/lib/utils";
 
+import { EmptySheetsDialog, type EmptySheetsClinic } from "./EmptySheetsDialog";
+
 export type ReportRow = { rowNumber: number; values: string[]; carriers?: string[] };
 export type BucketResult = {
   bucketKey: string;
@@ -191,13 +193,38 @@ function sheetHasContent(sheet: SheetResult): boolean {
 }
 
 // A clinic none of whose sheet tabs has anything to show is left out of the
-// results whole, unless one of them fell back to the app's own account: which
-// account read a clinic is what tells a reader that its rows were held back by
-// the filters and not by a link Google turned down.
+// results whole. Its sheets are listed in the dialog of the sheets without
+// rows instead.
 function clinicHasContent(group: ClinicGroup): boolean {
-  return (
-    group.sheets.some(sheetHasContent) || group.sheets.some((sheet) => sheet.fallback !== undefined)
-  );
+  return group.sheets.some(sheetHasContent);
+}
+
+// The sheets that read no rows, by clinic, for the dialog that lists them. A
+// clinic that has no results of its own carries its fallback with it, because
+// which account read it is what tells a reader that a link Google turned down
+// is behind the empty result. A clinic that shows results already says it
+// above them.
+function emptySheetsByClinic(
+  groups: ClinicGroup[],
+  t: Messages
+): { clinics: EmptySheetsClinic[]; sheetCount: number } {
+  const clinics: EmptySheetsClinic[] = [];
+  let sheetCount = 0;
+
+  for (const group of groups) {
+    const emptySheets = group.sheets.filter((sheet) => !sheetHasContent(sheet));
+    if (emptySheets.length === 0) continue;
+    const fallback = clinicHasContent(group) ? null : clinicFallback(group);
+    sheetCount += emptySheets.length;
+    clinics.push({
+      clinicId: group.clinicId,
+      clinicName: group.clinicName,
+      tabTitles: emptySheets.map((sheet) => sheet.tabTitle),
+      fallbackNote: fallback === null ? null : fallbackText(fallback, t),
+    });
+  }
+
+  return { clinics, sheetCount };
 }
 
 // The account a clinic's sheets were read with. Every sheet of a clinic belongs
@@ -787,8 +814,8 @@ export function OverviewCard({ result }: { result: ReportResult }) {
  * Renders one finished run. Each clinic the run found rows for is a tab named
  * after the clinic and its row count, and inside it the sheet tabs of that
  * clinic carry the rows they found. A clinic or a sheet tab with nothing to
- * show is left out, unless it failed or fell back to the app's own account, in
- * which case its error or its account stays in view. Every value comes from the
+ * show is left out and listed in a dialog instead, unless it failed, in which
+ * case its error stays in view. Every value comes from the
  * run itself, so editing the report controls afterward never rewrites what the
  * run returned.
  */
@@ -797,7 +824,9 @@ export function ResultsCard({ result }: { result: ReportResult }) {
   // The clinic the reader is looking at. A new run may not hold the clinic the
   // last one was on, and then the first tab of the new run is what shows.
   const [selectedClinicId, setSelectedClinicId] = useState<string | null>(null);
-  const groups = groupByClinic(result.sheets).filter(clinicHasContent);
+  const allGroups = groupByClinic(result.sheets);
+  const groups = allGroups.filter(clinicHasContent);
+  const emptySheets = emptySheetsByClinic(allGroups, t);
   const selectedGroup = groups.find((group) => group.clinicId === selectedClinicId) ?? groups[0];
 
   // A run that read no sheet and a run that found no row both answer with a
@@ -819,6 +848,9 @@ export function ResultsCard({ result }: { result: ReportResult }) {
           <Badge variant="secondary" className="tabular-nums">
             {t.reports.results.rows(countRows(result))}
           </Badge>
+          <div className="ml-auto">
+            <EmptySheetsDialog clinics={emptySheets.clinics} sheetCount={emptySheets.sheetCount} />
+          </div>
         </div>
       </CardHeader>
       <CardContent className="flex flex-col gap-6">

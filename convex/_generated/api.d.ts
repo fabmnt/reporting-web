@@ -47,6 +47,7 @@ import type * as model_reportRuns from "../model/reportRuns.js";
 import type * as model_reportTypeSeed from "../model/reportTypeSeed.js";
 import type * as model_reportTypes from "../model/reportTypes.js";
 import type * as model_reporting from "../model/reporting.js";
+import type * as model_sheetTabCache from "../model/sheetTabCache.js";
 import type * as model_staff from "../model/staff.js";
 import type * as model_tokens from "../model/tokens.js";
 import type * as model_totp from "../model/totp.js";
@@ -108,6 +109,7 @@ declare const fullApi: ApiFromModules<{
   "model/reportTypeSeed": typeof model_reportTypeSeed;
   "model/reportTypes": typeof model_reportTypes;
   "model/reporting": typeof model_reporting;
+  "model/sheetTabCache": typeof model_sheetTabCache;
   "model/staff": typeof model_staff;
   "model/tokens": typeof model_tokens;
   "model/totp": typeof model_totp;
